@@ -1,0 +1,38 @@
+#!/usr/local/opt/apssystem/cede/r12/lib/jtex/bin/expect
+
+set timeout 3600
+set OPT [lindex $argv 0]
+set BUILD_SERVER [lindex $argv 1]
+set TEAM [lindex $argv 2]
+
+
+ #/usr/local/opt/apssystem/cede/r12/lib/jtex/bin/expect -c '
+
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${BUILD_SERVER}
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shr@@t123\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+                expect "#"
+                send "/git_repos/cominf_test/SOURCES/build_scripts/infrastructure/bin/copy_jump  -t ${TEAM} -f -s ${OPT} -u\r"
+                expect "#"
+                #sleep 200
+                send "exit\r"
+

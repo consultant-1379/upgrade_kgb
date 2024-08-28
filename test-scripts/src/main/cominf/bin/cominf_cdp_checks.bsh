@@ -1,0 +1,445 @@
+#!/usr/bin/env bash
+# (c) Ericsson Radio Systems AB 2014 - All rights reserved.
+# The copyright to the computer program(s) herein is the property
+# of Ericsson Radio Systems AB, Sweden. The programs may be used
+# and/or copied only with the written permission from Ericsson Radio
+# Systems AB or in accordance with the terms and conditions stipulated
+# in the agreement/contract under which the program(s) have been
+# supplied.
+#
+#
+# ********************************************************************
+# Name      : cominf_upgrade_tasks.bsh
+# Date      :
+# Revision  : A
+# Purpose   : Check CDP records as required.
+#
+#
+#
+BASEDIR=$(dirname $0)
+BASEDIR_FULL_PATH=$(cd $BASEDIR 2>/dev/null; pwd)
+BINDIR=${BASEDIR_FULL_PATH}
+
+  
+if [ -e "${BASEDIR_FULL_PATH/%bin/lib}/cominf_common_functions.lib" ]
+then
+    source "${BASEDIR_FULL_PATH/%bin/lib}/cominf_common_functions.lib"
+else
+    echo "ERROR: You must run this module on an Admin Server, with access to cominf_common_functions.lib"
+    echo "UPGRADE_TASKS_ERROR: You must run this module on an Admin Server, with access to cominf_common_functions.lib [NOK]"
+    exit 1
+fi  
+
+
+
+
+# ***********************************************************************
+#
+#         Configuration Section and Global Variables
+#
+# ***********************************************************************
+
+
+#************************************************************
+# Default log file, optional parameter -l will overwrite this
+#************************************************************
+LOGFILE="/ericsson/ocs/log/cominf_cdp_checks_${TIMESTAMP}.log"
+MODULE_NAME="cominf_cdp_checks"
+HIDDEN_FNAME="cominf_cdp_checks"
+STATUS_DIR="/ericsson/ocs/log"
+COMINF_FINAL_PRE_CHECK_STATUS_FILE="${STATUS_DIR}/.${PREVIOUS_HIDDEN_FNAME}_status_file"
+COMINF_UPGRADE_TASKS_STATUS_FILE="${STATUS_DIR}/.${HIDDEN_FNAME}_status_file"
+NAMEDCONF="/etc/named.conf"
+USE_CONFIG="/ericsson/config/ericsson_use_config"
+SKIP="NO"
+
+ORC_RUN="TRUE"
+export ORC_RUN
+# ***********************************************************************
+#
+#                             Functions
+#
+# ***********************************************************************
+
+### Function: parse_supplied_params ###
+#
+# Parse the supplied parameters
+#
+# Arguments     : Options list
+#
+# Return Values : None
+#
+#**************************************
+function parse_supplied_params()
+{
+
+# Parse the optional parameters
+
+  # while getopts ":dhxs" ARG
+  while getopts ":dhxs" ARG
+  do
+    case ${ARG} in
+      h)    usage_msg
+            orc_cleanup_and_exit_after_usg_msg 0 "UPGRADE_TASKS_USAGE_INFO" 
+            ;;
+      d)    DEBUG="TRUE"
+            ;;
+      x)    export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[1]}:+${FUNCNAME[0]}:'
+            set -o xtrace
+            ;;
+      s)    SKIP="YES"
+            ;;
+
+      *)    ${ECHO} "ERROR: Invalid option ${OPTARG} supplied"
+            sleep 2
+            usage_msg
+            orc_cleanup_and_exit_after_usg_msg 1 "UPGRADE_TASKS_ERROR" 
+            ;;
+    esac
+  done
+
+# Parse the fixed parameters
+  
+  shift $((OPTIND-1))
+ 
+  NUM_FIXED_ARGS=$#
+
+  if [ "$NUM_FIXED_ARGS" -ne "1" ]
+  then
+    if [ "$NUM_FIXED_ARGS" -lt "1" ]
+    then
+      ${ECHO} "ERROR Invalid input '${@}' missing mandatory parameters"
+	else
+      ${ECHO} "ERROR Invalid input '${@}' too many parameters"
+    fi
+    sleep 2
+    usage_msg
+    orc_cleanup_and_exit_after_usg_msg 1 "UPGRADE_TASKS_ERROR"
+  fi
+  
+  DOMAIN_NAME=$1
+  return 0
+}
+
+### Function: usage_msg ###
+#
+# Print out the usage message
+#
+# Arguments     : None
+#
+# Return Values : None
+#
+#****************************
+function usage_msg()
+{
+	POD2TEXT="/usr/perl5/5.8.4/bin/pod2text"
+
+    ${CLEAR}
+
+    $POD2TEXT $0
+
+    return 0 
+}
+
+### Function: check_supplied_params ###
+#
+# Check the supplied parameters
+#
+# Arguments     : none
+#
+# Return Values : 0 - Successfull
+#                 1 - Unsuccessfull
+#
+#******************************
+function check_supplied_params()
+{
+  # Check supplied domain
+  [ "${DEBUG}" ] && orc_log_script "DOMAIN_NAME = ${DOMAIN_NAME}"
+  #com_get_domain_name ${DOMAIN_NAME}
+  #res=$?  # save the result, remember 1 is an error
+  
+  #if [ $res -eq 1 ]
+  #then
+  #     orc_log_script "ERROR IP address of MWS is not valid"
+  #     orc_cleanup_and_exit $res UPGRADE_TASKS_ERROR
+  #  else
+  #     orc_log_script "IP address of MWS is ${ADMIN_IP_ADDRESS_MWS}"
+  #fi  
+  
+  return 0
+}
+
+# ***********************************************************************
+#
+#                    Main body of program
+#
+# ***********************************************************************
+
+#**************************
+# Parse supplied parameters
+#**************************
+parse_supplied_params "${@}" || orc_cleanup_and_exit $? UPGRADE_TASKS_ERROR
+
+#******************
+# Create a log file
+#******************
+orc_create_logfile || orc_cleanup_and_exit $? UPGRADE_TASKS_ERROR
+
+#******************
+# Create a lockfile
+#******************
+orc_create_lockfile || orc_cleanup_and_exit $? UPGRADE_TASKS_ERROR
+
+#************************************************
+# Check that the effective id of the user is root
+#************************************************
+orc_check_id "${DEF_USER}" || orc_cleanup_and_exit $? UPGRADE_TASKS_ERROR
+
+#****************************************************
+# Check that the architecture of the system is i386
+#****************************************************
+orc_check_arch "${DEF_ARCH}" || orc_cleanup_and_exit $? UPGRADE_TASKS_ERROR
+
+#******************************
+# Check the supplied parameters
+#******************************
+check_supplied_params || orc_cleanup_and_exit $? UPGRADE_TASKS_ERROR
+
+#*****************************************************
+# Output the parameters to the log file and the screen
+#*****************************************************
+orc_display_parameters log_and_screen
+
+#*****************************************************************
+# If an interrupt is trapped the script will not abort immediately
+# It will complete current stage and then abort
+#*****************************************************************
+trap " INTERRUPT_FLAG=TRUE;${ECHO} 'Interrupt trapped - it will be actioned at end of this function' " INT HUP QUIT TSTP
+trap "" EXIT
+
+orc_header_1 "Begin COMINF Check for CDP entries in DNS"
+#*************************************************************************
+#
+# Step 0: Check status file of a previous run of THIS module
+#
+#*************************************************************************
+
+    orc_header_2 "Report status from previous run of module $0"
+
+    orc_check_previous_run $HIDDEN_FNAME
+    RES=$?
+    if [ $RES -eq 0 ]
+    then
+        orc_log_tag "UPGRADE_TASKS_INFO: Found status of previous run of module $0 [OK]"
+    else
+        orc_log_tag "UPGRADE_TASKS_INFO: No previous run of module $0 [OK]"
+    fi
+
+
+#*************************************************************************
+#
+# Step 1: Check USE_CONFIG for system type
+#
+#*************************************************************************
+    orc_header_2 "Check USE_CONFIG for system type"
+    if [ "${SKIP}" = "YES" ]
+    then
+        orc_log_tag "UPGRADE_TASKS_INFO: Skip option passed. Will skip this step. [OK]"
+    else
+        if [ ! -f ${USE_CONFIG} ]
+        then
+            orc_log_tag "UPGRADE_TASKS_ERROR: \"${USE_CONFIG}\" is missing. Cannot continue. [NOK]"
+            orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+        fi
+
+        SERVER_TYPE=$(${CAT} ${USE_CONFIG} | ${AWK} -F'=' '{print $2}')
+        if [ "${SERVER_TYPE}" != "om_serv_master" ]
+        then
+            orc_log_tag "UPGRADE_TASKS_ERROR: This module cannot be run on server type \"${SERVER_TYPE}.\" [NOK]"
+            orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+        fi
+
+        orc_log_tag "UPGRADE_TASKS_INFO: Running on server type \"${SERVER_TYPE}\". [OK]"
+    fi
+#*************************************************************************
+#
+# Step 2: Check the DNS service is valid and running on this system
+#
+#*************************************************************************
+    orc_header_2 "Check the DNS service is valid and running on this system"
+
+    if [ "${SKIP}" = "YES" ]
+    then
+        orc_log_tag "UPGRADE_TASKS_INFO: Skip option passed. Will skip this step. [OK]"
+    else
+        if ! orc_check_is_service_online ${ORC_SVCS_NETWORK_DNS_SERVER}
+        then
+            orc_log_tag "UPGRADE_TASKS_ERROR: The DNS service is not running on this server. [NOK]"
+            orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+        fi
+        orc_log_tag "UPGRADE_TASKS_INFO: The DNS service is installed and running on this server. [OK]"
+    fi
+#*************************************************************************
+#
+# Step 3: Check the DNS configuration file
+#
+#*************************************************************************
+    orc_header_2 "Check the DNS configuration file"
+
+    if [ "${SKIP}" = "YES" ]
+    then
+        orc_log_tag "UPGRADE_TASKS_INFO: Skip option passed. Will skip this step. [OK]"
+    else
+        if [ ! -f ${NAMEDCONF} ]
+        then
+            orc_log_tag "UPGRADE_TASKS_ERROR: The DNS service configuration file \"${NAMEDCONF}\" is missing. [NOK]"
+            orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+        fi
+
+        ZONES_DIRECTORY=$(${CAT} /etc/named.conf | grep directory | ${AWK} '{print $2}'| ${SED} -e 's/;//g' -e 's/\"//g')
+        if [ ! -d ${ZONES_DIRECTORY} ]
+        then
+            orc_log_tag "UPGRADE_TASKS_ERROR: The DNS zones directory \"${ZONES_DIRECTORY}\" is missing. [NOK]"
+            orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+        fi
+
+        ZONE_FILE="${ZONES_DIRECTORY}/${DOMAIN_NAME}.ip4zone"
+        if [ ! -f ${ZONE_FILE} ]
+        then
+            orc_log_tag "UPGRADE_TASKS_ERROR: The DNS zones file \"${ZONE_FILE}\" is missing. Is \"${DOMAIN_NAME}\" correct. [NOK]"
+            orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+        fi
+
+        orc_log_tag "UPGRADE_TASKS_INFO: DNS files are placed correctly. [OK]"
+    fi
+#*************************************************************************
+#
+# Step 4: Check the CDP entries are in the zone file
+#
+#*************************************************************************
+    orc_header_2 "Check the CDP entries are in the zone file"
+    if [ "${SKIP}" = "YES" ]
+    then
+        orc_log_tag "UPGRADE_TASKS_INFO: Skip option passed. Will skip this step. [OK]"
+    else
+        MASTER_IP=$(${GETENT} hosts om_serv_master | awk '{print $1}')
+        SLAVE_IP=$(${GETENT} hosts om_serv_slave | awk '{print $1}')
+        CDPS="cdp1.cdps.${DOMAIN_NAME} cdp2.cdps.${DOMAIN_NAME}"
+        retVal=0
+        for CDP in ${CDPS}
+        do
+            ${XPG4GREP} -q ${CDP} ${ZONE_FILE}
+            retVal=$?
+            if [ ${retVal} -ne 0 ]
+            then
+                orc_log_tag "UPGRADE_TASKS_ERROR: ${CDP} not found in \"${ZONE_FILE}\". [NOK]"
+                orc_cleanup_and_exit -h "${HIDDEN_FNAME}" ${retVal} "UPGRADE_TASKS_ERROR"
+            fi
+            CDPIP=$(${GREP} ${CDP} ${ZONE_FILE} | ${AWK} '{print $4}')
+            if [ "${CDP}" = "cdp1.cdps.${DOMAIN_NAME}" ]
+            then
+                if [ "${CDPIP}" != "${MASTER_IP}" ]
+                then
+                    orc_log_tag "UPGRADE_TASKS_ERROR: Master server mismatch IP for \"${CDPIP} (dns)\" and \"${MASTER_IP} (hosts)\". [NOK]"
+                    orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+                fi
+            else
+                if [ "${CDPIP}" != "${SLAVE_IP}" ]
+                then
+                    orc_log_tag "UPGRADE_TASKS_ERROR: Slave server mismatch IP for \"${CDPIP} (dns)\" and \"${SLAVE_IP} (hosts)\". [NOK]"
+                    orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+                fi
+            fi
+        done
+
+        orc_log_tag "UPGRADE_TASKS_INFO: All CDP entries correct in \"${ZONE_FILE}\". Ok to continue with upgrade. [OK]"
+    fi
+#*****************
+# Cleanup and exit
+#*****************
+
+    orc_header_1 "End COMINF Check for CDP entries in DNS"
+
+    # Remove previous status file on successful run
+    #orc_remove_file ${ADMIN_FINAL_PRE_CHECK_STATUS_FILE}
+    #RES=$?
+    #if [ $RES -ne 0 ]
+    #then
+    #    orc_log_tag "UPGRADE_TASKS_ERROR: Failed to remove status file from previous orchestrator module ${PREVIOUS_MODULE_NAME} run. [NOK]"
+    #    orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 1 "UPGRADE_TASKS_ERROR"
+    #fi
+    orc_cleanup_and_exit -h "${HIDDEN_FNAME}" 0 "UPGRADE_TASKS_INFO" "OK to proceed with upgrade."
+    
+
+#****************************************
+#****************************************
+# POD Section for man and HTML pages.
+#****************************************
+#****************************************
+: <<=cut
+
+=pod
+
+=head1 NAME
+
+cominf_cdp_checks.bsh - Orchestrator module for checking the validity of the DNS files on a smrs_master server
+
+=head1 SYNOPSIS
+
+   Usage: cominf_cdp_checks.bsh { -dhxs} [domain_name]
+   
+   Options:
+
+   -h  : Display usage information.
+
+   -d  : Display additional debug information.
+
+   -x  : Enable BASH xtrace.
+
+   -s  : Skip over each step, just write success to the status file.
+
+   Mandatory Parameters:
+
+   [ domain_name ]      : The domain name of the DNS server e.g. vts.com
+
+=head1 DESCRIPTION
+
+cominf_cdp_checks.bsh performs the following checks on the smrs master server.
+
+=over 8
+
+=item *
+
+Checks the status of any previous run of this module.
+
+=item *
+
+Checks for the 'ericsson_use_config' file and exits if not present.
+
+=item *
+
+Checks the system type from 'ericsson_use_config' and exits if not 'om_serv_master'.
+
+=item *
+
+Checks if the DNS service is installed and if it is enabled. Exits if service not installed or not running.
+
+=item *
+
+Checks that the DNS configuration files are correctly placed. Exits if that is not the case.
+
+=item *
+
+Checks for the required CDP entries in the forward zone file for the domain given.
+
+=item *
+
+Checks the CDP IP addresses in the forward zone file against the entries in /etc/hosts. Exits if inconsistencies found.
+
+=back
+
+=head1 LICENSE
+
+Ericsson Radio Systems AB 2014 - All rights reserved.
+
+=cut

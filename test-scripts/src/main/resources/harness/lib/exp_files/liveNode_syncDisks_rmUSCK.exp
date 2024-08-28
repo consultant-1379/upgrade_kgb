@@ -1,0 +1,58 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set LIVEnode [lindex $argv 0].athtem.eei.ericsson.se
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$LIVEnode
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+set timeout 10800
+send -- "/ericsson/dmr/bin/dmtool sy\r"
+expect "Do you want to re-mirror one side (y/n)?"
+send -- "y\r"
+expect "Enter selection (1-2):"
+send -- "2\r"
+expect "Skip Re-Mirror of root disk (y/n)?"
+send -- "y\r"
+expect "Continue (y/n)?"
+send -- "y\r"
+expect "The synchronization can take some time"
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "<-"
+sleep 60
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "#"
+send -- "pkgrm ERICusck\r"
+expect "Do you want to remove this package?"
+send -- "y\r"
+sleep 60
+expect "#"
+send "exit\r"
+exit 0

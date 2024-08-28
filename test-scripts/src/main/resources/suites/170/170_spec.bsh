@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TEST SUITE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Tuesday 21st of October 2014 21:13:51
+#
+SPEC_TS_NAME=X86_ORCHA_PREP
+SPEC_TS_ID=170
+SPEC_TS_SLOGAN="Gets mws  and Admin Ready for SLU & OM Upg "
+SPEC_TS_TIMEOUT=2400
+SPEC_TS_AUTHOR="eolikil"
+SPEC_TS_INDEPENDENT=0
+SPEC_TS_TC_IDS=(4299 4300 19100 6100 30100 29100)

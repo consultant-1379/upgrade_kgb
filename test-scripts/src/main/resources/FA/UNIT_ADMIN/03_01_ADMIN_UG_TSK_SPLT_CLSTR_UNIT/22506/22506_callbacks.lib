@@ -1,0 +1,162 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# 08/07/14	xmcgama    Checks admin_has_peer returns 1 if no asn_ entries in /etc/hosts
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+    # If there is asn_ in the /etc/inet/hosts then  make a copy without asn
+    # NB although code uses /etc/hosts its a symbolic link to /etc/inet/hosts
+    # so edit /etc/inet/hosts so that symbolic link is preserved when move
+    # back
+    grep asn_ /etc/inet/hosts
+    if [ $? -eq 0 ]
+    then
+        mv /etc/inet/hosts /etc/inet/hosts.24406
+        grep -v asn_ /etc/inet/hosts.24406 > /etc/inet/hosts
+    fi
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	# Ensure no fth_ entries in /etc/hosts
+    grep asn_ /etc/hosts
+    if [ $? -eq 0 ]
+    then
+        echo "Found asn entries"
+        return 101
+    fi
+    # Ensure library is there
+    if [ ! -f /opt/ericsson/sck/lib/admin_common_functions.lib ]
+    then
+        echo "No admin common library"
+        return 102
+    fi
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+	source /opt/ericsson/sck/lib/admin_common_functions.lib
+    echo "Run without debug"
+    admin_has_peer
+    if [ $? -ne 1 ]
+    then
+        return $?
+    fi
+    DEBUG="TRUE"
+    echo "Run with debug"
+    admin_has_peer
+	return $?
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+    return 0
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# If amended /etc/hosts - then put it back
+    if [ -f /etc/inet/hosts.24406 ]
+    then
+        rm /etc/inet/hosts
+        mv /etc/inet/hosts.24406 /etc/inet/hosts
+    fi
+	return 0
+
+}

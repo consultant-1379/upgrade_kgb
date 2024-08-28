@@ -1,0 +1,62 @@
+#!/ericsson/solaris/bin/expect --
+set force_conservative 1
+set timeout -1
+
+set release [lindex $argv 0]
+set shipment [lindex $argv 1]
+set ip [lindex $argv 2]
+set type [lindex $argv 3]
+set LLSV_NO [lindex $argv 4]
+set platform [lindex $argv 5]
+set mws_ip [lindex $argv 6]
+
+if { "$LLSV_NO" == "NO" } {
+	set LLSV_NO ""
+}
+set timeout 28800
+send "/bin/rm -rf /home/ossrcdm/.ssh/known_hosts\r"
+spawn /usr/bin/ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$ip
+expect -timeout 10 "Are you sure you want to continue connecting (yes/no)" {send "yes\r"; exp_continue}
+expect_after timeout exit
+expect "assword:"
+send "shroot\r"
+expect "#"
+send -- "bash\r"
+expect "/#"
+send -- "rm -rf /ossrc/upgrade/R* > /dev/null 2>&1\r"
+expect "/#"
+send -- "umount /var/tmp/ciupgrade > /dev/null 2>&1\r" 
+expect "/#"
+send -- "\[\[ ! -d /var/tmp/ciupgrade ]] && mkdir - /var/tmp/ciupgrade\r"
+expect "/#"
+send -- "mount $mws_ip:/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_${release}/${shipment}_UG/ /var/tmp/ciupgrade\r"
+expect "/#"
+#send -- "/var/tmp/ciupgrade/solarischeck.ksh -r $platform -s $shipment\r"
+#expect "/#"
+send -- "/var/tmp/ciupgrade/ci_upgrade.sh $platform $shipment $mws_ip\r"
+while 1 {
+        expect {
+                "System Upgrade is complete" {
+			sleep 800
+                        send "\r"
+			break}
+                "FATAL ERROR in stage" {
+			sleep 10
+                        send "\r"
+			exit 1}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+
+expect "/#"
+send -- "cd /\r"
+expect "/#"
+send -- "umount /var/tmp/ciupgrade\r" 
+expect "/#"

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# script to determine new BE metadevice for liveupgrade
+
+current_metadevice=$( mount | egrep '^/ on' | awk '{ print $3 }' )
+current_metadevice_shortname=${current_metadevice#/dev/md/dsk/}
+
+if [[ "$current_metadevice_shortname" != d10 && "$current_metadevice_shortname" != d70 ]]; then
+	echo "Error - unexpected device mounted on /"
+	exit 1
+fi
+
+if [ "$current_metadevice_shortname" = d10 ]; then
+	echo d70
+else
+	echo d10
+fi
+
+

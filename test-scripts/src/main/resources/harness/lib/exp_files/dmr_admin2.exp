@@ -1,0 +1,63 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+expect "#"
+set timeout 7000
+send "/ericsson/dmr/bin/dmtool ro a\r"
+expect "How many mirrors should be defined"
+send "\r"
+expect -timeout 10 "Are data disks OK (y/n)" {send "y\r"; exp_continue}
+expect -re "\[0-9]\{1,2\}\[ ]\{2\}\[c]\[0-9]\[t]\[0-9]\[d]\[0-9]s\[0-9]\[ ]\[ ]"
+set root1 [lindex $expect_out(0,string) 0]
+expect -re "\[0-9]\{1,2\}\[ ]\{2\}\[c]\[0-9]\[t]\[0-9]\[d]\[0-9]s\[0-9]\[ ]\[ ]"
+set root2 [lindex $expect_out(0,string) 0]
+set root2name [lindex $expect_out(0,string) 1]
+sleep 10
+send "$root1\r"
+sleep 10
+send "$root2\r"
+expect "Is this a good mirror definition (y/n)"
+send "y\r"
+expect "Enter disk to add as a root disk:"
+send "$root2name\r"
+expect "Clear Disks"
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "<-"
+sleep 600
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "#"
+sleep 1200
+send "rm -rf /ossrc/upgrade/R*\r"
+expect "#"
+send "exit\r"
+expect "#"
+exit 0

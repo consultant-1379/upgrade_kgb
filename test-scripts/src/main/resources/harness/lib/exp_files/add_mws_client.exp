@@ -1,0 +1,39 @@
+#!./expect -- 
+set timeout 300 
+#log_user 0
+
+set FILE1 [lindex $argv 0]
+set MWS [lindex $argv 1]
+set MWS_ROOTPW [lindex $argv 2]
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$MWS
+
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"
+                        break}
+
+                "Password:" {
+                        send "$MWS_ROOTPW\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+sleep 2
+	send -- "/ericsson/jumpstart/bin/manage_dhcp_clients.bsh -a add -f  /JUMP/MWS_add_client_files/$FILE1 -N\r"
+	expect -timeout 60 "* with client data"
+	send "\r"
+send "exit\r"
+catch "wait -i $spawn_id" reason
+
+# return status code of spawned process
+exit [ lindex $reason 3 ]
+

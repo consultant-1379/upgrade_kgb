@@ -1,0 +1,26 @@
+set timeout 40
+
+trap {
+	if [catch {wait -i -1} output] return
+	if {[lindex $output [expr [llength $output] -1]] != 0 } {
+		exit [lindex $output [expr [llength $output] -1]]
+	}
+} SIGCHLD
+
+spawn /opt/ericsson/sck/bin/ist_run
+
+expect {
+	"Please enter selection:" {
+	} default {
+		exit 1
+	}
+}
+sleep 2
+send -- "1\r"
+
+set timeout 30
+expect {
+    EOF {}
+    timeout { exit 99 }
+}
+sleep 2

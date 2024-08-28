@@ -1,0 +1,30 @@
+#!./expect -- 
+set timeout 120 
+
+set platform [lindex $argv 4]
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set SERVER_IP [lindex $argv 1]
+spawn /bin/tcsh
+expect ">"
+send -- "sftp root@$SERVER_IP\r"
+expect "Password"
+send -- "shroot\r"
+expect "sftp>"
+send "ls /var/tmp/rootca.cer\r"
+        expect {
+        "/var/tmp/rootca.cer" {
+        send -- "get /var/tmp/rootca.cer /var/tmp/rootca.cer.$SERVER\r"
+        expect "sftp>"
+sleep 5
+        send -- "bye\r"
+        expect * 
+        send -- "byeqqqqqqqq\r"
+        }
+        timeout {
+        send -- "bye\r"
+        expect " >"
+}
+}
+        send -- "exit\r"

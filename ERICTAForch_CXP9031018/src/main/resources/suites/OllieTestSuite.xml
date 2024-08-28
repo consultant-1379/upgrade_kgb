@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="OllieTestSuite">
+    <test name="OllieTestSuite">
+        <classes>			
+			 <class name="com.ericsson.oss.orchestrator.test.cases.SshMwsUasScenario" />                  
+        </classes>
+    </test>
+</suite>
+

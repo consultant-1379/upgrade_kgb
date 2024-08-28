@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Thursday 1st of May 2014 10:15:23
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="SCK"
+SPEC_UC_NAME="SCK_X86_MS_POSTINSTALL_WITH_DPASS_PPASS"
+SPEC_TC_ID=686
+SPEC_TC_SLOGAN="Changing storadm and storobs Default Password"
+SPEC_TC_TYPE="KGB"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="high"
+SPEC_TC_AUTOMATED=1
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=4500
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xjithbv"
+SPEC_TC_AUTOMATOR="estenea"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+#None
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#Changing storadm and storobs Default Password
+#The default password for both storadm and storobs is ‘changeme’. This
+#needs to be changed to a user defined password ["letmein"]:
+## passwd -r files storadm
+#New Password:
+#Re-enter new Password:
+## passwd -r files storobs
+#New Password:
+#Re-enter new Password:
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+#The new password "letmein" works for storadm and storobs.
+# END_POST_CONDITIONS

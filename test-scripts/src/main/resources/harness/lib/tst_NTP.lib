@@ -1,0 +1,117 @@
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+#
+#
+#   Provides a set of library functions related to NTP
+#   Functions provided:
+#      NTP_SERVER_INSTALLED
+#      NTP_SERVER_RUNNING
+#      NTP_QUERY_SUCCESS
+#      NTP_QUERY_RESPONSE
+#      NTP_UPSTREAM_SERVERS
+
+# Revision History
+# 25/05/2012	v1.0	xbahzam	 Initial version
+
+
+### Function: NTP_SERVER_INSTALLED ###
+#
+# check that ntp server is installed
+#
+# Arguments:
+#    none
+#
+# Return Values:
+
+# 0 if ntp package installed, non-zero if not installed
+
+function NTP_SERVER_INSTALLED(){
+	pkginfo | grep SUNWntpr >/dev/null 
+	return $?
+
+}
+
+### Function: NTP_SERVER_RUNNING ###
+#
+# check that ntp server is running
+#
+# Arguments:
+#    none
+#
+# Return Values:
+#    0 if ntp service is running and 1 otherwise
+
+function NTP_SERVER_RUNNING() {
+	svcs svc:/network/ntp:default > /dev/null
+    	return $?
+}
+
+
+### Function: NTP_QUERY_SUCCESS ###
+#
+# check that ntp query executed successfully
+#
+# Arguments:
+#    none
+#
+# Return Values:
+#    0 if ntp query successful. A non-zero value means ntp query was unsuccessful 
+
+function NTP_QUERY_SUCCESS(){
+	ntpq -p >/dev/null 2>&1
+	return $?
+}
+
+
+### Function: NTP_QUERY_RESPONSE ###
+#
+# returns the ntp query  data 
+#
+# Arguments:
+#    none
+#
+# Return Values: Each line of data incdlude the collumns in the order below:
+#1. remote: The IP address or DNS name of the remote server 
+#2. refid:  An identification of the type of the reference clock. 
+#3. st:     The "stratum" or level of the server: for almost all systems, 2 is great. Your local system will have a higher number. 
+#4. t:     The type of service. Your setup will show "l" for local on your local system, or "u" for "unicast" for communicating with remote servers. 
+#5. when:  This is the number of seconds since the server was last heard from. After a couple of minutes of operation your server should start to report numeric values here. 
+#6. poll:  Current polling interval in seconds. When remote servers are responding, "when" should be no greater than "poll". 
+#7. reach: This and the remaining fields are important indicators of the health of your local server, your remote servers, and their communication. This field is really a bit array indicating whether responses have been received to your local server's eight most recent requests. The value starts at 0. If your local server is receiving responses to all its requests, it will go to 1, then 3, then 7. The display is in octal, so 377 is the maximum value. Anything less indicates that either your local server recently started or some requests did not receive responses. 
+#8 delay:  Recent average roundtrip time in milliseconds from request to response. 
+#9 offset:    Estimated differential between your system clock and this time server's clock, in milliseconds. You may consider this the "bottom line" on the accuracy of your system clock. NTP can usually drive this down to the level of the jitter or less. 
+#10 jitter:    A measure of the variability of the delays between request and receipt of a response, in milliseconds. High jitter tends to limit your server's ability to synchronize accurately. 
+
+function NTP_QUERY_RESPONSE(){
+	QUERY_RESPONSE=`ntpq -p 2>/dev/null|tail --line=+3`  
+}
+
+
+### Function: NTP_UPSTREAM_SERVERS ###
+#
+# returns  a list of ntp upstream servers 
+#
+# Arguments:
+#    none
+#
+# Return Values: List of upstream ntp servers 
+
+function NTP_UPSTREAM_SERVERS(){
+	UPSTREAM_SERVERS=`ntpq -p 2>/dev/null |awk '$4 ~ /^u$/{print $1}'`
+}
+
+
+#variables
+declare UPSTREAM_SERVERS
+declare QUERY_RESPONSE

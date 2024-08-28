@@ -1,0 +1,8 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="OSS-23087_Functional">
+	<test name="OSS-23087_Functional">
+		<classes>
+			<class name="com.ericsson.sut.test.cases.Glassfish_FunctionalTest" />
+		</classes>
+	</test>
+</suite>

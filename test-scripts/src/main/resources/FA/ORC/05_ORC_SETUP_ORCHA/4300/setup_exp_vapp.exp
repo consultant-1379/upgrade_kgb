@@ -1,0 +1,116 @@
+#!/usr/local/bin/expect
+
+set O_INPFILE [lindex $argv 0]
+set timeout 60
+
+set tries 1
+set retstatus 99
+set pid 0
+
+# loop until either exhausted max tries or result is zero (success)
+while { $tries < 3 && $retstatus > 0 } {
+
+  send_user "commencing test\r"
+
+  # we only run the removal option if we are NOT on our first run thru
+  if { $retstatus < 99 } {
+    set pid [spawn su - orcha -c "/ericsson/orchestrator/bin/setup_orcha_user.bsh -r -f $O_INPFILE"]
+    send_user "spawned removal task with pid $pid\r"
+    set count 1
+    while { $count < 99 } {
+        expect {
+          "===> Starting removal"  {send_user "starting processing next node - no action" }
+          eof {send_user "eof detected - end of loop\r"; set count 99}
+          timeout {send_user "timeout detected - end of loop\r"; set count 99}
+       }
+    } 
+    catch "wait -i $spawn_id" reason
+    set retstatus [ lindex $reason 3 ]
+    #??close -i $spawn_id
+    send_user "caught spawn result\r"
+    # return status code of spawned process
+    send_user "removal completed - status code of spawned removal process: $retstatus\r"
+    
+    
+    sleep 1
+    # force tidyup 
+    if { $pid > 0 } {
+      send_user "attempting to kill pid $pid\r"
+      #exec kill -9 $pid
+      set pid 0
+    }
+
+    # if our removal attempt has failed then exit with error code now
+    if { $retstatus > 0 } {
+        exit $retstatus
+    }
+  } else {
+     send_user "This is our first attempt\r"
+  }
+
+
+  # errored var is used to flag expect errors
+  set errored 0
+
+  set pid [ spawn su - orcha -c "/ericsson/orchestrator/bin/setup_orcha_user.bsh -f $O_INPFILE" ]
+  send_user "setup process spawned with pid $pid\r"
+  expect {
+        "Enter password to be used for the orcha user:" {send_user "sending orcha password\r"; send "Orch@12A\r" }
+          eof {send_user "eof detected waiting for orcha password prompt\r"; set errored 1}
+          timeout {send_user "timeout detected waiting for orcha password prompt\r"; set errored 1}
+  }
+  
+  if { $errored == 0 } {
+    expect {
+        "Re-enter orcha user Password:" {send_user "sending re-entry of orcha password\r";  send "Orch@12A\r" }
+         eof {send_user "eof detected waiting for orcha re-enter password prompt\r"; set errored 1}
+         timeout {send_user "timeout detected waiting for orcha re-enter password promptp\r"; set errored 1}
+    }
+  }
+
+ if { $errored == 0 } {
+    set count 0
+    set expectsend 9
+    set continu 1
+    while { $count < 99 && $continu > 0 } {
+      expect { 
+          "===> Starting setup"  {send_user "starting processing next node - no action\r" }
+          eof {send_user "eof detected - end of loop\r"; set continu 0; set count 1 }
+          timeout {send_user "timeout detected - end of loop\r"; set continu 0 }
+      }
+    }
+    if { $count == 1 } {
+      send_user "test ended with script completing\r"
+    } else {
+      send_user "test ended on a timeout - potential problem\r"
+    } 
+  }
+ 
+  if { $errored == 0 } {
+    # if we had no expect errors then catch the result of the spawned process
+    catch "wait -i $spawn_id" reason
+    set retstatus [ lindex $reason 3 ]
+    #??close -i $spawn_id
+    send_user "caught spawn result\r"
+    # return status code of spawned process
+    send_user "setup completed - status code of spawned process: $retstatus\r"
+    send_user "spawned process returned $retstatus on attempt $tries\r"
+  } else {
+    # if we encountered expect errors then fail
+    send_user "encountered expect error during attempt $tries - spawned process may need to be killed\r"
+    set retstatus 1
+  }
+  sleep 1
+  # force tidyup 
+  if { $pid > 0 } {
+     send_user "attempting to kill pid $pid\r"
+     exec ps -ef | grep setup
+     #exec kill -9 $pid
+     set pid 0
+  }
+  set tries [expr $tries+1]
+}
+
+send_user "setup result $retstatus at end of test case\r"
+exit $retstatus
+

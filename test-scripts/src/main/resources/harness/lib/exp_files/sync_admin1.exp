@@ -1,0 +1,55 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set BUIP1 [lindex $argv 0]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${BUIP1}
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+set timeout 10800
+send -- "/ericsson/dmr/bin/dmtool sy\r"
+expect "Continue (y/n)?"
+send -- "y\r"
+expect "The synchronization can take some time"
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "<-"
+sleep 1200
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+sleep 600
+expect "#"
+send -- "pkgrm ERICusck\r"
+expect "Do you want to remove this package?"
+send -- "y\r"
+sleep 60
+expect "#"
+send "rm -rf /ossrc/upgrade/R*\r"
+expect "#"
+send "exit\r"
+exit 0

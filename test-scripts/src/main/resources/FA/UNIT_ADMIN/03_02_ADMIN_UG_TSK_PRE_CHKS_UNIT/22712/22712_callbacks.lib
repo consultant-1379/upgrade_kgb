@@ -1,0 +1,200 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+    
+SYSTEM_INI_FILE=/tmp/orc_system_ini_updates
+   
+#Setup remote ini file
+echo "NETWORK_SIZE number_rnc_count=2
+iniset NETWORK_SIZE -f /ericsson/config/.network_size number_rnc_count=2
+iniset SERVER_MISC OSS_MINUTE_GPEH=NO
+iniset SERVER_MISC OSS_CELL_TRACE=NO
+iniset NUMBER_IPROUTER_NODES number_iprouter_nodes=2
+iniset NUMBER_EPGSSR_NODES number_epgssr_nodes=1
+iniset NUMBER_MTAS_NODES number_mtas_nodes=1
+iniset NUMBER_CSCF_NODES number_cscf_nodes=1
+iniset NUMBER_WCG_NODES number_wcg_nodes=1
+iniset NUMBER_CBA_PGM_NODES number_cba_pgm_nodes=1
+iniset NUMBER_MIO_NODES number_mio_nodes=1
+iniset SERVER_MISC OSS_5mROP_FS=YES
+iniset NUMBER_EGR_NODES number_egr_nodes=1
+iniset NUMBER_HSS_NODES number_hss_nodes=1
+iniset NUMBER_PICO_WCDMA_CELLS number_pico_wcdma_cells=1
+iniset NUMBER_PICO_LTE_CELLS number_pico_lte_cells=1
+iniset NUMBER_TCU_NODES number_tcu_nodes=1
+iniset NUMBER_DSC_NODES number_dsc_nodes=1
+iniset NUMBER_BSP_NODES number_bsp_nodes=1
+iniset NUMBER_SASNSSR_NODES number_sasnssr_nodes=1
+iniset NUMBER_SDC_NODES number_sdc_nodes=1
+iniset NUMBER_DUA_S_NODES number_dua_s_nodes=1
+iniset NUMBER_RNC_1MIN number_rnc_1min=1
+iniset NUMBER_MP_15MIN number_mp_15min=1
+iniset GPEH_FSIZE_1MIN gpeh_fsize_1min=1
+iniset FTH_INSTANCES_PMS fth_instances_pms=0
+iniset NUMBER_MP_1MIN number_mp_1min=0
+iniset NUMBER_WIFI_NODES number_wifi_nodes=1
+iniset NUMBER_LANSWITCH_NODES number_lanswitch_nodes=2
+iniset NUMBER_SBG_NODES number_sbg_nodes=2" > $SYSTEM_INI_FILE
+    
+    if [ $? -ne 0 ]
+    then 
+        echo "ERROR: Failed to create file: ${SYSTEM_INI_FILE}"
+        return 1
+    fi
+    
+    return 0
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+    
+    return 0
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+    
+    source /opt/ericsson/sck/lib/admin_common_functions.lib
+    LOGFILE=/tmp/system_ini.log
+    SYSTEM_INI_FILE=/tmp/orc_system_ini_updates
+    DEBUG=TRUE
+    
+    admin_check_iniset_syntax $SYSTEM_INI_FILE
+    res=$?
+
+    if [ $res -eq 1 ] 
+    then
+        orc_log_script "Negative test of admin_update_system_ini_file - incorrect iniset syntax: field iniset missing was successful"
+    else
+        orc_log_script "ERROR: Negative test of admin_update_system_ini_file - incorrect iniset syntax: field iniset missing was successful"
+        return 1
+    fi
+    
+    return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+    
+	return 0
+
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+   
+    SYSTEM_INI_FILE=/tmp/orc_system_ini_updates
+    LOGFILE=/tmp/system_ini.log
+    
+    if [ -f ${LOGFILE} ]
+    then
+        rm ${LOGFILE}
+    fi
+    
+    if [ -f ${SYSTEM_INI_FILE} ]
+    then
+        rm ${SYSTEM_INI_FILE}
+    fi
+    
+
+
+}
+

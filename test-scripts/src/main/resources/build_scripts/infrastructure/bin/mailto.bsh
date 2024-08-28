@@ -1,0 +1,53 @@
+#!/bin/bash
+
+###### History ########
+# eeiddne 27/10/10      Changed to only mail the designer, team lead and test resp
+# eeiddne	030311	Added some improvements 
+#######################
+
+PACKAGE=$1
+VERSION=$2
+NAME=$3
+ARCH=$4
+PRODNUM=$5
+UPLOAD_SCRIPT=$6
+PKG_DIR=$7
+TIMESTAMP=$8
+ME=`whoami`
+
+DATE=`date '+%y%m%d, %H:%M'`
+
+for name in "$ME" "lmi.cif.3pp.support" 
+do
+mail $name << EOF
+Subject:  $ME has uploaded $PACKAGE, $NAME, $PRODNUM for test on $ARCH
+
+****** A 3PP Package has been uploaded for Test ********
+
+PACKAGE : $PACKAGE
+
+NAME : $NAME
+
+VERSION : $VERSION
+
+This has been uploaded to the jump area by `whoami` for test on $ARCH
+
+The package has been placed in the following directory, please make sure it is applicable:
+$PKG_DIR
+
+You can check the timstamp HERE:
+
+echo $TIMESTAMP
+
+The following upload script was used : $UPLOAD_SCRIPT
+
+#########################################################
+The product number is $PRODNUM.
+
+N.B. PLEASE ENSURE THIS CORRECT FOR $ARCH!
+
+#########################################################
+
+This occured on $DATE.
+EOF
+done

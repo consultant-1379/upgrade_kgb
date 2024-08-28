@@ -1,0 +1,298 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# 08/07/2014	xkriski	Tests single server oss and sybase not ok for admin_pre_cutover_tasks
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+  
+  echo "OK" > /ericsson/config/.admin_post_upgrade_tasks_status_file
+  if [ $? -ne 0 ]
+    then
+        echo "Failed to create predecessor status file"
+        return 110
+    fi
+  test -e /opt/ericsson/sck/bin/admin_pre_cutover_tasks.bsh
+    if [ $? -ne 0 ]
+    then
+        echo "Script not found"
+        return 111
+    fi
+
+
+  TMPDIR="24606_tmp"
+  mkdir ${TMPDIR}
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to create temp script dir"
+        return 112
+    fi
+  mkdir ${TMPDIR}/bin
+  if [ $? -ne 0 ]
+    then
+        echo "Unable to create temp script bin dir"
+        return 113
+    fi
+  mkdir ${TMPDIR}/lib
+  if [ $? -ne 0 ]
+    then
+        echo "Unable to create temp script lib dir"
+        return 114
+    fi
+  cp /opt/ericsson/sck/bin/admin_pre_cutover_tasks.bsh ${TMPDIR}/bin/
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to copy script to temp script bin dir"
+        return 115
+    fi
+  
+ 
+  cp /opt/ericsson/sck/lib/admin_common_functions.lib ${TMPDIR}/lib/admin_common_functions.copy
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to copy admin common to temp script lib dir"
+        return 116
+    fi
+
+    cp /opt/ericsson/sck/bin/spinner.sh ${TMPDIR}/bin/
+    if [ $? -ne 0 ]
+    then
+        echo "Unable to copy spinner to temp script bin dir"
+        return 117
+    fi
+
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+   
+    test -e /ericsson/config/.admin_post_upgrade_tasks_status_file
+    if [ $? -ne 0 ]
+    then
+        echo "Predecessor status file not found"
+        return 121
+    fi
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+
+
+   REPLFUNC="admin_check_oss_sybase_on_single_node"
+   REPLRESP="1"
+   TMPDIR="24606_tmp"
+
+   # set up the mock function in a side file
+   echo "function ${REPLFUNC} {"  > ${TMPDIR}/wrongServerType.txt
+   echo " return ${REPLRESP}" >> ${TMPDIR}/wrongServerType.txt
+   echo "}"  >> ${TMPDIR}/wrongServerType.txt
+   echo "function ${REPLFUNC}_tmpreplace()"  >> ${TMPDIR}/wrongServerType.txt
+
+   # swap the mock function into the lib instead of the real function (nb newline before } is essential syntax)
+   sed "/function ${REPLFUNC}/  {s/function ${REPLFUNC}//; r ${TMPDIR}/wrongServerType.txt
+}" < ${TMPDIR}/lib/admin_common_functions.copy > ${TMPDIR}/lib/admin_common_functions.lib
+   if [ $? -ne 0 ]
+    then
+        echo "common lib file edit to tmp file failed - unable to proceed with test"
+        return 100
+    fi
+
+
+   diff ${TMPDIR}/lib/admin_common_functions.copy ${TMPDIR}/lib/admin_common_functions.lib
+    if [ $? -eq 0 ]
+    then
+        echo "common lib file not changed - unable to proceed with test"
+        return 101
+    fi
+
+    # Test with mocks
+    OUT=`${TMPDIR}/bin/admin_pre_cutover_tasks.bsh 10.44.192.191  /JUMP/UPGRADE_SW/14.3.8`
+    RC=$?
+    echo "Output for oss and sybase not ok scenario is $OUT"
+
+
+    if [[ $OUT != *"This is a single node cluster configuration.  Oss and Sybase not OK"* ]]
+    then
+        echo "Expected output not found"
+        return 100
+    fi
+
+
+    # Check return code is not 0
+    if [ $RC -eq 0 ]
+    then
+        echo "Success returned, when return code when should have failed"
+        return 102
+    fi
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+   echo "hidden status files for admin:"
+   echo `ls -al //ericsson/config/.admin*`
+   # Check admin_pre_cutover_tasks status file exists
+   test -e /ericsson/config/.admin_pre_cutover_tasks_status_file
+    if [ $? -ne 0 ]
+    then
+        echo "status file not found, but should have been created by this scenario"
+        return 131
+    fi
+
+    # Check admin_pre_cutover_tasks status file contains NOK
+    grep -w "NOK" /ericsson/config/.admin_pre_cutover_tasks_status_file
+    if [ $? -ne 0 ]
+    then
+        echo "status file does not contain OK"
+        return 132
+    fi
+
+   # Check predecessor status file has NOT been removed
+   test -e /ericsson/config/.admin_post_upgrade_tasks_status_file
+    if [ $? -ne 0 ]
+    then
+        echo "Predecessor status not file found, but should not have been removed by this scenario"
+        return 133
+    fi
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+  # remove admin_pre_cutover_tasks status file if exists
+  test -e /ericsson/config/.admin_pre_cutover_tasks_status_file
+    if [ $? -eq 0 ]
+    then
+        echo "Removing status file created by this test"
+        rm /ericsson/config/.admin_pre_cutover_tasks_status_file
+        if [ $? -ne 0 ]
+        then
+           echo "Error removing status file created by this test"
+        fi
+    fi
+
+   # remove predecessor status file if still exists
+   test -e /ericsson/config/.admin_post_upgrade_tasks_status_file
+    if [ $? -eq 0 ]
+    then
+        echo "Removing predecessor status file created for this test"
+        rm /ericsson/config/.admin_post_upgrade_tasks_status_file
+        if [ $? -ne 0 ]
+        then
+           echo "Error removing predecessor file created for this test"
+        fi
+    fi
+
+    test -e 24606_tmp
+    if [ $? -eq 0 ]
+    then
+        echo "Removing temp script dir created for this test"
+        rm -rf 24606_tmp
+        if [ $? -ne 0 ]
+        then
+           echo "Error removing temp script dir created for this test"
+        fi
+    fi
+	return 0
+
+}

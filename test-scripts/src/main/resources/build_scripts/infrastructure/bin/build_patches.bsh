@@ -1,0 +1,695 @@
+#!/bin/bash
+#*********************************************************************
+# Ericsson Radio Systems AB                                     SCRIPT
+#*********************************************************************
+#
+#
+# (c) Ericsson Radio Systems AB 2001 - All rights reserved.
+#
+# The copyright to the computer program(s) herein is the property
+# of Ericsson Radio Systems AB, Sweden. The programs may be used
+# and/or copied only with the written permission from Ericsson Radio
+# Systems AB or in accordance with the terms and conditions stipulated
+# in the agreement/contract under which the program(s) have been
+# supplied.
+#
+# Name    : build_patches.bsh
+# Written : Grant Loch
+# Date    : 07/01/2014
+# Revision: A
+# Purpose : Label the OM vob with the new Patches r-state.
+#           tar and gzip the Patches directory.
+#           This is similar to build_cxp but designed for
+#           Patches product only and run via Jenkins.
+#           Note: The -F option will only tar/gzip the Patches
+#                 directory. It does not update ClearCase or the
+#                 cxp_info file. It should only be used for testing
+#                 or when NOTHING has changed in the Patches directory.
+#          
+#
+#*********************************************************************
+
+#*********************************************************************
+#
+#       Command Section
+#
+#*********************************************************************
+BASENAME=/usr/bin/basename
+BZCAT=/usr/bin/bzcat
+CAT=/usr/bin/cat
+CD=/usr/bin/cd
+CHMOD=/usr/bin/chmod
+CLEAR=/usr/bin/clear
+CLEARTOOL=/opt/rational/clearcase/bin/cleartool
+CP=/usr/bin/cp
+CPIO=/usr/bin/cpio
+CUT=/usr/bin/cut
+DATE=/usr/bin/date
+DD=/usr/bin/dd
+DF=/usr/bin/df
+DIRNAME=/usr/bin/dirname
+DU=/usr/bin/du
+ECHO=/usr/bin/echo
+EGREP=/usr/bin/egrep
+ENV=/usr/bin/env
+EXPR=/usr/bin/expr
+FIND=/usr/bin/find
+FOLD=/usr/bin/fold
+GETENT=/usr/bin/getent
+GREP=/usr/bin/grep
+GZCAT=/usr/bin/gzcat
+GZIP=/usr/bin/gzip
+HEAD=/usr/bin/head
+HOSTNAME=/usr/bin/hostname
+ID=/usr/bin/id
+LN=/usr/bin/ln
+LS=/usr/bin/ls
+MKDIR=/usr/bin/mkdir
+MKFILE=/usr/sbin/mkfile
+MORE=/usr/bin/more
+MV=/usr/bin/mv
+NAWK=/usr/bin/nawk
+PKGTRANS=/usr/bin/pkgtrans
+PWD=/usr/bin/pwd
+RM=/usr/bin/rm
+RCP=/usr/bin/rcp
+RSH=/usr/bin/rsh
+SED=/usr/bin/sed
+SEVENZ=/usr/bin/7z
+SLEEP=/usr/bin/sleep
+SORT=/usr/bin/sort
+SU=/usr/bin/su
+TAIL=/usr/bin/tail
+TAR=/usr/bin/tar
+TOUCH=/usr/bin/touch
+UNAME=/usr/bin/uname
+UNZIP=/usr/bin/unzip
+WC=/usr/bin/wc
+ZIP=/usr/bin/zip
+
+#********************************************************************
+#
+#       functions
+#
+#********************************************************************
+
+### Function: abort_script ###
+#
+# Abort the script when an error has been detected
+#
+# Arguments:
+#       $1 - Error message
+# Return Values:
+#       none
+#*****************************************************************
+abort_script()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : abort_script\n"
+
+  ${ECHO} "ERROR: $1\n";
+
+  exit 1
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : abort_script\n"
+}
+
+
+### Function: check_dirs ###
+#
+# Check for required directories
+#
+# Arguments:
+#       none
+# Return Values:
+#       none
+#****************************
+check_dirs()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : check_dirs\n"
+
+  #****************************
+  # Check that PATCH_DIR exists
+  #****************************
+  if [ ! -d ${PATCHES_DIR} ]
+  then
+      abort_script "${PATCHES_DIR} does not exist"
+  else
+      ${ECHO} "${PATCHES_DIR} exists\n"
+  fi
+
+  #*********************************************
+  # Check that OUT_DIR is a fully qualified name
+  #*********************************************
+  if [ ! `${ECHO} ${OUT_DIR} | ${EGREP} '^[/]'` ]
+  then
+      abort_script "${OUT_DIR} is not a fully qualified name"
+  fi
+
+  #****************************************************
+  # Check that OUT_DIR exists and if not then create it
+  #****************************************************
+  if [ ! -d ${OUT_DIR} ]
+  then
+      ${ECHO} "${OUT_DIR} does not exist\n"
+      ${ECHO} "Creating ${OUT_DIR}\n"
+      ${MKDIR} -p ${OUT_DIR}
+      if [ $? -ne 0 ]
+      then
+          abort_script "Could not create ${OUT_DIR}"
+      fi
+      ${ECHO} "${OUT_DIR} created successfully\n"
+  else
+      ${ECHO} "${OUT_DIR} exists\n"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : check_dirs\n"
+}
+
+
+### Function: check_label ###
+#
+# Create a label string and make a new label
+# if it does not already exist.
+#
+# Arguments:
+#       none
+# Return Values:
+#       none
+#****************************
+check_label()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : check_label\n"
+
+  #********************************
+  # Get PRODNUM field from cxp_info
+  #********************************
+  PRODNUM=`grep "^PRODNUM=" ${CXP_INFO}`
+  if [ $? -ne 0 ]
+  then
+      abort_script "No PRODNUM field in ${CXP_INFO}"
+  fi
+
+  #*************************
+  # Strip out product number
+  #*************************
+  PRODNUM=${PRODNUM##*=}
+
+  #***********************
+  # Build new label string
+  #***********************
+  LABEL=${PRODNUM}_${RSTATE}
+  ${ECHO} "New label is ${LABEL}"
+
+  #******************************
+  # Check if label already exists
+  #******************************
+  cd ${CXP_HOME}
+  if [ $? -ne 0 ]
+  then
+      abort_script "Unable to cd into ${CXP_HOME}"
+  fi
+  ${CLEARTOOL} desc -s lbtype:${LABEL} 2>/dev/null
+  if [ $? -eq 0 ]
+  then
+      abort_script "Label ${LABEL} already exists"
+  fi
+
+  #*****************
+  # Create new label
+  #*****************
+  ${CLEARTOOL} mklbtype -c 'New Patches label from build_patches.bsh' ${LABEL}
+  if [ $? -ne 0 ]
+  then
+      abort_script "Unable to create label ${LABEL}"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : check_label\n"
+}
+
+
+### Function: check_and_set_config_spec ###
+#
+# Check that a config file exists for the supplied
+# release and set the config spec.
+#
+# Arguments:
+#       none
+# Return Values:
+#       none
+#****************************
+check_and_set_config_spec()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : check_and_set_config_spec\n"
+
+  if [ -f /view/sck/vobs/oss_sck/tools/cs/sck_o${RELEASE}.cs ]
+  then
+      ${ECHO} "Config spec file is /view/sck/vobs/oss_sck/tools/cs/sck_o${RELEASE}.cs\n"
+      CONFIG_SPEC="/view/sck/vobs/oss_sck/tools/cs/sck_o${RELEASE}.cs"
+      ${CLEARTOOL} setcs ${CONFIG_SPEC}
+      if [ $? -eq 0 ]
+      then
+          ${ECHO} "Set config spec ${CONFIG_SPEC}\n"
+      else
+          abort_script "Unable to set config spec ${CONFIG_SPEC}"
+      fi
+      ${CLEARTOOL} catcs
+      if [ $? -ne 0 ]
+      then
+          abort_script "Unable to catcs"
+      fi
+  else
+      abort_script "Config spec file /view/sck/vobs/oss_sck/tools/cs/sck_o${RELEASE}.cs not found"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : check_and_set_config_spec\n"
+}
+
+
+### Function: compare_rstates ###
+#
+# Ensure that the supplied r-state is newer
+# than the existing value in the cxp_info file.
+#
+# Arguments:
+#       none
+# Return Values:
+#       none
+#****************************
+compare_rstates()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : compare_rstates\n"
+
+  #**********************
+  # Check cxp_info exists
+  #**********************
+  if [ ! -f ${CXP_INFO} ]
+  then
+      abort_script "${CXP_INFO} does not exist"
+  fi
+
+  #********************************
+  # Get VERSION field from cxp_info
+  #********************************
+  VERSION=`grep "^VERSION=" ${CXP_INFO}`
+  if [ $? -ne 0 ]
+  then
+      abort_script "No VERSION field in ${CXP_INFO}"
+  fi
+
+  #******************
+  # Strip out r-state
+  #******************
+  CURRENT_RSTATE=${VERSION##*=}
+  ${ECHO} "Current r-state is ${CURRENT_RSTATE}\n"
+
+  #********************************
+  # Check for valid current r-state
+  #********************************
+  if [[ "${CURRENT_RSTATE}" =~ ${RSTATE_PATTERN} ]]
+  then
+      ${ECHO} "Current r-state ${CURRENT_RSTATE} is valid\n"
+  else
+      abort_script "Current r-state ${CURRENT_RSTATE} is invalid"
+  fi
+
+  #****************************
+  # Check for valid new r-state
+  #****************************
+  ${ECHO} "New r-state is ${RSTATE}\n"
+  if [[ "${RSTATE}" =~ ${RSTATE_PATTERN} ]]
+  then
+      ${ECHO} "New r-state ${RSTATE} is valid\n"
+  else
+      abort_script "New r-state ${RSTATE} is invalid"
+  fi
+
+  #**************************************
+  # Split r-states into 3 component parts
+  #**************************************
+  [[ "${RSTATE}" =~ ${RSTATE_SPLIT_PATTERN} ]]
+  RSTATE_1=${BASH_REMATCH[1]}
+  RSTATE_2=${BASH_REMATCH[2]}
+  RSTATE_3=${BASH_REMATCH[3]}
+  [ "${DEBUG}" ] && ${ECHO} "RSTATE_1=${RSTATE_1}"
+  [ "${DEBUG}" ] && ${ECHO} "RSTATE_2=${RSTATE_2}"
+  [ "${DEBUG}" ] && ${ECHO} "RSTATE_3=${RSTATE_3}\n"
+
+  [[ "${CURRENT_RSTATE}" =~ ${RSTATE_SPLIT_PATTERN} ]]
+  [ "${DEBUG}" ] && ${ECHO} ${BASH_REMATCH}
+  CURRENT_RSTATE_1=${BASH_REMATCH[1]}
+  CURRENT_RSTATE_2=${BASH_REMATCH[2]}
+  CURRENT_RSTATE_3=${BASH_REMATCH[3]}
+  [ "${DEBUG}" ] && ${ECHO} "CURRENT_RSTATE_1=${CURRENT_RSTATE_1}"
+  [ "${DEBUG}" ] && ${ECHO} "CURRENT_RSTATE_2=${CURRENT_RSTATE_2}"
+  [ "${DEBUG}" ] && ${ECHO} "CURRENT_RSTATE_3=${CURRENT_RSTATE_3}\n"
+
+  #*******************
+  # Field 1 comparison
+  #*******************
+  if [[ $RSTATE_1 -gt $CURRENT_RSTATE_1 ]]
+  then
+      #*********************
+      # New r-state is newer
+      #*********************
+      ${ECHO} "New r-state is newer than current r-state\n"
+      return 0
+  elif [[ $RSTATE_1 -lt $CURRENT_RSTATE_1 ]]
+  then
+      #*************************
+      # Current r-state is newer
+      #*************************
+      abort_script "Current r-state ${CURRENT_RSTATE} is newer than supplied r-state ${RSTATE}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "Matching r-state field 1\n"
+
+  #*************************************************
+  # Field 2 comparison, field 1 must have been equal
+  #*************************************************
+  if [[ $RSTATE_2 > $CURRENT_RSTATE_2 ]]
+  then
+      #*********************
+      # New r-state is newer
+      #*********************
+      ${ECHO} "New r-state is newer than current r-state\n"
+      return 0
+  elif [[ $RSTATE_2 < $CURRENT_RSTATE_2 ]]
+  then
+      #*************************
+      # Current r-state is newer
+      #*************************
+      abort_script "Current r-state ${CURRENT_RSTATE} is newer than supplied r-state ${RSTATE}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "Matching r-state field 2\n"
+
+  #*********************************************************
+  # Field 3 comparison , first 2 fields must have been equal
+  #*********************************************************
+  if [[ $RSTATE_3 -gt $CURRENT_RSTATE_3 ]]
+  then
+      #*********************
+      # New r-state is newer
+      #*********************
+      ${ECHO} "New r-state is newer than current r-state\n"
+      return 0
+  elsif [[ $RSTATE_3 -lt $CURRENT_RSTATE_3 ]]
+      #*************************
+      # Current r-state is newer
+      #*************************
+      abort_script "Current r-state ${CURRENT_RSTATE} is newer than supplied r-state ${RSTATE}"
+  else
+      #***********************************************
+      # Current r-state is the same as the new r-state
+      #***********************************************
+      [ "${DEBUG}" ] && ${ECHO} "Matching r-state field 3\n"
+      abort_script "Current r-state ${CURRENT_RSTATE} is the same as the supplied r-state ${RSTATE}"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : compare_rstates\n"
+}
+
+
+### Function: create_tar_gzip ###
+#
+# tar and gzip the Patches directory to the
+# supplied output directory.
+#
+# Arguments:
+#       none
+# Return Values:
+#       none
+#****************************
+create_tar_gzip()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : create_tar_gzip\n"
+
+  #************
+  # cd into vob
+  #************
+  ${ECHO} "cd ${CXP_HOME}\n"
+  cd ${CXP_HOME}
+  if [ $? -ne 0 ]
+  then
+      abort_script "Unable to cd into ${CXP_HOME}"
+  fi
+
+  #**************************
+  # tar the Patches directory
+  #**************************
+  ${ECHO} "${TAR} cvf ${OUT_DIR}/Patches_${RSTATE}.tar Patches\n"
+  ${TAR} cvf ${OUT_DIR}/Patches_${RSTATE}.tar Patches
+  if [ $? -ne 0 ]
+  then
+      abort_script "${TAR} cvf ${OUT_DIR}/Patches_${RSTATE}.tar Patches"
+  fi
+  ${ECHO}
+
+  #************************************
+  # gzip the Patches directory tar file
+  #************************************
+  ${ECHO} "${GZIP} ${OUT_DIR}/Patches_${RSTATE}.tar\n"
+  ${GZIP} ${OUT_DIR}/Patches_${RSTATE}.tar
+  if [ $? -ne 0 ]
+  then
+      abort_script "${GZIP} ${OUT_DIR}/Patches_${RSTATE}.tar"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : create_tar_gzip\n"
+}
+
+
+### Function: label_vob ###
+#
+# Add the previously created label to the Patches
+# directory in the vob.
+#
+# Arguments:
+#       none
+# Return Values:
+#       none
+#****************************
+label_vob()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : label_vob\n"
+
+  #**************
+  # Label the vob
+  #**************
+  ${CLEARTOOL} mklabel -rec $LABEL ${PATCHES_DIR}
+  if [ $? -ne 0 ]
+  then
+      abort_script "${CLEARTOOL} mklabel -rec $LABEL ${PATCHES_DIR}"
+  fi
+
+  #************************************************************************************
+  # Lock the label
+  # Info: lock label type
+  # If a label type is locked, you cannot do the following:
+  # 1) Use the type in an rmtype, rename, or mklbtype -replace command
+  # 2) Attach or remove a version label of that type with mklabel or rmlabel
+  #    (This includes moving a label from one version to another with mklabel -replace)
+  #************************************************************************************
+  ${CLEARTOOL} lock lbtype:${LABEL}
+  if [ $? -ne 0 ]
+  then
+      abort_script "${CLEARTOOL} lock lbtype:${LABEL}"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : label_vob\n"
+}
+
+
+### Function: update_cxp_info ###
+#
+# Update the cxp_info file with the new r-state
+#
+# Arguments:
+#       none
+# Return Values:
+#       none
+#****************************
+update_cxp_info()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : update_cxp_info\n"
+
+  #*******************
+  # Change the r-state
+  #*******************
+  ${CAT} ${CXP_INFO} | while read LINE
+  do
+    VERSION_PATTERN="^VERSION="
+    if [[ "${LINE}" =~ ${VERSION_PATTERN} ]]
+    then
+        ${ECHO} "VERSION=${RSTATE}"
+    else
+        ${ECHO} ${LINE}
+    fi
+  done > ${TMP_CXP_INFO}
+  if [ $? -ne 0 ]
+  then
+      abort_script "Updating ${TMP_CXP_INFO} with new r-state"
+  fi
+  ${ECHO} "Updated r-state in temporary cxp_info file ${TMP_CXP_INFO}\n"
+  [ "${DEBUG}" ] && ${CAT} ${TMP_CXP_INFO} && ${ECHO}
+
+  #************************
+  # Check out cxp_info file
+  #************************
+  ${CLEARTOOL} co -nc ${CXP_INFO}
+  if [ $? -ne 0 ]
+  then
+      abort_script "${CLEARTOOL} co -nc ${CXP_INFO}"
+  fi
+  ${ECHO} "Checked out ${CXP_INFO}\n"
+
+  #***************************************
+  # Copy temp cxp_info file to ${CXP_INFO}
+  #***************************************
+  ${CP} ${TMP_CXP_INFO} ${CXP_INFO}
+  if [ $? -ne 0 ]
+  then
+      abort_script "${CP} ${TMP_CXP_INFO} ${CXP_INFO}"
+  fi
+  ${ECHO} "Copied ${TMP_CXP_INFO} to ${CXP_INFO}\n"
+
+  #***********************
+  # Check in cxp_info file
+  #***********************
+  ${CLEARTOOL} ci -ident -c "update with new version ${RSTATE}" ${CXP_INFO}
+  if [ $? -ne 0 ]
+  then
+      abort_script "${CLEARTOOL} ci -ident -c \"update with new version ${RSTATE}\" ${CXP_INFO}"
+  fi
+  ${ECHO} "Checked in ${CXP_INFO}\n"
+
+  #******************************************
+  # Delete temp cxp_info file ${TMP_CXP_INFO}
+  #******************************************
+  ${RM} ${TMP_CXP_INFO}
+  if [ $? -ne 0 ]
+  then
+      abort_script "${RM} ${TMP_CXP_INFO}"
+  fi
+  ${ECHO} "Deleted temporary cxp_info file ${TMP_CXP_INFO}\n"
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : update_cxp_info\n"
+}
+
+
+### Function: usage_msg ###
+#
+# Display the usage message
+#
+# Arguments:
+#       none
+# Return Values:
+#       none
+#****************************
+usage_msg()
+{
+  ${ECHO} "Usage: `${BASENAME} $0` -c <release> -o <fqn_of_output_dir> 
+                         -r <r-state> ] [ -D ] [ -F ]
+
+  options:
+      -c : The release to build, e.g. 14.2.6
+           This is used to select the config spec.
+
+      -o : Full path to output directory where the Patches tar/gzip file
+           will be stored.
+
+      -r : New r-state for this build of the Patches product.
+
+      -D : Debug, increased logging.
+
+      -F : Force, only tar/gzip the directory. Make no changes to ClearCase."
+}
+
+
+#********************************************************************
+#
+#       Main body of program
+#
+#********************************************************************
+
+#*****************
+# Set up variables
+#*****************
+START_TIME=`${DATE} +'%Y%m%d%H%M%S'`
+RSTATE_PATTERN="^R[0-9]+[A-Z][0-9]+$"
+RSTATE_SPLIT_PATTERN="^R([0-9]+)([A-Z])([0-9]+)$"
+CXP_HOME="/vobs/fw/cif2_CDimage/cif4/OM"
+PATCHES_DIR="${CXP_HOME}/Patches"
+CXP_INFO="${PATCHES_DIR}/cxp_info"
+TMP_CXP_INFO="/tmp/build_patches.bsh_cxp_info_${START_TIME}"
+
+#**************************
+# Parse supplied parameters
+#**************************
+while getopts ":c:o:r:DF" arg
+do
+  case ${arg} in
+    c) RELEASE="${OPTARG}"
+       ;;
+    o) OUT_DIR="${OPTARG}"
+       ;;
+    r) RSTATE="${OPTARG}"
+       ;;
+    D) DEBUG="YES"
+       ;;
+    F) FORCE="YES"
+       ;;
+    *) usage_msg
+       exit 1
+       ;;
+  esac
+done
+if [ `expr ${OPTIND} - 1` -ne ${#} ]
+then
+    ${ECHO} "ERROR: Invalid parameter string '${@}'\n"
+    sleep 2
+    usage_msg
+    exit 1
+fi
+if [ "$RELEASE" == "" ] || [ "$OUT_DIR" == "" ] || [ "$RSTATE" == "" ]
+then
+    ${ECHO} "ERROR: Missing parameters\n"
+    sleep 2
+    usage_msg
+    exit 1
+fi
+
+#******************************
+# Check and set the config spec
+#******************************
+check_and_set_config_spec
+
+#******************
+# Check directories
+#******************
+check_dirs
+
+#**************
+# Check r-state
+#**************
+[[ ! ${FORCE} ]] && compare_rstates
+
+#************
+# Check label
+#************
+[[ ! ${FORCE} ]] && check_label
+
+#****************
+# Update cxp_info
+#****************
+[[ ! ${FORCE} ]] && update_cxp_info
+
+#**********
+# Label vob
+#**********
+[[ ! ${FORCE} ]] && label_vob
+
+#*********************
+# Create tar/gzip file
+#*********************
+create_tar_gzip
+
+exit 0

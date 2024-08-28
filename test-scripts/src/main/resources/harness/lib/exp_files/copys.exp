@@ -1,0 +1,52 @@
+#!./expect -- 
+set force_conservative 1
+#exp_internal 1
+
+set source [lindex $argv 0]
+set dest [lindex $argv 1]
+set mws [lindex $argv 2]
+set mws_rootpw [lindex $argv 3]
+
+set timeout 9600
+expect_after timeout exit
+spawn ssh -ostricthostkeychecking=no root@$mws
+
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "$mws_rootpw\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+expect "\/#"
+sleep 2
+send -- "bash\r"
+expect "#"
+send -- "cp -rp $source/ossrc_base_sw $dest\r"
+expect "#"
+send -- "cp -r $source/om $dest\r"
+expect "#"
+send -- "chmod 777 $dest/ossrc_base_sw/\r"
+expect "#"
+send -- "chmod 777 $dest/ossrc_base_sw/\r"
+expect "#"
+send -- "chmod 777 $dest/ossrc_base_sw/.ossrc_base_sw_i386\r"
+expect "#"
+send -- "chmod 777 $dest/ossrc_base_sw/.ossrc_base_sw_sparc\r"
+expect "#"
+send -- "chmod 777 $dest/om/.om\r"
+expect "#"
+sleep 5

@@ -1,0 +1,54 @@
+Do you want to add/modify a system in the /ericsson/config/cluster.ini file (y/n)?
+y
+Enter hostname of system to add or modify*
+atrcxb1281
+hostname
+atrcxb1281
+IPaddress*
+10.45.224.24
+*PASSWD*
+shroot
+*PASSWD*
+shroot
+First Storage LAN NIC (NIC1)*
+
+Second Storage LAN NIC (NIC2)*
+
+First Storage LAN NIC (NIC1) Base IP address*
+10.42.232.37
+Second Storage LAN NIC (NIC2) Base IP address*:
+10.42.232.38
+Storage IP Address*
+10.42.232.39
+Storage LAN Netmask*
+255.255.252.0
+First Public LAN NIC (NIC1)*
+
+Second Public LAN NIC (NIC2)*
+
+First Public LAN NIC (NIC1) Base IP address*
+10.45.224.26
+Second Public LAN NIC (NIC2) Base IP address*
+10.45.224.27
+Public LAN Netmask*
+255.255.248.0
+Public LAN default router*
+10.45.224.1
+First Cluster Heartbeat NIC (NIC1)*
+
+Second Cluster Heartbeat NIC (NIC2)*
+
+Private LAN NIC*
+
+Private LAN NIC IP address*
+
+Private LAN Netmask*
+
+Backup LAN NIC*
+
+Backup LAN NIC IP address*
+10.248.0.227
+Backup LAN Netmask*
+255.255.255.0
+Are these values correct (y/n)*
+y

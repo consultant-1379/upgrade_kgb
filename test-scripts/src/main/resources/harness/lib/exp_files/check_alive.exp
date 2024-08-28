@@ -1,0 +1,52 @@
+#!./expect -- 
+
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+
+
+
+set timeout 1800 
+set count 0
+while {$count < 15} {
+	spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${ADMIN1}.athtem.eei.ericsson.se
+	set count [expr $count+1]
+        expect {
+        	"Password:" {
+			send "shroot\r"
+			if {$ADMIN2 == "NO"} {
+				exit 0
+				}
+                        break}
+		"Last login:" {
+                        if {$ADMIN2 == "NO"} {
+                                exit 0
+                                }
+                        break}
+		"Connection timed out" {
+			puts "waiting 5 mins..."
+			sleep 300}
+		"Connection refused" {
+			puts "waiting 5 mins..."
+			sleep 300}
+
+                timeout {
+                        puts "timeout"}
+                }
+}
+
+if {$ADMIN2 != "NO"} {
+	while {$count < 15} {
+		send "ssh ${ADMIN2}-priv\r"
+		set count [expr $count+1]
+        	expect {
+                	"${ADMIN2}\{root\}" {
+                        	exit 0}
+                	timeout {
+                        	puts "timeout"
+                        }
+                }
+	}
+}
+exit 1

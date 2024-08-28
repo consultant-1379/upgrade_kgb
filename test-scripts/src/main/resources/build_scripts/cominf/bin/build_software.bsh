@@ -1,0 +1,256 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/04/2012    edavmax         First version
+# 28/01/2013    edavmax         Port to Solaris
+#
+# This script calls the media build script to build cominf
+# media and packages
+#
+
+usage() {
+cat << EOF
+
+Usage:  ${G_SCRIPTNAME} [-h] 
+
+This script is called by the Jenkins server. It performs the following actions:
+
+-Builds Cominf OM Services packages and media 
+-Caches media on MWS
+
+
+EOF
+
+return 0
+
+}
+
+
+
+#
+# Function to create a tar ball from supplied rpm
+#
+create_test_harness_tarball() {
+	local test_rpm=$1
+	local tmp_dir="/tmp/cominf_test_rpm"
+	if [ ! -s "$test_rpm" ]; then
+		echo "Error rpm \"$1\" does not exist or is empty"
+		return 1
+	fi
+	if [ -d $tmp_dir ]; then
+		/bin/rm -rf $tmp_dir || return 1
+	fi
+	mkdir -p $tmp_dir || return 1
+	cd $tmp_dir
+	$RPM2CPIO $test_rpm | cpio -idv > /dev/null 2>&1 || return 1 
+	[ -d $tmp_dir/opt ] || return 1
+	tar -zcvf $G_TESTHARNESS_TGZ  opt > /dev/null || return 1
+	echo "Creating cominf test harness tarball $WORKSPACE/$G_TESTHARNESS_TGZ"
+	/bin/cp -f $G_TESTHARNESS_TGZ $WORKSPACE || {
+		echo "Error - copy of test harness tarball to workspace dir $WORKSPACE"
+		return 1
+	}
+	
+
+}
+
+#
+# Function to cache media on MWS
+#
+cache_media_mws() {
+	# if kickstarts are in progress
+	# at the moment then we wait
+
+	l_count=0
+	while pgrep -f $G_JUMPSTARTSCRIPT > /dev/null; do
+		echo "Waiting for $G_JUMPSTARTSCRIPT to finish"
+		if [ $l_count -gt 360 ]; then
+			echo "Error - giving up on waiting for $G_JUMPSTARTSCRIPT to finish"
+			return 1
+		fi   
+		sleep 10
+		let l_count+=1
+	done
+	ssh root@$G_MWS_IP mkdir -p $G_MWS_TMPDIR || {
+                echo "** Error failed to create dir $G_MWS_TMPDIR on MWS"
+                return 1
+        }
+
+	printf "\n** caching media on MWS **\n"
+	for file in $G_SCRIPTDIR/cache_new_media.bsh $G_ETCDIR/ci.env ; do
+		scp $file root@$G_MWS_IP:$G_MWS_TMPDIR || return 1
+	done
+	ssh -t root@$G_MWS_IP $G_MWS_TMPDIR/cache_new_media.bsh $G_CLEARCASE_HOST $G_CLEARCASE_USER $G_OCS_CLEARCASE_VIEW ${G_COMINFISOLOCATION}/${G_MEDIA_NAME}.iso || return 1
+
+}
+
+#
+# function to build packages and media
+#
+build_packages_and_media() {
+
+echo "** Building COMInf packages and Media **"
+ssh ${G_CLEARCASE_USER}@${G_CLEARCASE_HOST} "$CT setview -exec \"$G_COMINFBUILDSCRIPT -m $G_MEDIA_NAME -c -f ${G_MEDIA_NAME}.iso\" $G_OCS_CLEARCASE_VIEW" || {
+	echo "** Error failed to build cominf packages/media **"
+	exit 1
+}
+
+
+#copy cominf packages to workspace
+for pkg in $G_COMINF_PACKAGES; do
+	[ -f $WORKSPACE/$pkg ] && {
+		/bin/rm -f $WORKSPACE/$pkg  > /dev/null 2>&1
+	}
+done
+/bin/rm -f $WORKSPACE/media_info > /dev/null 2>&1
+echo "Copying cominf files from build server"
+ssh ${G_CLEARCASE_USER}@${G_CLEARCASE_HOST} "$CT setview -exec \"cd $G_COMINFMEDIAVOBPATH/$G_MEDIA_NAME/dvd/Solaris_10/i386/Packages; scp $G_COMINF_PACKAGES ../../../manifest/media_info jenkins@$G_CI_IP:$WORKSPACE\" $G_OCS_CLEARCASE_VIEW" || {
+	echo "** Error - failed to copy cominf packages from build server **"
+	exit 1
+}
+
+
+# build cominf test harness
+build_script=$WORKSPACE/build.sh
+repo_name=cominf_test
+version=R1A01
+rpmfile=$WORKSPACE/RPMS/noarch/$G_COMINF_TEST_HARNESS_RPM 
+
+if [ -f $rpmfile ]; then
+	/bin/rm -f $rpmfile
+fi
+echo -e "*********************************************************\n"
+if [ -x $build_script ]; then
+	echo "building $repo_name rpm using command $build_script"
+	if $build_script $version > /dev/null 2>&1 > /dev/null;  then
+		if [ -s $rpmfile ]; then
+		create_test_harness_tarball $WORKSPACE/RPMS/noarch/$G_COMINF_TEST_HARNESS_RPM || {
+			echo "Failed to create cominf test harness tarball"
+			exit 1
+		}
+		else
+			echo "** Error - rpm file $rpmfile does not exist or is empty **"
+		fi
+	else
+		echo "Error - build script $build_script failed"
+		exit 1
+	fi
+else
+	echo "Note: no build script found for repo $repo_name. Assuming no rpm build needed."
+fi
+echo -e "*********************************************************\n"
+echo "** Building SMRS package **"
+${G_SCRIPTDIR}/build_smrs_package.bsh || {
+	echo "Error - failed to build smrs package"
+	exit 1
+}
+
+# tar up cominf software
+cd $WORKSPACE
+[ -f $G_COMINF_SOFTWARE_TGZ ] && /bin/rm -f $G_COMINF_SOFTWARE_TGZ
+echo "Creating cominf software tar file"
+tar zcvf $G_COMINF_SOFTWARE_TGZ $G_COMINF_PACKAGES $G_TESTHARNESS_TGZ || {
+	echo "** Error failed to create cominf software tar file"
+	exit 1
+} 
+
+
+}
+
+#MAIN
+
+G_INST_TYPE=cominf
+G_SCRIPTNAME=$(/bin/basename $0)
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_ETCDIR=$( dirname $G_SCRIPTDIR )/etc
+. $G_ETCDIR/ci.env
+G_BUILD_ROOTDIR=$( /usr/bin/dirname $( /usr/bin/dirname $G_SCRIPTDIR ))
+G_JUMPSTARTSCRIPT=/export/scripts/CLOUD/bin/master.sh
+G_SRC_BOOTSTRAPDIR=$G_BUILD_ROOTDIR/bootstrap/$G_INST_TYPE
+G_SRC_CXPINFODIR=$G_BUILD_ROOTDIR/cxp_info
+G_SRC_REPODATA=$G_BUILD_ROOTDIR/repodata
+G_COMPSXMLFILE=$G_SRC_REPODATA/comps.xml
+G_DEST_PACKAGEDIRNAME=packages
+G_COMINF_SOFTWARE_TGZ=cominf_software.tar.gz
+tarfilename=$(basename $G_COMINF_TEST_HARNESS_RPM)
+G_TESTHARNESS_TGZ=${tarfilename%.*}.tar.gz
+G_COMINFMEDIAVOBPATH=/vobs/cominf_media/media_build
+G_COMINFBUILDSCRIPT=${G_COMINFMEDIAVOBPATH}/bin/cominf_build.bsh
+G_COMINFISOLOCATION=${G_COMINFMEDIAVOBPATH}/iso
+G_MEDIA_NAME=om_services
+G_COMINF_PACKAGES="ERICocs.pkg ERICsdse.pkg ERICpkg.adm"
+
+while getopts ":j:h" opt
+	do
+	case ${opt} in
+		h)      # Print help and exit OK
+			usage
+			exit 0
+		;;
+		j)
+			G_JENKINSJOBNAME=$OPTARG
+		;;
+		*)      # Print usage and exit error
+			usage
+			exit 1
+		;;
+	esac
+done
+
+# check for installed utilities
+for utility in $GIT $RPMBUILD $RPM2CPIO $CREATEREPO; do
+	if [ ! -x $utility ]; then
+		echo "Error - looks like $utility not installed. Install associated rpm & try again."
+		exit 1
+	fi
+done
+
+# get the IP of HUB server
+#G_CLEARCASE_HOST=$(${G_SCRIPTDIR}/select_hub_server.py)
+G_CLEARCASE_HOST=$G_DEFAULT_CLEARCASE_HOST
+[ -z "$G_CLEARCASE_HOST" ] && {
+	echo "Failed to determine IP of clearcase host"
+	exit 1
+}
+
+if [ -z "$WORKSPACE" ]; then 
+	# script called outside jenkins env
+	if [ -z "$G_JENKINSJOBNAME" ]; then
+		echo "** Error - jenkins job name must be specified if script not run from jenkins"
+		exit 1
+	else
+		WORKSPACE=$HOME/workspace/$G_JENKINSJOBNAME
+	fi
+fi
+
+if [ ! -d "$WORKSPACE" ]; then
+	echo "** Error - workspace dir \"$WORKSPACE\" does not exist"
+	exit 1
+	
+fi
+
+build_packages_and_media
+
+
+# cache new media
+cache_media_mws || {
+	echo "** Error failed to cache cominf media"
+	exit 1  
+}
+
+
+
+exit 0

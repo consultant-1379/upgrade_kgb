@@ -1,0 +1,652 @@
+#!/bin/bash
+
+
+# *****************************************************************************
+# Script Name:   configure_shipment
+# Author:        edavmax 
+# Function:      setup MWS to receive shipment
+#
+# History:       07-10-11 by Rob Blee
+#		24-05-13 edavmax refactored for infra team
+# *****************************************************************************
+
+
+# usage function
+usage () {
+cat << EOF
+
+Configures MWS to receive a shipment or shipments from DM server 
+
+Usage:  ${SCRIPTNAME} -a <action> [ -t <team> ] [ -s <shipment> ] [ -c <cron schedule> ]
+			[ -p <SPARC Solaris Media location> ] [ -x <X86 Solaris Media location> ]
+
+
+Example:
+
+${SCRIPTNAME} -a add -t infra -s "OSSRC_O13_2/13.2.9_LLSVA OSSRC_O14_0/14.0.5.daily" 
+	-c '1 0 * * *' -p /JUMP/SOL_MEDIA/2 -x /JUMP/SOL_MEDIA/1
+
+${SCRIPTNAME} -a modify
+
+${SCRIPTNAME} -a delete 
+
+EOF
+    return 0
+}
+
+
+#
+# cleanup script
+#
+cleanupOnExit() {
+	echo "cleaning up.."
+	if [ -f $LOCKFILE ]; then
+		/bin/rm -f $LOCKFILE || {
+			echo "Failed to remove lockfile"
+		}
+	fi
+	
+
+}
+
+#This function restart crontab service
+#i/p parameters : crontab service name
+#Return codes: 0=success 1=failure
+
+enableCrontabService() {
+	local l_crontab_service=$1
+	info "Restarting crontab service."
+	svcadm disable -s $l_crontab_service &&
+	svcadm enable -s $l_crontab_service || {
+		error "Failed to restart crontab service."
+		return 1
+	}
+	return 0
+
+}
+
+# This function adds the specified entry to the root cron
+#
+# I/P parameters: line to place in cron
+# Return codes: 0=success, 1=failure
+
+updateRootCron() {
+	l_cron_sched=$1
+	l_cron_script=$2
+	[ -z "$l_cron_sched" ] || [ -z "$l_cron_script" ] && {
+		error "$FUNCNAME: required parameter missing."
+		return 1
+	}
+
+	grep -v "$l_cron_script" $G_ROOTCRONTAB > $G_ROOTCRONTAB.$$ &&
+	echo "$l_cron_sched $l_cron_script" >> $G_ROOTCRONTAB.$$ &&
+	mv -f $G_ROOTCRONTAB.$$ $G_ROOTCRONTAB || {
+		error "Failed to update root crontab with entry for $l_cron_script."
+		return 1
+	}
+	info "Updated root crontab with entry $l_cron_script."
+	enableCrontabService $G_CRON_SERVICE || return 1
+	return 0
+}
+
+# This function removes the specified entry to the root cron
+#
+# I/P parameters: line to remove from cron
+# Return codes: 0=success, 1=failure
+
+removeFromRootCron() {
+	l_cron_script=$1
+	[ -z "$l_cron_script" ] && {
+		error "FUNCNAME: required parameter missing."
+		return 1
+	}
+	
+	grep -v "$l_cron_script" $G_ROOTCRONTAB > $G_ROOTCRONTAB.$$ && 
+	mv -f $G_ROOTCRONTAB.$$  $G_ROOTCRONTAB || {
+		error "Failed to remove entry for $l_cron_script from root cron."
+		return 1
+	}
+	info "Removed entry for $l_cron_script from root cron."
+	enableCrontabService $G_CRON_SERVICE|| return 1
+	return 0
+}
+
+#
+# This function enables the specified entry in the root cron
+# Assumes: G_ROOTCRONTAB is set
+# I/P parameters: script to enable in cron
+# Return codes: 0=success, 1=failure
+
+enableInRootCron() {
+        local l_cron_script=$1
+        [ -z "$l_cron_script" ] && {
+                error "enable_in_root_cron(): required parameter missing."
+                return 1
+        }
+	grep $l_cron_script $G_ROOTCRONTAB > /dev/null 2>&1 || {
+		error "No cron entry for $l_cron_script"
+		return 1
+	}
+        grep -v '^#' $G_ROOTCRONTAB | grep "$l_cron_script" > /dev/null 2>&1 && return 0
+        sed -e "s,^#\(.*$l_cron_script.*\),\1," $G_ROOTCRONTAB > $G_ROOTCRONTAB.$$ &&
+        mv -f $G_ROOTCRONTAB.$$ $G_ROOTCRONTAB || {
+                error "Failed to enable entry for $l_cron_script in root crontab."
+                return 1
+        }
+        info "Enabled entry for $l_cron_script in root crontab."
+	enableCrontabService $G_CRON_SERVICE || return 1
+        return 0
+}
+
+# This function enables the specified entry in the root cron
+# Assumes: G_ROOTCRONTAB is set
+# I/P parameters: script to disable in cron
+# Return codes: 0=success, 1=failure
+
+disableInRootCron() {
+        l_cron_script=$1
+        [ -z "$l_cron_script" ] && {
+                error "$FUNCNAME: required parameter missing."
+                return 1
+        }
+	grep $l_cron_script $G_ROOTCRONTAB > /dev/null 2>&1 || {
+		error "No cron entry for $l_cron_script"
+		return 1
+	}
+        grep -v '^#' $G_ROOTCRONTAB | grep "$l_cron_script" > /dev/null 2>&1 || return 0
+        sed -e "s,\(.*$l_cron_script.*\),#\1," $G_ROOTCRONTAB > $G_ROOTCRONTAB.$$ &&
+        mv -f $G_ROOTCRONTAB.$$ $G_ROOTCRONTAB || {
+                error "Failed to disable entry for $l_cron_script in root crontab."
+                return 1
+        }
+        info "Disabled entry for $l_cron_script in root crontab."
+        enableCrontabService $G_CRON_SERVICE|| return 1
+        return 0
+}
+
+# This function removes the specified entry to the root cron
+#
+# I/P parameters: line to remove from cron
+# Return codes: 0=success, 1=failure
+
+removeFromRootCron() {
+        l_cron_script=$1
+        [ -z "$l_cron_script" ] && {
+                error "$FUNCNAME: required parameter missing."
+                return 1
+        }
+
+        grep -v "$l_cron_script" $G_ROOTCRONTAB > $G_ROOTCRONTAB.$$
+        > $G_ROOTCRONTAB &&
+        cat $G_ROOTCRONTAB.$$ >> $G_ROOTCRONTAB || {
+                error "Failed to remove entry for $l_cron_script from root cron."
+                return 1
+        }
+        info "Removed entry for $l_cron_script from root cron."
+	enableCrontabService $G_CRON_SERVICE || return 1
+        return 0
+}
+
+
+createDirStructure() {
+	shipment=$1
+	if [ -z "$shipment" ]; then
+		error "$FUNCNAME: shipment arg not specified"
+		return 1
+	fi
+	mkdir -p $TEAM_MWS_DESTINATION/$shipment/$TESTPACKAGEDIR/om/one_shot &&
+	mkdir -p $TEAM_MWS_DESTINATION/$shipment/$TESTPACKAGEDIR/ossrc_base_sw/common &&
+	mkdir -p $TEAM_MWS_DESTINATION/$shipment/$TESTPACKAGEDIR/ossrc_base_sw/sparc &&
+	mkdir -p $TEAM_MWS_DESTINATION/$shipment/$TESTPACKAGEDIR/ossrc_base_sw/i386 &&
+	mkdir -p $TEAM_MWS_DESTINATION/$shipment/$TESTPACKAGEDIR/ossrc_base_sw/one_shot/common &&
+	mkdir -p $TEAM_MWS_DESTINATION/$shipment/$TESTPACKAGEDIR/ossrc_base_sw/one_shot/sparc &&
+	mkdir -p $TEAM_MWS_DESTINATION/$shipment/$TESTPACKAGEDIR/ossrc_base_sw/one_shot/i386 &&
+	chmod -fR 777 $TEAM_MWS_DESTINATION/$shipment || {
+		error "Issue occured creating directory structure for shipment"
+		return 1
+	}
+	if [ ! -h $TEAM_MWS_DESTINATION/$shipment/uploaded ]; then
+		pushd . > /dev/null &&
+		cd $TEAM_MWS_DESTINATION/$shipment &&
+		ln -s $TESTPACKAGEDIR/ossrc_base_sw/common uploaded || {
+			warning "Failed to create uploaded symlink"
+		}
+		popd > /dev/null 
+	fi
+	return 0
+}
+
+createLocFiles () {
+	shipment=$1
+	if [ -z "$shipment" ]; then
+		error "$FUNCNAME: shipment arg not specified"
+		return 1
+	fi
+
+	echo $SPARCSOLPATH/Solaris_10 > $TEAM_MWS_DESTINATION/$shipment/sol_sparc.loc &&
+	echo $SPARCSOLPATH/Solaris_10 > $TEAM_MWS_DESTINATION/$shipment/sol_sun4u.loc &&
+	echo $X86SOLPATH > $TEAM_MWS_DESTINATION/$shipment/sol_x86.loc 
+
+
+}
+
+updateNFS () {
+	dfstabfile=/etc/dfs/dfstab
+	grep "$MWS_DESTINATION/teams" $dfstabfile > /dev/null 2>&1 || {
+		info "updating $dfstabfile"
+		echo "share -F nfs -o ro $MWS_DESTINATION/teams" >> $dfstabfile || {
+			error "Failed to update $dfstabfile"
+			return 1
+		}
+		shareall
+	}
+
+
+}
+
+configureShipment() {
+	check_shipment $shipment FALSE || {
+		return 1
+	}
+	createDirStructure $shipment || {
+		 return 1
+	}
+	createLocFiles $shipment || {
+		 return 1
+	}
+	if [ -n "$CRONSCHED" ]; then
+		#updateRootCron "$CRONSCHED" "$COPYJUMPSCRIPT -t $TEAM -s \"$SHIPMENTS\""  || {
+		# 	return 1
+		#}
+		info "If this is a .daily shipment you should schedule a nightly cron by adding following line to root crontab"
+		echo "$CRONSCHED $COPYJUMPSCRIPT -t $TEAM -s \"$SHIPMENTS\""
+	fi
+	updateNFS || { 
+		return 1
+	}
+
+}
+
+menuitems() {
+
+    	echo "Select number for shipment to be deleted:"
+    	for i in ${!TEAM_SHIPMENTS[@]}; do
+        	printf "%3d%s) %s\n" $((i+1)) "${choices[i]:- }" "${TEAM_SHIPMENTS[i]}"
+    	done
+    	[[ "$msg" ]] && echo "$msg"; :
+}
+
+select_shipments() {
+	unset SELECTED_SHIPMENTS
+	unset TEAM_SHIPMENTS 
+
+	if [ -z "$SELECTED_TEAM" ]; then
+	 	error "$FUNCNAME: no team selected!"
+		return 
+	fi
+	pushd . > /dev/null
+	cd $MWS_DESTINATION/teams/$SELECTED_TEAM
+	IFS=" "
+	TEAM_SHIPMENTS=( $( find . -type f -name  sol_x86.loc -exec dirname {} \; | sed 's/^\.\///g' | tr "./" "" |  tr "\\n" " "  ) )
+	popd > /dev/null
+	unset IFS
+	
+	
+	prompt="Enter an option (enter again to uncheck, press RETURN when done): "
+	while menuitems && read -rp "$prompt" num && [[ "$num" ]]; do
+    	[[ "$num" != *[![:digit:]]* ]] && (( num > 0 && num <= ${#TEAM_SHIPMENTS[@]} )) || {
+        	msg="Invalid option: $num"; continue
+    	}
+    	((num--)); msg="${TEAM_SHIPMENTS[num]} was ${choices[num]:+un-}selected"
+    	[[ "${choices[num]}" ]] && choices[num]="" || choices[num]="x"
+	done
+	
+	for i in ${!TEAM_SHIPMENTS[@]}; do
+    		[[ "${choices[i]}" ]] && { 
+			SELECTED_SHIPMENTS="$SELECTED_SHIPMENTS ${TEAM_SHIPMENTS[i]}"
+		}
+	done
+	return 0
+}
+
+select_team() {
+	echo ""
+	echo ""
+	unset SELECTED_TEAM
+	PS3="Select number corresponding to team: "
+	select team in $VALID_TEAMS; do
+		if [ -n  "$team" ]; then
+			SELECTED_TEAM=$team
+			break
+		else
+			echo bad option
+		fi
+	done
+	if [ ! -d $MWS_DESTINATION/teams/$SELECTED_TEAM ]; then
+		error "Team shipment dir $MWS_DESTINATION/teams/$SELECTED_TEAM does not exist"
+		return 1
+	fi
+	echo "$SELECTED_TEAM selected"
+	echo ""
+}
+
+print_delete_warning() {
+cat << EOF
+
+*WARNING* - deleting a shipment removes the following:
+	- The cached OSSRC and OM media for chosen shipment.
+	- The media staging area in ${MWS_DESTINATION}/<team> including any test packages therein.
+	- Any crontab entries for the shipment
+
+
+EOF
+	okYN 
+	return $?
+
+	
+}
+
+delete_shipments() {
+	local errors=0
+	print_delete_warning || return 99 
+	select_team || return 1
+	select_shipments || return 1
+	echo ""
+	echo ""
+	if [ -n "$SELECTED_SHIPMENTS" ]; then
+		info "Shipments selected for deletion:"
+		echo $SELECTED_SHIPMENTS | tr " " "\\n"
+		echo ""
+		okYN 
+		ret=$?
+		if [ $ret -ne 0 ]; then
+			return $ret
+		fi
+		echo ""
+		for del_shipment in $SELECTED_SHIPMENTS; do
+			om_cached_media_location=$MWS_CACHEDLOCATION/OM_MEDIA/${del_shipment}_${SELECTED_TEAM}
+			if [ -d $om_cached_media_location ]; then
+				info "Removing cached OM media for shipment $del_shipment"
+				echo "$MWS_NFSMEDIACACHESCRIPT -a remove -m om -p $om_cached_media_location -N"
+				$MWS_NFSMEDIACACHESCRIPT -a remove -m om -p $om_cached_media_location -N || {
+					warning "Problem removing cached OM media for shipment $del_shipment"
+					let errors+=1
+				}
+			else
+				warning "Cached OM media dir $om_cached_media_location does not exist"
+				let errors+=1
+			fi
+			ossrc_cached_media_location=$MWS_CACHEDLOCATION/OSSRC_MEDIA/${del_shipment}_${SELECTED_TEAM}
+			if [ -d $ossrc_cached_media_location ]; then
+				info "Removing cached OSSRC media for shipment $del_shipment"
+				echo "$MWS_NFSMEDIACACHESCRIPT -a remove -m ossrc -p $ossrc_cached_media_location -N"
+				$MWS_NFSMEDIACACHESCRIPT -a remove -m ossrc -p $ossrc_cached_media_location -N || {
+					warning "Problem removing cached OSSRC media for shipment $del_shipment"
+					let errors+=1
+				}
+			else
+				warning "Cached OSSRC media dir $ossrc_cached_media_location does not exist"
+				let errors+=1
+			fi
+			ossrc_ug_cached_media_location=$MWS_CACHEDLOCATION/OSSRC_MEDIA/${del_shipment}_${SELECTED_TEAM}_UG
+			if [ -d $ossrc_ug_cached_media_location ]; then
+				info "Removing cached OSSRC upgrade media for shipment $del_shipment"
+				echo "$MWS_NFSMEDIACACHESCRIPT -a remove -m ossrc -p $ossrc_ug_cached_media_location -N"
+				$MWS_NFSMEDIACACHESCRIPT -a remove -m ossrc -p $ossrc_ug_cached_media_location -N || {
+					warning "Problem removing cached OSSRC media for shipment $del_shipment"
+					let errors+=1
+				}
+			fi
+
+			if [ -d $MWS_DESTINATION/teams/$SELECTED_TEAM/$del_shipment ]; then
+				info "Removing media staging area for shipment $del_shipment"
+				/bin/rm -rf $MWS_DESTINATION/teams/$SELECTED_TEAM/$del_shipment || {
+					warn "Unable to remove team staging area for shipment $del_shipment"
+					let errors+=1
+				}
+			else
+				warning "Unable to locate team staging area for shipment $del_shipment"
+				let errors+=1
+
+			fi
+			removeFromRootCron "copy_jump -t $SELECTED_TEAM -s \"$del_shipment\"" || {
+				warning "Unable to remove cron entry for $del_shipment"
+			}
+			
+		done
+	else
+		info "No shipments selected for deletion"
+		return 0
+	fi
+	return $errors
+
+
+}
+
+okYN() {
+	while true; do
+		echo -n "OK to continue (y/n) [y] "
+		read response
+		[ -z "$response" ] && response=y
+		if [[ "$response" = y || "$response" = "Y" ]]; then
+			return 0
+		elif [[ "$response" = n || "$response" = "N" ]]; then
+			return 99 
+		else
+			echo "Invalid response"
+	fi
+	done
+
+
+}
+
+umask 0
+DATETIME=`date +%d-%m-%Y_%H-%M-%S`
+SCRIPTNAME=$(basename $0)
+LOGDIR=/var/tmp/${SCRIPTNAME}_log
+LOG=${LOGDIR}/${SCRIPTNAME}_${DATETIME}.log
+SCRIPTDIR=$(cd $(dirname $0); pwd)
+COPYJUMPSCRIPT=$SCRIPTDIR/copy_jump
+DM_SERVER_IP=159.107.173.47
+DM_SHIPMENTLOCATION=/net/${DM_SERVER_IP}/export/jumpstart
+VALID_TEAMS="infra 3pp iiug 10g sol_patches stor ci mihaiela"
+II_BUILD_COMPLETEFLAGS="copy_sparc copy_i386"
+LOCKFILEDIR=/var/tmp/${SCRIPTNAME}_lck
+LOCKFILE=$LOCKFILEDIR/$$
+MWS_DESTINATION=/export/jumpstart
+RSYNC=/usr/local/bin/rsync
+CI_INTEGRATIONVOBBINDIR=/view/www_integrationci/vobs/ossrc/del-mgt/isobuild/ci/bin
+CC_SERVER=selid1a029.lmera.ericsson.se
+SSH_SETUPSCRIPT=$SCRIPTDIR/ssh_setup2.sh
+OSSCIUSER=ossrcci
+OSSCIUSER_PASS=Ericsson1
+EXPECT=/usr/local/bin/expect
+ALLOWED_CXPS="blade bootstrap ddc DU EMC freeware iptool ldap_setup Liveupgrade ombs omtools Patches peer_tools security selfmon sfs storage"
+CURRENTPKGTMPDIR=/var/tmp/currentpkg.$$
+NEWPKGTMPDIR=/var/tmp/newpkg.$$
+ERICAXEPKG=ERICaxe.pkg.7z
+DM_MWS_IP=159.107.173.47
+MWS_NFSMEDIACACHESCRIPT=/ericsson/jumpstart/bin/manage_nfs_media.bsh
+MWS_CACHEDLOCATION=/export/SW_LOCATION
+G_CRON_SERVICE=svc:/system/cron:default
+G_ROOTCRONTAB=/var/spool/cron/crontabs/root
+TESTPACKAGEDIR=test_packages
+
+. $SCRIPTDIR/../lib/common_functions.lib
+
+# MAIN
+# set up log directory
+if [ ! -d $LOGDIR ]; then
+	mkdir $LOGDIR || {
+		warning "Unable to create $LOGDIR"
+	}
+fi
+
+# Cleanup when script exits
+trap 'cleanupOnExit' EXIT HUP INT QUIT TERM
+
+
+info "Logging all messages to $LOG"
+# process cmd line options
+while getopts ":a:s:t:c:p:x:h" opt; do
+        case $opt in
+                a)      ACTION=$OPTARG
+			;;
+                s)      SHIPMENTS=$OPTARG
+			;;
+                t)      TEAM=$OPTARG
+			;;
+                c)      CRONSCHED=$OPTARG
+			;;
+                p)      SPARCSOLPATH=$OPTARG
+			;;
+                x)      X86SOLPATH=$OPTARG
+			;;
+                h)      usage
+			exit 0
+			;;
+		?)
+			echo "invalid option \"$opt\""
+			usage
+			exit 1
+			;;
+        esac
+done
+shift `expr $OPTIND - 1`
+
+
+if [ -z "$ACTION" ]; then
+	usage
+	error "action must be specified"
+	exit 1
+fi
+
+case $ACTION in
+	'add')
+		# check required arguments
+		if [ -z "$SHIPMENTS" ]; then
+			usage
+			error "No shipments specified"
+			exit 1
+		fi
+		
+		if [ -z "$TEAM" ]; then
+			usage
+			error "No team specified"
+			exit 1
+		else
+			echo $VALID_TEAMS | grep -w $TEAM > /dev/null 2>&1 || {
+				usage
+				error "Invalid team \"$TEAM\". Must be one of $VALID_TEAMS"
+				exit 1
+			}
+		fi
+		if [ -n "$CRONSCHED" ]; then
+			set -f
+			numtoks=$( echo $CRONSCHED | wc -w )
+			set +f
+			if [ $numtoks -ne 5 ]; then
+				usage
+				error "cron syntax does not appear to be correct"
+				exit 1
+			fi
+		
+		fi
+		if [ ! -d "$SPARCSOLPATH" ]; then
+			usage
+			error "Path to SPARC solaris media not specified or path does not exist"
+			exit 1
+		fi
+		if [ ! -d "$X86SOLPATH" ]; then
+			usage
+			error "Path to X86 solaris media not specified or path does not exist"
+			exit 1
+		fi
+
+		;;
+	'modify')
+		;;
+	'delete')
+		;;
+
+esac
+
+
+# check another instance of script not running with same shipment/team
+if [ ! -d $LOCKFILEDIR ]; then
+	mkdir $LOCKFILEDIR || {
+	 	error "Failed to create lock file dir"
+		exit 1
+	}
+fi
+for lckfile in $( find $LOCKFILEDIR -type f ); do
+	pid=$( awk '{print $1}' $lckfile)
+	lck_team=$( awk '{print $2}' $lckfile)
+	kill -0 $pid > /dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		if [ "$lck_team" = $TEAM ]; then
+			# process is still running - check args
+			lck_shipments=$( cut -f2- -d ' ' $lckfile )
+			for shipment in $SHIPMENTS; do
+				echo $lck_shipments | grep -w $shipment > /dev/null && {     
+					error "Another instance of "$SCRIPTNAME $*" appears to be running for team $TEAM and shipment $shipment"
+					exit 1
+				}
+			done
+		fi
+	else
+		# remove stale lock file
+		warning "Removing stale lockfile"
+		/bin/rm -f $lckfile || {
+			 error "Failed to remove stale lockfile $lckfile"
+			exit 1
+		}
+	fi
+done
+
+
+# create lockfile
+echo "$$ $TEAM $SHIPMENTS" > $LOCKFILE || {
+	 error "Failed to create lockfile"
+	exit 1
+}
+
+# check DM server is up
+#check_dm_server 
+
+TEAM_MWS_DESTINATION=${MWS_DESTINATION}/teams/${TEAM}
+
+case $ACTION in
+	'add')
+	for shipment in $SHIPMENTS
+	do
+		configureShipment || {
+			error "Problem occured setting up shipment $shipment"
+			exit 1
+		}
+	done
+	#info "** Don't forget to add new shipments to the CI results index page /view/www_integrationci/vobs/ossrc/del-mgt/html/CI/index.html **"
+	#info "** Don't forget to add new shipments to the file /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/pages_to_refresh.$TEAM  **"
+		;;
+	'modify')
+		;;
+	'delete')
+		delete_shipments 
+		ret=$?
+		case $ret in
+			0)
+				info "Deletion of shipments successful"
+				;;
+			99)
+				info "Deletion of shipments aborted"
+				;;
+			*)
+				error "Warnings/errors occured during deletion of shipments"
+				exit 1
+
+		esac
+		;;
+
+esac
+
+exit 0

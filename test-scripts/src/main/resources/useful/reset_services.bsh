@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+#######
+GREP="/usr/bin/grep"
+PKGINFO="/usr/bin/pkginfo"
+SLS="svc:/ericsson/cominf/sls:default"
+CSADAEMON="svc:/ericsson/cominf/csa-daemon:default"
+CSA="svc:/ericsson/cominf/csa:default"
+RACRS="svc:/ericsson/cominf/racrs:default"
+CAAS="svc:/ericsson/cominf/caas:default"
+SLS="svc:/ericsson/cominf/sls:default"
+AIWS="svc:/ericsson/cominf/aiws:default"
+AIWSEXTCA="svc:/ericsson/cominf/aiws-extca:default"
+CADM="svc:/ericsson/cominf/cadm:default"
+MYSQL="svc:/ericsson/cominf/mysql:default"
+NTP="svc:/network/ntp:default"
+NTP4="svc:/network/ntp4:default"
+
+function check_service
+{
+    local -i res=1
+    local SVC=$1
+    STATE=$(svcs | ${GREP} ${SVC} | awk '{print $1}')
+    if [ "${STATE}" = "online" ]; then
+        res=0
+    fi
+    return ${res}
+}
+
+function stop_service
+{
+    local -i res=1
+    local SVC=$1
+    local -i iteration=$2
+    local -i cnt=0
+    # Disable the specified service
+    echo "Disabling ${SVC} service"
+    svcadm disable ${SVC}
+    while [ ${cnt} -le ${iteration} ]; do
+        echo "Waiting for service ${SVC} to go offline"
+        check_service ${SVC}
+        retVal=$?
+        if [ ${retVal} -eq 1 ];then
+            break
+        fi
+        sleep 5
+        ((cnt++))
+    done
+    if [ ${cnt} -lt ${iteration} ]; then
+        echo "Disabled service ${SVC}"
+        res=0
+    else
+        echo "Failed to disable service ${SVC}"
+    fi
+    return ${res}
+}
+
+function start_service
+{
+    local -i res=1
+    local SVC=$1
+    local -i iteration=$2
+    local -i cnt=0
+
+    svcadm enable ${SVC}
+    while [ ${cnt} -le ${iteration} ]; do
+        echo "Waiting for service ${SVC} to come online"
+        check_service ${SVC}
+        retVal=$?
+        if [ ${retVal} -eq 0 ];then
+            break
+        fi
+        sleep 5
+        ((cnt++))
+    done
+}
+
+function om_serv
+{
+    check_service ${MYSQL}
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        start_service ${MYSQL} 5
+        retVal=$?
+        if [ ${retVal} -eq 0 ]; then
+            echo "Started service ${MYSQL}."
+        else
+            echo "Unable to start service ${MYSQL}"
+            return 3
+        fi
+    else
+        echo "Service ${MYSQL} is already running."
+    fi
+
+    # Check the SLS service
+    check_service ${SLS}
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+       start_service ${SLS} 5 
+       retVal=$?
+        if [ ${retVal} -eq 0 ]; then
+            echo "Started service ${SLS}."
+        else
+            echo "Unable to start service ${SLS}"
+            return 3
+        fi
+    else
+        echo "Service ${SLS} is already running."
+    fi
+}
+
+function omsas
+{
+    check_service ${MYSQL}
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        start_service ${MYSQL} 5
+        retVal=$?
+        if [ ${retVal} -eq 0 ]; then
+            echo "Started service ${MYSQL}."
+        else
+            echo "Unable to start service ${MYSQL}"
+            return 3
+        fi
+    else
+        echo "Service ${MYSQL} is already running."
+    fi
+
+    ${PKGINFO} -q ERICaiws
+    aiwsinst=$?
+    if [ ${aiwsinst} -eq 0 ]; then
+        echo "ERICaiws is installed"
+        check_service ${AIWS}
+        retVal=$?
+        if [ ${retVal} -ne 0 ]; then
+            start_service ${AIWS} 5
+            retVal=$?
+            if [ ${retVal} -eq 0 ]; then
+                echo "Started service ${AIWS}."
+            else
+                echo "Unable to start service ${AIWS}"
+                return 3
+            fi
+        else
+            echo "Service ${AIWS} is already running."
+        fi
+    else
+        echo "ERICaiws is not installed. Continuing....."
+    fi
+
+    check_service ${CADM}
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        start_service ${CADM} 5
+        retVal=$?
+        if [ ${retVal} -eq 0 ]; then
+            echo "Started service ${CADM}."
+        else
+            echo "Unable to start service ${CADM}"
+            return 3
+        fi
+    else
+        echo "Service ${CADM} is already running."
+    fi
+
+    check_service ${CSA}
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        start_service ${CSA} 36
+        retVal=$?
+        if [ ${retVal} -eq 0 ]; then
+            echo "Started service ${CSA}."
+        else
+            echo "Unable to start service ${CSA}"
+            return 3
+        fi
+    else
+        echo "Service ${CSA} is already running."
+    fi
+}
+
+#######################
+#                     #
+# Main body of script #
+#                     #
+#######################
+
+# We should not run this on a systsem where any SSERV module has been run.
+if [[ -f /var/ericsson/log/SSERV/.sserv_upgrade_tasks_status_file ]] || [[ -f /var/ericsson/log/SSERV/.sserv_post_upgrade_tasks_status_file ]]; then
+    echo "SSERV upgrade has been run on this system. Cannot continue."
+    exit 239
+fi
+
+# if the cominf_upgrade_tasks has been run we expect NTP4 to be online
+# and NTP to be disabled. If this system has been rebooted however the
+# services may be in the the incorrect state. Make sure that the NTP services
+# are in the correct state.
+if [ ! -f /ericsson/ocs/log/.cominf_upgrade_tasks_status_file ]; then
+    echo "The cominf_upgrade_tasks module has not been run on this server"
+    COMINF_UPGRADE="N"
+    # Set the NTP services as expected.
+    echo "Check that NTP is the running time service"
+    check_service ${NTP}
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        stop_service ${NTP4} 2
+        start_service ${NTP} 2
+    else
+        echo "NTP services are in the expected state."
+    fi
+else
+    echo "The cominf_upgrade_tasks module has been run on this server"
+    COMINF_UPGRADE="Y"
+    # Set the NTP services as appropriate
+    echo "Check that NTP4 is the running time service"
+    check_service ${NTP4}
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        echo "NTP services are not in the expected state. Switching services"
+        stop_service ${NTP} 2
+        start_service ${NTP4} 2
+    else
+        echo "NTP services are in the expected state."
+    fi
+fi
+
+egrep 'om_serv_master|om_serv_slave|omsas' /ericsson/config/ericsson_use_config > /dev/null 2>&1
+retVal=$?
+if [ ${retVal} -ne 0 ]; then
+    echo "Not a supported server type"
+    exit 241
+fi
+server_type=$(cat /ericsson/config/ericsson_use_config | awk -F'=' '{print $2}')
+
+if [ "${server_type}" = "infra_omsas" ]; then
+    SERVER="OMSAS"
+else
+    SERVER="OM_SERVICES"
+fi
+
+echo "SERVER is type ${SERVER}"
+
+case ${SERVER} in
+    OMSAS)		echo "Checking services for ${SERVER} server"
+                        if [ "${COMINF_UPGRADE}" = "N" ]; then
+                            echo "Processing services for ${SERVER} with no cominf_upgrade_tasks run."
+                            omsas
+                        else
+                            # Switch the NTP services around to allow SLS service to start
+                            # prior to the sserv_upgrade being run.
+                            stop_service ${NTP4} 2
+                            start_service ${NTP} 2
+                            omsas
+                            stop_service ${NTP} 2
+                            start_service ${NTP4} 2
+                        fi
+                	;;
+    OM_SERVICES)	echo "Checking services for ${SERVER} server"
+                        if [ "${COMINF_UPGRADE}" = "N" ]; then
+                            echo "Processing services for ${SERVER} with no cominf_upgrade_tasks run."
+                            om_serv
+                        else
+                            # Switch the NTP services around to allow SLS service to start
+                            # prior to the sserv_upgrade being run.
+                            stop_service ${NTP4} 2
+                            start_service ${NTP} 2
+                            om_serv
+                            stop_service ${NTP} 2
+                            start_service ${NTP4} 2
+                        fi
+                	;;
+esac

@@ -1,0 +1,1082 @@
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+#
+# 2012-05-15  XAMAMCG	Initial script
+# ... ...     ....      various additions made
+# 2012-06-19  xsimrea	Tidy-ups and removing surerfluous comments
+# 2012-07-10  xamamcg	Move check_profile to common
+# 2012-07-12  xamamcg	Add remove user functions
+#
+#   Provides a set of library functions that are useful to all functional areas
+#   Functions provided:
+#     GET_CONFIG_TYPE
+#     GET_INST_TYPE
+#     DECODE_PASSWD
+#     GET_CONFIG_SECTION
+#     LOG_MARK_STATUS
+#     LOG_SEARCH_FROM_MARK
+#     POSIX_USER_EXISTS
+#     POSIX_CHECK_USER
+#     POSIX_USER_CAN_LOG_IN
+#	  POSIX_REMOVE_USER
+#     TEST_REDHAT
+#     CONSOLE_OUTPUT_CONTAINS
+#     CONSOLE_OUTPUT_MATCH
+#     RPM_CHECK
+#     MOUNT_APP
+#     MOUNT_OM
+#     MOUNT_ERIC_MNT
+#     UNMOUNT_APP
+#     UNMOUNT_OM
+#     UNMOUNT_ERIC_MNT
+#     CHECK_PROFILE
+#     CHECK_FILESYSTEM
+#     CONSOLE_OUTPUT_COUNT
+#     IS_SERVER_SSH_CONTACTABLE
+declare -a LOG_LINENO
+declare -a LOG_INODE
+declare -a LOG_FILENAME
+
+# Global Variables
+# Location of the params file
+G_PARAMS_CFG_FILE=/ericsson/config/build/params.cfg
+# Location of the config.ini file
+G_CONFIG_INI_FILE=/opt/ericsson/config/config.ini
+
+### Function GET_CONFIG_TYPE
+#
+# Outputs the "config=" value from the params.cfg file
+#
+# Arguments: None
+#
+# Return Values:
+# 0     if log file found (even if config entry not found)
+# 1     if log file missing
+#
+# Input globals accessed by this function
+# G_PARAMS_CFG_FILE
+#
+# Output globals set by this function
+# None
+function GET_CONFIG_TYPE()
+{
+	[ -r "${G_PARAMS_CFG_FILE}" ] || return 1
+	awk -F= '$1 ~ /^config$/{print $2;exit}' ${G_PARAMS_CFG_FILE}
+	return 0
+}
+
+### Function GET_INST_TYPE
+#
+# Outputs the "inst_type=" value from the params.cfg file
+#
+# Arguments: None
+#
+# Return Values:
+# 0     if log file found (even if inst type entry not found)
+# 1     if log file missing
+#
+# Input globals accessed by this function
+# G_PARAMS_CFG_FILE
+#
+# Output globals set by this function
+# None
+function GET_INST_TYPE()
+{
+	[ -r "${G_PARAMS_CFG_FILE}" ] || return 1
+	awk -F= '$1 ~ /^inst_type$/{print $2;exit}' ${G_PARAMS_CFG_FILE}
+	return 0
+}
+
+
+### Function DECODE_PASSWD
+#
+# Decodes an encoded password
+#
+# Arguments: The encoded password, including its leading "{ENC}
+#
+# Return Values:
+# 0     if password decoded successfully
+# 1     if something went wrong
+#
+# If OK, Decoded password is send to stdout
+# If error, error message is sent to stdout
+function DECODE_PASSWD()
+{
+	local retpass=""
+	[ -z "$1" ] && { echo "Need encoded password as parameter"; return 1; }
+	echo "$1" | grep '"{ENC}' >&/dev/null || {
+		echo "Parameter is not an encoded password"; return 1;
+	}
+	retpass=$(echo "$1" | sed -e 's/.*{ENC}//' -e 's/"//g' | /usr/bin/openssl enc -base64 -d)
+	[ -z "$retpass" ] && { echo "Password not decoded properly"; return 1; }
+	echo "$(echo $1 | cut -d= -f1)=${retpass}"
+	return 0
+}
+
+
+### Function GET_CONFIG_SECTION
+#
+# Finds a specific section of the config.ini file and prints it out.
+#
+# Arguments:
+# $1 config.ini file (use $G_CONFIG_INI_FILE for standard one)
+# $2 section name (without the square brackets)
+# $3 Tag name in the section
+# $4 Required value for that tag
+# $5 another tag name in the section
+# $6 Required value for that second tag
+# $7, $8 etc, in pairs.  No limit on the number of pairs.
+#
+# The first and second parameters are mandatory, and remaining parameters are all
+# optional, but they MUST come in pairs.
+# When a section of the correct name is found, and all specified tags have
+# the required values, that section is the desired one and is printed to stdout.
+# If no tag/value pairs are given, then the first section of the given name is selected.
+#
+# Return Values:
+# 0		section has been found
+# 1     cannot read config file
+# 2     No section name specified
+# 3     Wrong number of parameters (not an even number of parameter/value pairs)
+# 4		No section of the required section name found
+# 5		No section of the required parameters/values found
+#
+# Input globals accessed by this function
+# G_CONFIG_INI_FILE
+#
+# Output globals set by this function
+# None
+# 
+# Standard Ouput:
+# The section which matches the required tags.
+# The section is printed without the section name.
+#
+function GET_CONFIG_SECTION()
+{
+	local L_CONF_FILE
+	local L_HST
+
+	# First get the mandatory parameters
+	[ ! -r $1 ] && return 1
+	L_CONF_FILE=$1
+	[ -z "$2" ] && return 2
+	L_HST=$2
+	shift 2		# lose host and file entries
+
+	# Now treat the remaining pairs as tag and value
+	[ $(($# % 2)) -eq 0 ] || return 3
+	# We have an even number of parameters - write them to a temp file
+	> /tmp/tst_getsect.$$
+	while [ $# -gt 0 ]; do
+	  echo "$1=$2" >> /tmp/tst_getsect.$$
+	  shift 2
+	done
+
+	# Now call awk to find the desired section and print it out
+	awk -v wsct=$L_HST -v reqfile=/tmp/tst_getsect.$$ '
+function decode_passwd(inlin,     a, decpass, cmd)
+{ # Input is an encoded passwd line, including VAL=
+  # Output is the same line but with a decoded password
+  split(inlin, a, /=/)
+  sub(/^.*{ENC}/, "", inlin)
+  sub(/"/, "", inlin)
+  cmd="echo " inlin " | openssl enc -base64 -d"
+  cmd | getline decpass
+  print a[1] "=" decpass
+}
+function chksct(sctarr, reqarr,     gotlin, i, j)
+{ # Compare the section we have read (sctarr) with the required list (reqarr).
+  # If all lines in reqarr match one in sctarr, print out the section and return 0.
+  # If not, return 1.
+  gotlin=0
+  for (j in reqarr) {
+    for (i in sctarr) {
+      if (sctarr[i] == reqarr[j]) gotlin++
+    }
+  }
+  if (gotlin == length(reqarr)) {
+    for (i in sctarr) {
+      t = match(sctarr[i],/\"{ENC}/)
+      if (t == 0) {
+        print sctarr[i]
+      } else {
+        decode_passwd(sctarr[i])
+      }
+    }
+    return 0
+  }
+  return 1
+}
+BEGIN{
+  # Read in the file containing the matching lines
+  # Add the square brackets to the section name
+  wsct="[" wsct "]"
+  # Read the "required" lines from the specified file
+  i=0
+  while (1 == 1) {
+    rc=getline inbuf < reqfile
+    if (rc != 1) break;
+    i=i+1
+    j=sprintf("%d", i)
+    req[j]=inbuf
+  }
+  inwantedsect=0
+  hadwantedsect=0
+  gotsect=0
+  split("", sct)
+}
+/^[[]/{
+  if (length(sct) > 0) {
+    # we have a section to check - check it
+    rc=chksct(sct, req)
+    if (rc == 0) { gotsect=1; exit 0}
+    # Not got match, so empty array
+    split("", sct)
+  }
+  # Check whether we have found the right section type
+  if ($0 == wsct) { inwantedsect=1; hadwantedsect=1 } else { inwantedsect=0 }
+  next
+}
+{ if ((inwantedsect == 1) && (index($0, "=")) > 0) {
+    # We have a real line - copy into array
+    sct[length(sct)+1] = $0
+  }
+}
+END{
+  if ((inwantedsect == 1) && (gotsect == 0) && (length(sct) > 0)) {
+    rc=chksct(sct, req)
+    if (rc == 0) { gotsect=1; exit 0}
+  }
+  if (gotsect == 0) { if (hadwantedsect == 0) {exit 4} else {exit 5} }
+}' $L_CONF_FILE
+	rc=$?
+	rm -f /tmp/tst_getsect.$$
+	return $rc
+}
+
+
+### Function LOG_MARK_STATUS
+#
+# Sets global variables so know location of log file. To be used only within
+# a single function, because it keeps information in variables, so the mark
+# and search must be in same callback.
+#
+# Arguments:
+# $1 Log file to mark status
+# $2 Index to use in array to store - make sure each log has its own index
+#
+# Return Values:
+# 0		if log file found
+# 1		if not found log file
+# 2     wrong number of parameters
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# LOG_INODE[<index>]
+# LOG_LINENO[<index>]
+# 
+# NB. If there are . in basefilename these are replaced by _
+#
+function LOG_MARK_STATUS()
+{
+	[ -z "$1" ] && return 2
+	[ -z "$2" ] && return 2
+	[ ! -r $1 ] && return 1
+	# Set $filename to be the base of the file being handled, with dots changed to underscores
+	filename=$(basename $1)
+	filename=${filename//./_}
+
+	LOG_LINENO[$2]=$(wc -l < $1)
+	# Assign back to ourselves to remove leading spaces seen on Solaris
+	LOG_LINENO[$2]=$(echo ${LOG_LINENO[$2]})
+	LOG_INODE[$2]=$(ls -i $1 | awk '{print $1}')
+}
+
+### Function LOG_SEARCH_FROM_MARK
+#
+# Searches log file for searchstring since log file was last marked by
+# LOG_MARK_STATUS. To be used only in
+# tc_test as it declares variables so the mark and search must be in same
+# callback
+#
+# Arguments:
+# $1 Log file to query
+# $2 String to search log file for
+# $3 Index log file was marked as
+#
+# Return Values:
+# 0		if search string found in log file
+# 1     if search string not in log file
+# 2		if not found log file
+# 3     wrong number of parameters
+# 4     if searching non-marked file
+# 5     if log file is now new file since marked and can't find searchstring in
+#       new log file (it may be in old logfile but we can't check that)
+#
+# Input globals accessed by this function
+# LOG_INODE[<index>]
+# LOG_LINENO[<index>]
+#
+# Output globals set by this function
+# none
+# 
+# NB. If there are . in basefilename these are replaced by _
+#
+function LOG_SEARCH_FROM_MARK()
+{
+	[ -z "$1" ] && return 3
+	[ -z "$2" ] && return 3
+	[ -z "$3" ] && return 3
+	[ ! -r $1 ] && return 2
+	filename=$(basename $1)
+	filename=${filename//./_}
+	[ "${LOG_LINENO[$3]:-notset}" = "notset" ] && return 4
+	[ "${LOG_INODE[$3]:-notset}" = "notset" ] && return 4
+	newinode=$(ls -i $1 | awk '{print $1}')
+	if [ "${LOG_INODE[$3]}" = "$newinode" ]; then
+		sed 1,${LOG_LINENO[$3]}d $1 | grep -i  -- "$2"|grep -v "ARNE validation of XML file" >& /dev/null
+		return $?
+	else
+		grep -i -- "$2" $1 >& /dev/null
+		[ $? != 0 ] && return 5
+		return 0
+	fi
+
+}
+
+function invalid_params() {
+	echo -e "\033[44;36mInvalid parameters passed\033[0m"
+	echo "Usage: ${*}"
+}
+
+### Function TEST_REDHAT
+#
+# Tests that RHEL 6.1 and other stuff is installed
+#
+# Arguments:
+# None
+#
+# Return Values:
+# 2		OS Not GNU/Linux
+# 5		Time zone not set to London
+# 4		SSH daemon not running
+# 3		Jave 1.6 not installed
+# 1		OS Not Red Hat
+# 0		All OK
+#
+TEST_REDHAT()
+{
+	#Check operating system type
+	osversion=`uname -s`
+	if [ "$osversion" != "Linux" ]; then
+		echo "OS not Linux"
+		return 1
+	fi
+
+	# make sure /etc/redhat-release exists and has data
+	if [ ! -s /etc/redhat-release ]; then
+		echo "OS not Redhat"
+		return 1
+	fi
+
+	version=`cat /etc/redhat-release`
+
+	if [ "${version:0:42}" != "Red Hat Enterprise Linux Server release 6." ]; then
+		echo "Not the correct Red Hat version, 6.x"
+		return 2
+	fi
+
+	return 0
+}
+
+TEST_COMPONENTS() {
+# Perform checks on miscellaneous parts of OS
+
+# TODO Java not installed until COMLin 10
+#	rpm -q java-1.6.0-openjdk
+#	if [ $? -ne 0 ]; then
+#		echo "java version 1.6 not installed"
+#		return 1
+#	fi
+
+	service sshd status &>/dev/null
+	if [ $? -ne 0 ]; then
+		echo "SSH daemon not running"
+		return 2
+	fi
+
+	zone=`cat /etc/sysconfig/clock`
+	if [ "$zone" != "ZONE=\"Eire\"" ]; then
+		echo "Time zone not set to Eire"
+		return 3
+	fi
+
+	return 0
+}
+
+### Function POSIX_USER_EXISTS
+#
+# Checks if user exists
+#
+# Arguments:
+# $1    User
+# $2    Remote machine (optional)
+#       If preceeded by a 'z', then will ssh to smrs_master before checking.
+#
+#
+# Return Values:
+# 0	 User exists
+# 1	 user does not exist
+#
+function POSIX_USER_EXISTS() {
+	[ $# -lt 1 -o $# -gt 2 ] && {
+		invalid_params $FUNCNAME user "[remote]"
+		return 1
+	}
+
+	cmd='grep "^'"${1}"':" /etc/passwd >& /dev/null'
+	if [ $# -eq 1 ]; then
+		eval $cmd
+	else
+		if [ ${2::1} = z ]; then
+			# ssh to smrs_master first
+			ssh smrs_master "ssh ${2:1} grep \"^${1}:\" /etc/passwd"&>/dev/null
+		else
+			# ssh directly
+			ssh $2 $cmd&>/dev/null
+		fi
+	fi
+	# Normalise return code to 0=user present, 1=any other error
+	[ $? -eq 0 ]
+	return $?
+}
+
+### Function POSIX_CHECK_USER
+#
+# Checks if user with given attributes exists
+#
+# Arguments:
+# $1    User name
+# $2    uid
+# $3    gid
+# $4	desc
+# $5	homedir
+# $6	shell
+# $7    remote box	 (optional)
+# Return Values:
+# 0      User exists
+# 1      user does not exist
+#
+function POSIX_CHECK_USER()
+{
+	if [ $# -lt  6 -o $# -gt  7 ]; then
+		invalid_params $FUNCNAME user uid gid desc homedir shell '[remote]'
+		return 1
+	fi
+
+	cmd='grep "^'"${1}:x:${2}:${3}:${4}:${5}:${6}"'" /etc/passwd'
+	if [ $# -eq 7 ]; then
+		ssh $7 $cmd
+	else
+		eval $cmd
+	fi
+	# Normalise return code to 0=user present, 1=any other error
+	[ $? -eq 0 ]
+	return $?
+}
+
+### Function CHECK_FILESYSTEM
+#
+# Checks if filesystem with given attributes exists
+#
+# Arguments:
+# $1    filesystem
+# $2    owner
+# $3	permission
+# 
+# Return Values:
+# 0      Filesystem exists
+# 1      filesystem does not exist
+#
+function CHECK_FILESYSTEM()
+{
+	if [ "$#" -ne  3 ]; then
+		invalid_params $FUNCNAME filesystem owner permission
+		return 1
+	fi
+
+	mount -l |grep  "^/export.*/${1} (${2}, ${3})" >& /dev/null
+	# Normalise return code to 0= filesystem present, 1=any other error
+	[ $? -eq 0 ]
+	return $?
+}
+
+### Function POSIX_USER_CAN_LOG_IN
+#
+# Checks if a user should be able to login e.g. has a shell etc
+#
+# Arguments:
+# $1    User
+#
+# Return Values:
+# 0	 User exists
+# 1	 user does not exist
+# 2	 User does not have executable shell
+# 3	 Home directory not accessible to user
+# 4	 Password not set
+POSIX_USER_CAN_LOG_IN() {
+	if [ "$#" -ne 1 ]; then
+		invalid_params $FUNCNAME user
+		return 1
+	fi
+
+	POSIX_USER_EXISTS $1
+	[ $? -eq 0 ] || return 1
+
+	# Get components from password entry
+	user=`cat /etc/passwd|grep "^${1}"`
+	OIFS=$IFS
+	IFS=:
+	muser=($user)
+	IFS=$OIFS
+	shell=${muser[6]}
+	homedir=${muser[5]}
+
+	[ -x "$shell" ] || return 2
+	[ "$shell" = "/sbin/nologin" ] && return 2
+	# Cannot do owner check, because some users have, for example, / as home
+	# owner=$(stat -c "%U" ${homedir})
+	#echo "Owner: ${owner}"
+	# [ "$owner" == "$1" ] || return 3
+	# instead, check that user has read and execute permission on the home directory
+	[ -d "$homedir" ] || return 3
+	[ -r "$homedir" ] || return 3
+	[ -x "$homedir" ] || return 3
+	echo "We have arrived here"
+	passstatus=$(passwd -s $1|awk '{print $2}')
+	[ "$passstatus" == "PS" ] || {
+		echo "Password status is not PS"
+		echo "Password status is $passstatus"
+		return 4
+	}
+
+	return 0
+}
+
+### Function CONSOLE_OUTPUT_CONTAINS
+#
+# Searches console output for searchstring in case insensitive manner for 
+# fixed string. Use CONSOLE_OUTPUT_MATCH if want to match against a regular
+# expression
+# Should only be used in tc_postcond when console output will have been
+# flushed and closed (framework currently doesn't support this)
+#
+# Arguments:
+# $1 String to search console output for
+#
+# Return Values:
+# 0		if search string found in console output
+# 1     if search string not found in console output
+# 2     if wrong parameters supplied
+# 3     if TC_CONSOLE_FILE not set
+#
+# Input globals accessed by this function
+# TC_CONSOLE_FILE
+#
+# Output globals set by this function
+# none
+# 
+function CONSOLE_OUTPUT_CONTAINS()
+{
+	[ -z "$1" ] && return 2
+	[ "${TC_CONSOLE_FILE:-notset}" = "notset" ] && return 3
+	fgrep -i  -- "$1" ${TC_CONSOLE_FILE} >& /dev/null
+	return $?
+}
+
+### Function CONSOLE_OUTPUT_MATCH
+#
+# Searches console output for expression in case insensitive manner
+# Should only be used in tc_postcond when console output will have been
+# flushed and closed (framework currently doesn't support this)
+#
+# Arguments:
+# $1 Expression to match console output with
+#
+# Return Values:
+# 0		if search string found in console output
+# 1     if search string not found in console output
+# 2     if wrong parameters supplied
+# 3     if TC_CONSOLE_FILE not set
+#
+# Input globals accessed by this function
+# TC_CONSOLE_FILE
+#
+# Output globals set by this function
+# none
+# 
+function CONSOLE_OUTPUT_MATCH()
+{
+	[ -z "$1" ] && return 2
+	[ "${TC_CONSOLE_FILE:-notset}" = "notset" ] && return 3
+	grep -i -- "$1" ${TC_CONSOLE_FILE} >& /dev/null
+	return $?
+}
+
+
+#
+# Function which waits for specififed time period
+# until console contains the specified output string
+# Return 0 - the console o/p contained the specified 
+# string in the allotted time period
+# Return 1 - the console o/p did not cotain the specified
+# string in the allotted time period
+#
+#
+function WAIT_UNTIL_CONSOLE_OUTPUT_CONTAINS() 
+{
+	local timeout=$1
+	local count=1
+	if [ -z "$timeout" ]; then
+		echo "Error - $FUNCNAME: timeout not specified"
+		return 1
+	fi
+	shift
+	while [ $count -le $timeout ]; do
+		CONSOLE_OUTPUT_MATCH "$@" && {
+			return 0 
+		}
+		let count+=1
+		sleep 1
+	done
+
+	return 1
+
+
+
+}
+
+### Function RPM_IS_INSTALLED
+#
+# Checks the installation status of a given RPM
+#
+# Arguments:
+#     $1 should contain the RPM name to search for
+#
+# Return values:
+#     0 The RPM is installed
+#     1 The RPM is not installed
+#     2 No RPM name was passed to the function.
+#
+function RPM_IS_INSTALLED()
+{
+	[ $# -lt 1 ] && return 2
+	rpm=${1}
+	rpm -qa 2>/dev/null | grep  "^${rpm}" >& /dev/null
+	return $?
+}
+
+# Function MOUNT_OM
+#
+# Mounts the OM installation file system
+#
+# Arguments:
+#      None
+#
+# Return values:
+#     0 The file system has been/was mounted
+#     1 Unable to mount the file system
+#     2 File system already mounted
+#
+function MOUNT_OM()
+{
+	# Is the file system already mounted
+	df -k 2>/dev/null | grep  /mnt/OM >& /dev/null
+	[ $? -eq 0 ] && return 0
+
+	# Create the mount point if not already there
+	[ ! -d /mnt/OM ] && mkdir /mnt/OM
+
+	# Mount the file system
+	mount -t nfs 10.45.201.54://JUMP/OM_LINUX_MEDIA /mnt/OM > /dev/null 2>&1
+	[ $? -eq 0 ]
+	return $?
+}
+
+# Function MOUNT_APP
+#
+# Mounts the OM installation file system
+#
+# Arguments:
+#      None
+#
+# Return values:
+#     0 The file system has been/was mounted
+#     1 Unable to mount the file system
+#     2 File system already mounted
+#
+function MOUNT_APP()
+{
+	# Is the file system already mounted
+	df -k 2>/dev/null | grep  /mnt/APP >& /dev/null
+	[ $? -eq 0 ] && return 0
+
+	# Create the mount point if not already there
+	[ ! -d /mnt/APP ] && mkdir /mnt/APP
+
+	# Mount the file system
+	mount -t nfs 10.45.201.54://JUMP/COMINF_LINUX_MEDIA /mnt/APP > /dev/null 2>&1
+	[ $? -eq 0 ]
+	return $?
+}
+
+# Function MOUNT_ERIC_MNT
+#
+# Mounts the eric_mnt installation file system
+#
+# Arguments:
+#      None
+#
+# Return values:
+#     0 The file system has been/was mounted
+#     1 Unable to mount the file system
+#     2 File system already mounted
+#
+function MOUNT_ERIC_MNT()
+{
+	# Is the file system already mounted
+	df -k 2>/dev/null | grep  /mnt/eric_mnt >& /dev/null
+	[ $? -eq 0 ] && return 0
+
+	# Create the mount point if not already there
+	[ ! -d /mnt/eric_mnt ] && mkdir /mnt/eric_mnt
+
+	# Mount the file system
+	mount -t nfs 10.45.201.54://JUMP/LIN_MEDIA /mnt/eric_mnt > /dev/null 2>&1
+	[ $? -eq 0 ]
+	return $?
+}
+
+# Function UNMOUNT_ERIC_MNT
+#
+# Unmounts the eric_mnt installation file system
+#
+# Arguments:
+#      None
+#
+# Return values:
+#     0 The file system was not mounted
+#     1 Unable to unmount the file system
+#
+function UNMOUNT_ERIC_MNT()
+{
+	# Is the file system mounted
+	df -k 2>/dev/null | grep  /mnt/eric_mnt >& /dev/null
+	# The file system is not mounted so return success
+	# as this is what we wanted
+	[ $? -gt 0 ] && return 0
+
+	# Unmount the file system
+	umount /mnt/eric_mnt > /dev/null 2>&1
+	[ $? -ne 0 ] && return 2
+	return 0
+}
+
+# Function UNMOUNT_APP
+#
+# Unmounts the APP installation file system
+#
+# Arguments:
+#      None
+#
+# Return values:
+#     0 The file system was not mounted
+#     1 Unable to unmount the file system
+#
+function UNMOUNT_APP()
+{
+	# Is the file system mounted
+	df -k 2>/dev/null | grep  /mnt/APP >& /dev/null
+	# The file system is not mounted so return success
+	# as this is what we wanted
+	[ $? -gt 0 ] && return 0
+
+	# Unmount the file system
+	umount /mnt/APP > /dev/null 2>&1
+	[ $? -ne 0 ] && return 1
+	return 0
+}
+
+# Function UNMOUNT_OM
+#
+# Unmounts the OM installation file system
+#
+# Arguments:
+#      None
+#
+# Return values:
+#     0 The file system was not mounted
+#     1 Unable to unmount the file system
+#
+function UNMOUNT_OM()
+{
+	# Is the file system mounted
+	df -k 2>/dev/null | grep  /mnt/eric_mnt >& /dev/null
+	# The file system is not mounted so return success
+	# as this is what we wanted
+	[ $? -gt 0 ] && return 0
+
+	# Unmount the file system
+	umount /mnt/OM > /dev/null 2>&1
+	[ $? -ne 0 ] && return 2
+	return 0
+}
+
+### Function CHECK_PROFILE
+#
+#   Check if kickstart is set to install the correct install type
+#   and config
+#
+# Arguments:
+#       $1 should contain the server type
+# Return Values:
+#       0 Correct server type is specified
+#       1 Incorrect server type is specified
+#       2 Incorrect config type is specified
+#       3 The params.cfg file was not found
+#       4 No parameter was passed to the function
+#
+function CHECK_PROFILE()
+{
+	# Check for a parameter being passed
+	[ $# -lt 1 ] && return 4
+
+	# Set the type and config
+	required_conf=$1
+	required_type='cominf'
+
+	# Get the 'inst_type' and 'config' values from the params.cfg file and compare with
+	# $required_type and $required_conf respectively
+	config=$(GET_CONFIG_TYPE)
+	[ $? -eq 0 ] || { echo "Unable to get config entry from $G_PARAMS_CFG_FILE"; return 3; }
+	inst_type=$(GET_INST_TYPE)
+	[ $? -eq 0 ] || { echo "Unable to get inst_type entry from $G_PARAMS_CFG_FILE"; return 3; }
+
+	# "${inst_type}" != "${required_type}" ] && echo "Incorrect install type ${inst_type}. Expected ${required_type}";return 1
+	if [ "${inst_type}" != "${required_type}" ]; then
+		echo "Wrong installation type ${inst_type}. Expected ${required_type}"
+		return 1
+	fi
+	#[ "${config}" != "${required_conf}" ] && echo "Incorrect config type ${config}. Expected ${required_conf}";return 2
+	if [ "${config}" != "${required_conf}" ]; then
+		echo "Wrong config type ${config}. Expected ${required_conf}"
+		return 2
+	fi
+
+	return 0
+}
+
+### Function CHECK_CONFIG_INI
+#
+#   Check if config.ini has correct deploy_type  and serv_type
+
+# Arguments:
+#       $1 should contain the deploy type
+#
+# Return Values:
+#       0 Correct values
+#       1 Incorrect server type is specified
+#       2 Incorrect deploy type is specified
+#       3 The config.ini file was not found
+#       4 No parameter was passed to the function
+#
+function CHECK_CONFIG_INI()
+{
+	# Check for a parameter being passed
+	[ $# -lt 1 ] && return 4
+
+	# Set the type and config
+	required_deploy=$1
+
+	# Location of the ini file
+	ifile="/opt/ericsson/config/config.ini"
+
+	DEPLOY_TYPE=`grep ^DEPLOYMENT_TYPE ${ifile} 2> /dev/null | awk -F = '{print $2}'`
+	if [ "${DEPLOY_TYPE}" != "${required_deploy}" ]; then
+		echo "Wrong deploy type ${DEPLOY_TYPE}. Expected ${required_deploy}"
+		return 2
+	fi
+	return 0
+}
+
+### Function POSIX_REMOVE_USER
+#
+#   Removes specified user on local or remote host, does not delete home
+# directory as SMRS does not want that directory deleted
+#
+# Arguments:
+#       $1 should contain the username to remove
+#	    $2 contains remote host to remove user on (optional)
+#
+# Return Values:
+#       0 Success
+#       1 Failed to delete
+#       2 Incorrect parameters
+#
+function POSIX_REMOVE_USER()
+{
+	# Check for a parameter being passed
+	[ $# -lt 1 ] && return 2
+	[ $# -gt 2 ] && return 2
+
+	cmd="userdel $1"
+	if [ $# -eq 1 ]; then
+		`$cmd`
+	else
+		ssh root@$2 "$cmd"
+	fi
+}
+
+### Function IS_SOLARIS
+#
+# 	Returns 0 if on Solaris box
+# Arguments:
+#	None
+#
+# Return Values:
+#       0 Solaris
+#       1 Not Solaris
+#
+function IS_SOLARIS()
+{
+	osversion=`uname -s`
+	if [ "$osversion" != "SunOS" ]; then
+		return 1
+	fi
+	return 0
+}
+
+### Function POSIX_REMOTE_USER_EXISTS
+#
+# Checks if user exists on remote box, assumes passwordless login setup
+#
+# Arguments:
+# $1    User
+# $2    Remote machine to check on
+#
+# Return Values:
+# 0	 User exists
+# 1	 user does not exist
+#
+function POSIX_REMOTE_USER_EXISTS() 
+{
+	if [ "$#" -ne 2 ]; then
+		invalid_params $FUNCNAME user
+		return 1
+	fi
+
+	cmd='grep "^'"${1}"':" /etc/passwd >& /dev/null'
+	ssh $2 "$cmd"
+	# Normalise return code to 0=user present, 1=any other error
+	return $?
+}
+
+### Function CONSOLE_OUTPUT_COUNT
+#
+# Searches console output for searchstring in case insensitive manner for 
+# fixed string. Use CONSOLE_OUTPUT_MATCH if want to match against a regular
+# expression. Counts number of matches and checks it is expected value....
+# Should only be used in tc_postcond when console output will have been
+# flushed and closed (framework currently doesn't support this)
+#
+# Arguments:
+# $1 String to search console output for
+# $2 Expected number of occurrances
+#
+# Return Values:
+# 0		if search string found in console output correct number of times
+# 1     if search string found in console output incorrect number of times
+# 2     if wrong parameters supplied
+# 3     if TC_CONSOLE_FILE not set
+#
+# Input globals accessed by this function
+# TC_CONSOLE_FILE
+#
+# Output globals set by this function
+# none
+# 
+function CONSOLE_OUTPUT_COUNT()
+{
+	[ -z "$1" ] && return 2
+	[ -z "$2" ] && return 2
+	[ "${TC_CONSOLE_FILE:-notset}" = "notset" ] && return 3
+	found=$(fgrep -i  -- "$1" ${TC_CONSOLE_FILE} | wc -l )
+	[ $found -ne $2 ]  && return 1
+	return 0
+}
+
+### Function IS_SERVER_SSH_CONTACTABLE
+#
+# Determines if specified server can to logged
+# into using ssh as root w/o password
+# Arguments: server IP
+#
+# Return Values:
+# 0     server can be logged into as root without password
+# 1     login attempt failed
+#
+# Output globals set by this function
+# None
+function IS_SERVER_SSH_CONTACTABLE() {
+	local l_max_tries=6
+	local l_sleep_time=10
+	local l_remote_ip=$1
+	local l_ssh_max_dur=60
+	local l_count=1
+	echo "Checking can SSH login as root to $l_remote_ip without password"
+	while [ $l_count -le $l_max_tries ]; do
+		ssh root@$l_remote_ip ls > /dev/null 2>&1 &
+		ssh_pid=$!
+		ssh_count=0
+		while true; do
+			sleep 1
+			if [ $ssh_count -gt $l_ssh_max_dur ]; then
+				echo "SSH process $ssh_pid still not finished - killing"
+				kill -9 $ssh_pid > /dev/null 2>&1
+			fi
+			kill -0 $ssh_pid 2>/dev/null
+			if [ $? -ne 0 ]; then
+				# process no longer exists
+				wait $ssh_pid
+				if [ $? -eq 0 ]; then
+					echo "SSH login to $l_remote_ip succeeded"
+					return 0
+				fi
+				break
+			fi
+			let ssh_count+=1
+		done
+		sleep $l_sleep_time
+		let l_count+=1
+	done
+	echo "Error - SSH login to $l_remote_ip failed after $l_max_tries attempts"
+	return 1
+}
+
+
+COM_BRANCHNAME=com
+COM_GROUPNAME=com
+COM_GROUPGID=609

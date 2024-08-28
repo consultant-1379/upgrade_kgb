@@ -1,0 +1,1657 @@
+#!/bin/bash
+#*********************************************************************
+# Ericsson Radio Systems AB                                     SCRIPT
+#*********************************************************************
+#
+#
+# (c) Ericsson Radio Systems AB 2001 - All rights reserved.
+#
+# The copyright to the computer program(s) herein is the property
+# of Ericsson Radio Systems AB, Sweden. The programs may be used 
+# and/or copied only with the written permission from Ericsson Radio 
+# Systems AB or in accordance with the terms and conditions stipulated 
+# in the agreement/contract under which the program(s) have been 
+# supplied.
+#
+# Name    : EIS_process.bsh
+# Written : Mossey Fahey
+# Date    : 15/03/2006
+# Revision: C
+# Purpose : The purpose of the script is to parse the SUN EIS CD and extract
+#           all required SW & Patches needed for an OSSRC release.
+#
+# Revision: D
+# Author  : John Gallagher
+# History : 04/01/2012 Edited by John Gallagher to change the
+#                      permissions on the 7-zipped patches to 755.
+#                      This was to overcome a permissions issue 
+#                      encountered by Ray & Roja during jumpstart
+#                      testing in October 2011.
+#
+# Revision: E
+# Author  : Grant Loch
+# History : 03/05/2012 Introduced test for reboot from the
+#                      "Install Requirements" field of each patch
+#                      README. Uses tools/patch_reboot_required.pl
+#           23/05/2012 EIS_process.bsh created from PROCESS_EIS.bsh
+#                      for interaction with web interface
+#                      http://nfdbuild220.athtem.eei.ericsson.se:7531/cgi-bin/EIS.pl
+#
+# Revision: F
+# Author  : Grant Loch
+# History : 28/11/2013 Updated to handle new recommended patch bundle
+#                      from Oracle.
+#                      Updated to be used in the CI fromework.
+#
+#*********************************************************************
+
+#*********************************************************************
+#
+# 	Command Section
+#
+#*********************************************************************
+BASENAME=/usr/bin/basename
+BZCAT=/usr/bin/bzcat
+CAT=/usr/bin/cat
+CD=/usr/bin/cd
+CHMOD=/usr/bin/chmod
+CLEAR=/usr/bin/clear
+CP=/usr/bin/cp
+CPIO=/usr/bin/cpio
+CUT=/usr/bin/cut
+DATE=/usr/bin/date
+DD=/usr/bin/dd
+DF=/usr/bin/df
+DIRNAME=/usr/bin/dirname
+DU=/usr/bin/du
+ECHO=/usr/bin/echo
+EGREP=/usr/bin/egrep
+ENV=/usr/bin/env
+EXPR=/usr/bin/expr
+FIND=/usr/bin/find
+FOLD=/usr/bin/fold
+GETENT=/usr/bin/getent
+GREP=/usr/bin/grep
+GZCAT=/usr/bin/gzcat
+HEAD=/usr/bin/head
+HOSTNAME=/usr/bin/hostname
+ID=/usr/bin/id
+LN=/usr/bin/ln
+LS=/usr/bin/ls
+MKDIR=/usr/bin/mkdir
+MKFILE=/usr/sbin/mkfile
+MORE=/usr/bin/more
+MV=/usr/bin/mv
+NAWK=/usr/bin/nawk
+PKGTRANS=/usr/bin/pkgtrans
+PWD=/usr/bin/pwd
+RM=/usr/bin/rm
+RCP=/usr/bin/rcp
+RSH=/usr/bin/rsh
+SED=/usr/bin/sed
+SEVENZ=/usr/bin/7z
+SLEEP=/usr/bin/sleep
+SORT=/usr/bin/sort
+SU=/usr/bin/su
+TAIL=/usr/bin/tail
+TAR=/usr/bin/tar
+TOUCH=/usr/bin/touch
+UNAME=/usr/bin/uname
+UNZIP=/usr/bin/unzip
+WC=/usr/bin/wc
+ZIP=/usr/bin/zip
+
+#********************************************************************
+#
+# 	functions
+#
+#********************************************************************
+
+### Function: abort_script ###
+#
+#   This will be called if the script is aborted through an error,
+#   error signal sent by the kernel such as CTRL-C or if a serious
+#   error is encountered during runtime
+#
+# Arguments:
+#       $1 - Error message from part of program (Not always used)
+# Return Values:
+#       none
+#*****************************************************************
+abort_script()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : abort_script"
+
+  #**************************************************************
+  # Display error message if supplied otherwise a default message
+  #**************************************************************
+  if [ ! "$1" ]
+  then
+      ${ECHO} "Script aborted......."
+  else
+      ${ECHO} "$1"
+  fi
+
+  cd ${SCRIPTHOME}
+
+  #*********
+  # End time
+  #*********
+  END_TIME=`${DATE} +'%Y%m%d%H%M%S'`
+  [ "${DEBUG}" ] && ${ECHO} "End time: ${END_TIME}"
+
+  exit 100
+}
+
+### Function: add_adhoc_patches ###
+#
+# Merge the adhoc patches with the processed patches.
+#
+# Arguments:
+#       $1 - Architecture (sparc or i386)
+# Return Values:
+#       none
+#****************************************************
+add_adhoc_patches()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : add_adhoc_patches $1"
+
+  #*****************************************************
+  [ "${DEBUG}" ] && ${ECHO} "cd to ${ADHOC_DIR}/${ARCH}"
+  #*****************************************************
+  cd ${ADHOC_DIR}/${ARCH}
+  ERR=$?
+  if [[ ${ERR} != 0 ]]
+  then
+      abort_script "ERROR: cd into ${ADHOC_DIR}/${ARCH} - ${ERR}"
+  fi
+
+  #**************************************************************
+  # Get list of products with adhoc patches for this architecture
+  #**************************************************************
+  ${LS} > ${BASEDIR}/tmp/adhoc_loop_1 2>/dev/null
+
+  while read PRODUCT
+  do
+    #***************************************************
+    # If product does not already exists in the OUT_BASE
+    # copy the whole directory without the INFO dir
+    #***************************************************
+    if ! [[ -e ${OUT_BASE}/${ARCH}/${PRODUCT} ]]
+    then
+        [ "${DEBUG}" ] && ${ECHO} "Copying ${ADHOC_DIR}/${ARCH}/${PRODUCT} to ${OUT_BASE}/${ARCH}/"
+        cp -rp ./${PRODUCT} ${OUT_BASE}/${ARCH}/
+        ERR=$?
+        if [[ ${ERR} != 0 ]]
+        then
+            abort_script "ERROR: Copying ${ADHOC_DIR}/${ARCH}/${PRODUCT} to ${OUT_BASE}/${ARCH}/ - ${ERR}"
+        fi
+
+        #**********************
+        # Remove INFO directory
+        #**********************
+        if [[ -e ${OUT_BASE}/${ARCH}/${PRODUCT}/INFO ]]
+        then
+            [ "${DEBUG}" ] && ${ECHO} "Removing directory ${OUT_BASE}/${ARCH}/${PRODUCT}/INFO"
+            rm -r ${OUT_BASE}/${ARCH}/${PRODUCT}/INFO
+            ERR=$?
+            if [[ ${ERR} != 0 ]]
+            then
+                abort_script "ERROR: Removing directory ${OUT_BASE}/${ARCH}/${PRODUCT}/INFO - ${ERR}"
+            fi
+        fi
+
+    #***********************************************
+    # Otherwise copy the whole directory without the
+    # INFO directory and append the patch_order
+    #***********************************************
+    else
+        [ "${DEBUG}" ] && ${ECHO} "cd to ${ADHOC_DIR}/${ARCH}/${PRODUCT}"
+        cd $PRODUCT
+        ERR=$?
+        if [[ ${ERR} != 0 ]]
+        then
+            abort_script "ERROR: cd to ${ADHOC_DIR}/${ARCH}/${PRODUCT} - ${ERR}"
+        fi
+
+        #***********************************************************
+        # Get list of files/directories under this product directory
+        #***********************************************************
+        ${LS} > ${BASEDIR}/tmp/adhoc_loop_2
+
+        while read SOURCE
+        do
+          if [[ "$SOURCE" != "INFO" && "$SOURCE" != "patch_order" ]]
+          then
+              #**************************
+              # Check for duplicate patch
+              #**************************
+              if [[ ${SOURCE##*\.} == "7z" ]]
+              then
+                  [ "${DEBUG}" ] && ${ECHO} "Checking for duplicate patch ${SOURCE}"
+                  if [[ -e "${OUT_BASE}/${ARCH}/${PRODUCT}/${SOURCE}" ]]
+                  then
+                      $ECHO "WARNING: Adhoc patch ${SOURCE} already exists in the EIS distribution"
+                      $ECHO "WARNING: This patch should be removed from the ADHOC directory and patch_order"
+                  fi
+              fi
+
+              #***********
+              # Copy patch
+              #***********
+              [ "${DEBUG}" ] && $ECHO "Copying ${ADHOC_DIR}/${ARCH}/${PRODUCT}/${SOURCE} to ${OUT_BASE}/${ARCH}/${PRODUCT}/"
+              cp -rp ${SOURCE} ${OUT_BASE}/${ARCH}/${PRODUCT}/
+              ERR=$?
+              if [[ ${ERR} != 0 ]]
+              then
+                  abort_script "ERROR: Copying ${ADHOC_DIR}/${ARCH}/${PRODUCT}/${SOURCE} to ${OUT_BASE}/${ARCH}/${PRODUCT}/ - ${ERR}"
+              fi
+          fi
+        done < ${BASEDIR}/tmp/adhoc_loop_2
+
+        #*************************
+        # Append adhoc patch_order
+        #*************************
+        [ "${DEBUG}" ] && ${ECHO} "Appending ${ADHOC_DIR}/${ARCH}/${PRODUCT}/patch_order to ${OUT_BASE}/${ARCH}/${PRODUCT}/patch_order"
+        ${CAT} patch_order >> ${OUT_BASE}/${ARCH}/${PRODUCT}/patch_order
+        ERR=$?
+        if [[ ${ERR} != 0 ]]
+        then
+            abort_script "ERROR: Appending ${ADHOC_DIR}/${ARCH}/${PRODUCT}/patch_order to ${OUT_BASE}/${ARCH}/${PRODUCT}/patch_order - ${ERR}"
+        fi
+
+        #**************************
+        # cd back to ARCH directory
+        #**************************
+        [ "${DEBUG}" ] && ${ECHO} "cd to ${ADHOC_DIR}/${ARCH}"
+        cd ..
+        ERR=$?
+        if [[ ${ERR} != 0 ]]
+        then
+            abort_script "ERROR: cd to ${ADHOC_DIR}/${ARCH} - ${ERR}"
+        fi
+    fi
+
+  done < ${BASEDIR}/tmp/adhoc_loop_1
+
+  rm ${BASEDIR}/tmp/adhoc_loop_1 > /dev/null 2>&1
+  rm ${BASEDIR}/tmp/adhoc_loop_2 > /dev/null 2>&1
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : add_adhoc_patches\n"
+}
+
+
+### Function: check_id_root ###
+#
+#   Check that the effective id of the user is 0
+#   i.e. root. If not root, print error msg and exit.
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#****************************************************
+check_id_root() 
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : check_id_root"
+
+  EFFECT_ID=`${ID} | ${SED} 's/uid=\([0-9]*\)(.*/\1/'`
+  if [ "${EFFECT_ID}" != "0" ]
+  then
+      abort_script "ERROR: You must be root to execute this script."
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "ID=0"
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : check_id_root\n"
+}
+
+
+### Function: check_input_params ###
+#
+# Check Input parameters
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#***********************************
+check_input_params()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : check_input_params"
+
+  #*************************************************
+  # Check that the conf file exists and is not empty
+  #*************************************************
+  if [ ! -s "${CONF_FILE}" ]
+  then
+      abort_script "ERROR: ${CONF_FILE} is empty or missing"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "CONF_FILE = ${CONF_FILE}"
+
+  #************************************
+  # Check that the sun directory exists
+  #************************************
+  if [ ! -d "${DVD_SUN_DIR}" ]
+  then
+      abort_script "ERROR: ${DVD_SUN_DIR} does not exist."
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "DVD_SUN_DIR = ${DVD_SUN_DIR}"
+
+  #***********************************************
+  # Check that the output directory does not exist
+  #***********************************************
+  ${LS} -d ${OUT_DIR}* >/dev/null 2>&1
+  ERR=$?
+  if [ ${ERR} -eq 0 ]
+  then
+      [ "${DEBUG}" ] && ${ECHO} "Removing existing ${OUT_DIR}* directories"
+      ${RM} -r ${OUT_DIR}*
+      if [ ${ERR} -ne 0 ]
+      then
+          abort_script "ERROR: removing ${OUT_DIR}* directories - ${ERR}"
+      fi
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "OUT_DIR = ${OUT_DIR}"
+
+  #*****************************************************
+  # Check that patch_order copy directory does not exist
+  #*****************************************************
+  ${LS} -d ${PO_COPY_DIR}* >/dev/null 2>&1
+  ERR=$?
+  if [ ${ERR} -eq 0 ]
+  then
+      [ "${DEBUG}" ] && ${ECHO} "Removing existing ${PO_COPY_DIR}* directories"
+      ${RM} -r ${PO_COPY_DIR}*
+      if [ ${ERR} -ne 0 ]
+      then
+          abort_script "ERROR: Removing ${PO_COPY_DIR}* directories - ${ERR}"
+      fi
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "PO_COPY_DIR = ${PO_COPY_DIR}"
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : check_input_params\n"
+}
+
+
+### Function: check_patch_reboot_required ###
+#
+# Check is a patch requires a reboot
+#
+# Arguments:
+#       $1 : Patch README filename
+# Return Values:
+#       0  : Patch does not require a reboot
+#       1  : Patch requires a reboot
+#*******************************************
+check_patch_reboot_required()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : check_patch_reboot_required $1"
+
+  README=$1
+
+  if [[ ! -f $README ]]
+  then
+      abort_script "ERROR: $README does not exist"
+  fi
+
+  INST_REQ="FALSE"
+  RET=0
+  while read LINE
+  do
+    #*****************************************
+    # Check if we have already processed the
+    # first line of the "Install Requirements"
+    #*****************************************
+    if [[ $INST_REQ == "TRUE" ]]
+    then
+        #***************************************
+        # Check for a blank line which indicates
+        # the end of "Install Requirements"
+        #***************************************
+        if [[ $LINE =~ ^\s*$ ]]
+        then
+            break
+        else
+            shopt -s nocasematch;
+            if [[ $LINE =~ "reboot" ]]
+            then
+                RET=1
+                break
+            fi
+            shopt -u nocasematch
+        fi
+    elif [[ $LINE =~ ^"Install Requirements:" ]]
+    then
+        #*************************************
+        # First line of "Install Requirements"
+        # has been found
+        #*************************************
+        shopt -s nocasematch;
+        if [[ $LINE =~ "reboot" ]]
+        then
+            RET=1
+            break
+        else
+            INST_REQ="TRUE"
+        fi
+        shopt -u nocasematch
+    fi
+  done < $README
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : check_patch_reboot_required $1\n"
+
+  return $RET
+}
+
+
+### Function: copy_readmes ###
+#
+# Copy patch readme files to READMES
+#
+# Arguments:
+#       $1 : Product output directory
+# Return Values:
+#       none
+#************************************
+copy_readmes()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : copy_readmes $1"
+
+  PATCH_OUT_DIR=$1
+
+  #******************************************
+  # Copy README files to a separate directory
+  #******************************************
+  ${LS} ${PATCH_OUT_DIR}/*/README.* | grep -v "\/READMES\/" |
+  while read P_README
+  do
+    [ "${DEBUG}" ] && ${ECHO} "Folding $P_README"
+    [ "${DEBUG}" ] && ${ECHO} "To ${PATCH_OUT_DIR}/READMES/`basename ${P_README}`"
+
+    ${FOLD} -w7900 ${P_README} > ${PATCH_OUT_DIR}/READMES/`basename ${P_README}` 2>/dev/null
+
+    [ "${DEBUG}" ] && ${ECHO} "Copying ${PATCH_OUT_DIR}/READMES/`basename ${P_README}`"
+    [ "${DEBUG}" ] && ${ECHO} "To ${README_DIR}"
+
+    ${CP} ${PATCH_OUT_DIR}/READMES/`basename ${P_README}` ${README_DIR} 2>/dev/null
+  done
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : copy_readmes $1\n"
+}
+
+
+### Function: get_absolute_path ###
+#
+# Determine absolute path to software
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#************************************
+get_absolute_path() 
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : get_absolute_path"
+
+  DIR=`${DIRNAME} $0`
+  SCRIPTHOME=`cd ${DIR} 2> /dev/null && pwd || ${ECHO} ${DIR}`
+
+  [ "${DEBUG}" ] && ${ECHO} "SCRIPTHOME = ${SCRIPTHOME}"
+  [ "${DEBUG}" ] && ${ECHO} "End Function : get_absolute_path\n"
+}
+
+
+### Function: process_patches ###
+#
+# Unpack patches
+#
+# Arguments:
+#	$1 : Product name - PATCH_PRODUCT from conf file
+# Return Values:
+#	none
+#*******************************************************
+process_patches()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : process_patches $1"
+
+  [ "${DEBUG}" ] && ${ECHO} "Processing patches from ${PATCH_IN_PRODUCT_DIR}"
+
+  #*************************************
+  # Temporary patch order file variables
+  #*************************************
+  TEMP_PATCH_ORDER_1=${PATCH_OUT_DIR}/patch_order.tmp1
+  TEMP_PATCH_ORDER_2=${PATCH_OUT_DIR}/patch_order.tmp2
+
+  #***************************************************
+  # Uncompress patch files and update patch order file
+  #***************************************************
+  if [ $1 == "SOLARIS" ]
+  then
+      #*******************************************************
+      # Unpack recommended patch cluster if product is SOLARIS
+      # Patches unpacked from DVD to ${PATCH_OUT_DIR}
+      #*******************************************************
+      unpack_recom_patch_cluster
+
+      #***************************************
+      # Remove excluded patches from directory
+      #***************************************
+      for PATCH in ${EXCLUDE_PATCHES}
+      do
+        if [ -d "${PATCH}-??" ]
+        then
+            ${RM} -rf ${PATCH_OUT_DIR}/${PATCH}-??
+            ERR=$?
+            if [ ${ERR} -ne 0 ]
+            then
+                abort_script "ERROR: Removing excluded patch ${PATCH_OUT_DIR}/${PATCH} - ${ERR}"
+            fi
+            [ "${DEBUG}" ] && ${ECHO} "Removed excluded patch ${PATCH_OUT_DIR}/${PATCH}"
+
+            #********************************************
+            # Remove excluded patch from patch order file
+            #********************************************
+            ${CAT} ${PATCH_OUT_DIR}/patch_order | ${EGREP} -v ${PATCH} > ${TEMP_PATCH_ORDER_1}
+            ${MV} ${TEMP_PATCH_ORDER_1} ${PATCH_OUT_DIR}/patch_order
+            ERR=$?
+            if [ ${ERR} -ne 0 ]
+            then
+                abort_script "ERROR: Moving ${TEMP_PATCH_ORDER_1} to ${PATCH_OUT_DIR}/patch_order - ${ERR}"
+            fi
+            [ "${DEBUG}" ] && ${ECHO} "Removed excluded patch ${PATCH} from ${PATCH_OUT_DIR}/patch_order"
+        fi
+      done
+  else
+      #******************************************************
+      # Patches from products other than SOLARIS
+      # Patches will be unpacked from DVD to ${PATCH_OUT_DIR}
+      #******************************************************
+
+      #**********************************
+      # Create temporary patch order file
+      #**********************************
+      if [ ! -s ${PATCH_IN_PRODUCT_DIR}/patch_order ]
+      then
+          ${LS} ${PATCH_IN_PRODUCT_DIR} | ${EGREP} '^[1-9][0-9]+-[0-9]+' |
+                                          ${NAWK} -F\. '{print $1}' > ${TEMP_PATCH_ORDER_1}
+      else
+          ${CP} ${PATCH_IN_PRODUCT_DIR}/patch_order ${TEMP_PATCH_ORDER_1}
+          ERR=$?
+          if [ ${ERR} -ne 0 ]
+          then
+              abort_script "ERROR: Copying ${PATCH_IN_PRODUCT_DIR}/patch_order to ${TEMP_PATCH_ORDER_1} - ${ERR}"
+          fi
+      fi
+
+      #****************************************
+      # Unzip patches ignoring excluded patches
+      #****************************************
+      if [ -s ${TEMP_PATCH_ORDER_1} ]
+      then
+          #*****************************************************
+          # Process each patch in the temporary patch order file
+          #*****************************************************
+          for PATCH in `${CAT} ${TEMP_PATCH_ORDER_1}`
+          do
+            if [ -s ${PATCH_IN_PRODUCT_DIR}/${PATCH}.zip ]
+            then
+                #********************************
+                # Check the patch is not excluded
+                #********************************
+                PATCHID=`${ECHO} ${PATCH}| ${NAWK} -F"-" '{print $1}'`
+                ${ECHO} "${EXCLUDE_PATCHES}" | ${EGREP} "${PATCHID}" > /dev/null 2>&1
+                ERR=$?
+                if [ ${ERR} -eq 0 ]
+                then
+                    #******************************************************
+                    # Move onto the next patch because this one is excluded
+                    #******************************************************
+                    [ "${DEBUG}" ] && $ECHO "Excluding patch ${PATCHID}"
+                    continue
+                fi
+
+                #****************
+                # Unzip the patch
+                #****************
+                [ "${DEBUG}" ] && $ECHO "Unzipping patch ${PATCH}.zip"
+                ${UNZIP} -qq -d ${PATCH_OUT_DIR} ${PATCH_IN_PRODUCT_DIR}/${PATCH}.zip
+                ERR=$?
+                if [ ${ERR} -ne 0 ]
+                then
+                    abort_script "ERROR: Unzipping patch ${PATCH_IN_PRODUCT_DIR}/${PATCH}.zip - ${ERR}"
+                fi
+
+                #*********************
+                # Updating patch order
+                #*********************
+                [ "${DEBUG}" ] && $ECHO "Adding ${PATCH} to ${PATCH_OUT_DIR}/patch_order"
+                ${ECHO} ${PATCH} >> ${PATCH_OUT_DIR}/patch_order
+            else
+                abort_script "ERROR: Missing or invalid patch ${PATCH}"
+            fi
+          done
+      fi
+  fi
+
+  #********************************************************************
+  [ "${DEBUG}" ] && ${ECHO} "Removing duplicates from patch order file"
+  #********************************************************************
+  > ${TEMP_PATCH_ORDER_1}
+  while read PATCH
+  do
+    PATCH=`${ECHO} ${PATCH}| ${NAWK} -F: '{print $1}'`
+    ${EGREP} ${PATCH} ${TEMP_PATCH_ORDER_1} > /dev/null 2>&1
+    ERR=$?
+    if [ ${ERR} -ne 0 ]
+    then
+        #**************************************************************
+        [ "${DEBUG}" ] && ${ECHO} "Checking if patch requires a reboot"
+        #**************************************************************
+        check_patch_reboot_required ${PATCH_OUT_DIR}/${PATCH}/README.${PATCH}
+        ERR=$?
+        if [ ${ERR} -eq 0 ]
+        then
+            #**********************************************************************************
+            [ "${DEBUG}" ] && ${ECHO} "Adding ${PATCH}::0::0:: to ${PATCH_OUT_DIR}/patch_order"
+            #**********************************************************************************
+            ${ECHO} "${PATCH}::0::0::" >> ${TEMP_PATCH_ORDER_1}
+        else
+            #**********************************************************************************
+            [ "${DEBUG}" ] && ${ECHO} "Adding ${PATCH}::0::1:: to ${PATCH_OUT_DIR}/patch_order"
+            #**********************************************************************************
+            ${ECHO} "${PATCH}::0::1::" >> ${TEMP_PATCH_ORDER_1}
+        fi
+    else
+        ${ECHO} "Duplicate patch ${PATCH}"
+    fi
+  done < ${PATCH_OUT_DIR}/patch_order
+  ${MV} ${TEMP_PATCH_ORDER_1} ${PATCH_OUT_DIR}/patch_order
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Moving ${TEMP_PATCH_ORDER_1} to ${PATCH_OUT_DIR}/patch_order - ${ERR}"
+  fi
+
+  #*******************
+  # Create directories
+  #*******************
+  PATCH_OUT_DIR=${TEMP_DIR}/${PRODUCT_TYPE}
+  [ "${DEBUG}" ] && ${ECHO} "Creating ${PATCH_OUT_DIR}/PREPATCH"
+  ${MKDIR} -p ${PATCH_OUT_DIR}/PREPATCH
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Creating ${PATCH_OUT_DIR}/PREPATCH - ${ERR}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "Creating ${PATCH_OUT_DIR}/POSTPATCH"
+  ${MKDIR} -p ${PATCH_OUT_DIR}/POSTPATCH
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Creating ${PATCH_OUT_DIR}/POSTPATCH - ${ERR}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "Creating ${PATCH_OUT_DIR}/READMES"
+  ${MKDIR} -p ${PATCH_OUT_DIR}/READMES
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Creating ${PATCH_OUT_DIR}/READMES - ${ERR}"
+  fi
+
+  #***************************************
+  # Delete the temporary patch order files
+  #***************************************
+  ${RM} -f ${TEMP_PATCH_ORDER_1} 2>/dev/null
+  ${RM} -f ${TEMP_PATCH_ORDER_2} 2>/dev/null
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : process_patches $1\n"
+}
+
+
+### Function: process_product_patches ###
+#
+# Main function for processing product patches on the EIS DVD
+#
+# Arguments:
+#	$1 : Patch Product
+# Return Values:
+#	none
+#************************************************************
+process_product_patches()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : process_product_patches $1"
+
+  #************************************************
+  # Set all patch product parameters from conf file
+  #************************************************
+  set_conf_param "PATCH" "$1"
+
+  #*********************************
+  # Variable for patch out directory
+  #*********************************
+  PATCH_OUT_DIR="${TEMP_DIR}/${PRODUCT_TYPE}"
+
+  [ "${DEBUG}" ] && ${ECHO} "PATCH_OUT_DIR = ${PATCH_OUT_DIR}"
+
+  #***************************
+  # Create patch out directory
+  #***************************
+  if [ ! -d ${PATCH_OUT_DIR} ]
+  then
+      ${MKDIR} -p ${PATCH_OUT_DIR} > /dev/null 2>&1
+      ERR=$?
+      if [ ${ERR} -ne 0 ]
+      then
+          abort_script "ERROR: Creating ${PATCH_OUT_DIR} - ${ERR}"
+      fi
+      [ "${DEBUG}" ] && ${ECHO} "Created ${PATCH_OUT_DIR}"
+  fi
+
+  #**********************************************
+  # Process each patch directory for this product
+  #**********************************************
+  for PDIR in ${PATCH_IN_DIR}
+  do
+    PATCH_IN_PRODUCT_DIR="${DVD_SUN_DIR}/${PDIR}"
+
+    [ "${DEBUG}" ] && ${ECHO} "PATCH_IN_PRODUCT_DIR = ${PATCH_IN_PRODUCT_DIR}"
+
+    #*******************************
+    # Main patch processing function
+    #*******************************
+    process_patches $1
+  done
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : process_product_patches $1\n"
+}
+
+
+### Function: process_product_sw ###
+#
+# Main function for processing product sw on the EIS DVD
+#
+# Arguments:
+#	$1 : SW Product
+# Return Values:
+#	none
+#*******************************************************
+process_product_sw()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : process_product_sw $1"
+
+  #************************************************
+  # Set all patch product parameters from conf file
+  #************************************************
+  set_conf_param "SW" "$1"
+
+  SW_IN_PRODUCT_DIR="${DVD_SUN_DIR}/${SW_IN_DIR}"
+
+  [ "${DEBUG}" ] && ${ECHO} "SW_IN_PRODUCT_DIR = ${SW_IN_PRODUCT_DIR}"
+
+  #************************************
+  # Variable for software out directory
+  #************************************
+  if [ "${SW_OUT_DIR}" ]
+  then
+      SW_OUT_PRODUCT_DIR=${TEMP_DIR}/${SW_OUT_DIR}
+  else
+      SW_OUT_PRODUCT_DIR=${TEMP_DIR}
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "SW_OUT_PRODUCT_DIR = ${SW_OUT_PRODUCT_DIR}"
+
+  #**********************************************
+  # Create software out and reporting directories
+  #**********************************************
+  if [ ! -d ${SW_OUT_PRODUCT_DIR} ]
+  then
+      ${MKDIR} -p ${SW_OUT_PRODUCT_DIR} > /dev/null 2>&1
+      ERR=$?
+      if [ ${ERR} -ne 0 ]
+      then
+          abort_script "ERROR: Creating ${SW_OUT_PRODUCT_DIR} - ${ERR}"
+      fi
+      [ "${DEBUG}" ] && ${ECHO} "Created ${SW_OUT_PRODUCT_DIR}"
+  fi
+
+  #****************************************
+  # Check if the software is bundled or not
+  #****************************************
+  if [ "${SW_BUNDLED}" = "YES" ]
+  then
+      #*************************************************************
+      # Unpack the SW cluster to the ${SW_OUT_PRODUCT_DIR} directory
+      #*************************************************************
+      unpack_sw_cluster
+  else
+      #***********************************
+      # Should be a directory for each pkg
+      #***********************************
+      for PKG in ${SW_PKG_LIST}
+      do
+        if [ -d ${SW_IN_PRODUCT_DIR}/${PKG} ]
+        then
+            #******************************************
+            # Copy the package to ${SW_OUT_PRODUCT_DIR}
+            #******************************************
+            ${CP} -rf ${SW_IN_PRODUCT_DIR}/${PKG} ${SW_OUT_PRODUCT_DIR}
+            ERR=$?
+            if [ ${ERR} -ne 0 ]
+            then
+                abort_script "ERROR: Copying ${SW_IN_PRODUCT_DIR}/${PKG} to ${SW_OUT_PRODUCT_DIR} - ${ERR}"
+            fi
+            [ "${DEBUG}" ] && ${ECHO} "Copied ${SW_IN_PRODUCT_DIR}/${PKG} to ${SW_OUT_PRODUCT_DIR}"
+        else
+            abort_script "ERROR: ${SW_IN_PRODUCT_DIR}/${PKG} not found"
+        fi
+      done
+  fi
+
+  #*****************************
+  # Remove any excluded packages
+  #*****************************
+  for PKG in ${EXCLUDE_PKGS}
+  do
+    if [ -d ${SW_OUT_PRODUCT_DIR}/${PKG} ]
+    then
+        ${RM} -rf ${SW_OUT_PRODUCT_DIR}/${PKG}
+        ERR=$?
+        if [ ${ERR} -ne 0 ]
+        then
+            abort_script "ERROR: Removing ${SW_OUT_PRODUCT_DIR}/${PKG} - ${ERR}"
+        fi
+    fi
+  done
+
+  #*************************************************************
+  # Get a list of all software packages in ${SW_OUT_PRODUCT_DIR}
+  #*************************************************************
+  SW_PKG_LIST=`cd ${SW_OUT_PRODUCT_DIR}; ${LS} -d *`
+
+  #*******************************************
+  # Check if the software is to be packaged up
+  #*******************************************
+  if [ "${SW_PKG_FORMAT}" = "YES" ]
+  then
+      for PKG in ${SW_PKG_LIST}
+      do
+        #************************
+        # Transform to pkg format
+        #************************
+        if [ "${DEBUG}" ]
+        then
+            ${PKGTRANS} -s ${SW_OUT_PRODUCT_DIR} ${PKG}.pkg ${PKG} 2>&1
+        else
+            ${PKGTRANS} -s ${SW_OUT_PRODUCT_DIR} ${PKG}.pkg ${PKG} >/dev/null 2>&1
+        fi
+        ERR=$?
+        if [ ${ERR} -ne 0 ]
+        then
+            abort_script "ERROR: Converting ${SW_OUT_PRODUCT_DIR}/${PKG} to .pkg format"
+        fi
+        [ "${DEBUG}" ] && ${ECHO} "Converted ${SW_OUT_PRODUCT_DIR}/${PKG} to ${PKG}.pkg"
+
+        #**********************************
+        # Delete the old software directory
+        #**********************************
+        ${RM} -rf ${SW_OUT_PRODUCT_DIR}/${PKG}
+        ERR=$?
+        if [ ${ERR} -ne 0 ]
+        then
+            abort_script "ERROR: Deleting ${SW_OUT_PRODUCT_DIR}/${PKG}"
+        fi
+        [ "${DEBUG}" ] && ${ECHO} "Deleted ${SW_OUT_PRODUCT_DIR}/${PKG}"
+
+        #*********************************
+        # Check if the pkg is to be zipped
+        #*********************************
+        if [ "${SW_ZIPPED}" = "YES" ]
+        then
+            #************
+            # zip the pkg
+            #************
+            cd ${SW_OUT_PRODUCT_DIR}
+            ERR=$?
+            if [ ${ERR} -ne 0 ]
+            then
+                abort_script "ERROR: cd to ${SW_OUT_PRODUCT_DIR} - ${ERR}"
+            fi
+            [ "${DEBUG}" ] && ${ECHO} "cd to ${SW_OUT_PRODUCT_DIR}"
+
+            ${ZIP} -q ${SW_OUT_PRODUCT_DIR}/${PKG}.pkg.zip ${PKG}.pkg 2>/dev/null
+            ERR=$?
+            if [ ${ERR} -ne 0 ]
+            then
+                abort_script "ERROR: Zipping ${SW_OUT_PRODUCT_DIR}/${PKG}.pkg - ${ERR}"
+            fi
+            [ "${DEBUG}" ] && ${ECHO} "Zipped ${SW_OUT_PRODUCT_DIR}/${PKG}.pkg"
+
+            cd ${SCRIPTHOME}
+            ERR=$?
+            if [ ${ERR} -ne 0 ]
+            then
+                abort_script "ERROR: cd to ${SCRIPTHOME} - ${ERR}"
+            fi
+
+            #****************************
+            # Delete the unzipped package
+            #****************************
+            ${RM} -f ${SW_OUT_PRODUCT_DIR}/${PKG}.pkg
+            ERR=$?
+            if [ ${ERR} -ne 0 ]
+            then
+                abort_script "ERROR: Removing ${SW_OUT_PRODUCT_DIR}/${PKG}.pkg - ${ERR}"
+            fi
+            [ "${DEBUG}" ] && ${ECHO} "Removed ${SW_OUT_PRODUCT_DIR}/${PKG}.pkg"
+        fi
+      done
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : process_product_sw $1\n"
+}
+
+
+### Function: read_conf_param ###
+#
+# Sets parameter to values in the conf file
+#
+# Arguments:
+#	$1 : First 4 fields of the conf file identifying the product
+#            and the parameter required
+# Return Values:
+#	value of the parameter found in the conf file
+#       exit code 200 if not found
+#**********************************************************************
+read_conf_param()
+{
+  PARAM=`${CAT} ${CONF_FILE} | ${GREP} -v "^${IGNORE_PLATFORM}:" |
+                               ${GREP} "${1}" |
+                               ${NAWK} -F: '{print $4}'`
+  if [ ! "${PARAM}" ]
+  then
+      #*******************************************************
+      # This does not exit the script but tells set_conf_param
+      # that this parameter was not found in the conf file
+      #*******************************************************
+      exit 200
+  else
+      #*********************************************************
+      # Return the value of the parameter found in the conf file
+      #*********************************************************
+      ${ECHO} ${PARAM}
+  fi
+}
+
+
+### Function: set_conf_param ###
+#
+# Sets parameters to values in the conf file
+#
+# Arguments:
+#       $1 : PATCH or SW
+#	$2 : Second and third fields of the conf file identifying the product
+# Return Values:
+#	none
+#****************************************************************************
+set_conf_param()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : set_conf_param $1 $2"
+
+  if [ $1 = "PATCH" ]
+  then
+      #*********************************************
+      # Read the patch parameters from the conf file
+      #*********************************************
+      PRODUCT_TYPE=`read_conf_param "${2}:PRODUCT_TYPE:"` ||
+                   abort_script "ERROR: Missing "${2}:PRODUCT_TYPE:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "PRODUCT_TYPE = ${PRODUCT_TYPE}"
+
+      VERSION=`read_conf_param "${2}:VERSION:"` ||
+              abort_script "ERROR: Missing "${2}:VERSION:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "VERSION = ${VERSION}"
+
+      PATCH_IN_DIR=`read_conf_param "${2}:PATCH_IN_DIR:" | ${SED} -e 's/,/ /g'` ||
+                   abort_script "ERROR: Missing "${2}:PATCH_IN_DIR:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "PATCH_IN_DIR = ${PATCH_IN_DIR}"
+
+      COMPONENT_DIRS=`read_conf_param "${2}:COMPONENT_DIRS:"`
+      [ "${DEBUG}" ] && ${ECHO} "COMPONENT_DIRS = ${COMPONENT_DIRS}"
+
+      EXCLUDE_PATCHES=`read_conf_param "${2}:EXCLUDE_PATCHES:" | ${SED} -e 's/,/ /g'`
+      [ "${DEBUG}" ] && ${ECHO} "EXCLUDE_PATCHES = ${EXCLUDE_PATCHES}"
+
+      EIS_CD_NUM=`read_conf_param "${2}:EIS_CD_NUM:"` ||
+                 abort_script "ERROR: Missing "${2}:EIS_CD_NUM:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "EIS_CD_NUM = ${EIS_CD_NUM}"
+
+  elif [ $1 = "SW" ]
+  then
+      #************************************************
+      # Read the software parameters from the conf file
+      #************************************************
+      SW_IN_DIR=`read_conf_param "${2}:SW_IN_DIR:"` ||
+                abort_script "ERROR: Missing "${2}:SW_IN_DIR:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "SW_IN_DIR = ${SW_IN_DIR}"
+
+      SW_OUT_DIR=`read_conf_param "${2}:SW_OUT_DIR:"`
+      [ "${DEBUG}" ] && ${ECHO} "SW_OUT_DIR = ${SW_OUT_DIR}"
+
+      SW_BUNDLED=`read_conf_param "${2}:SW_BUNDLED:"` ||
+                 abort_script "ERROR: Missing "${2}:SW_BUNDLED:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "SW_BUNDLED = ${SW_BUNDLED}"
+
+      if [ "${SW_BUNDLED}" == "YES" ]
+      then
+          SW_BUNDLE_FILE=`read_conf_param "${2}:SW_BUNDLE_FILE:"` ||
+                         abort_script "ERROR: Missing "${2}:SW_BUNDLE_FILE:" parameter in ${CONF_FILE}"
+          [ "${DEBUG}" ] && ${ECHO} "SW_BUNDLE_FILE = ${SW_BUNDLE_FILE}"
+
+          SW_ZIPPED=`read_conf_param "${2}:SW_ZIPPED:"` ||
+                    abort_script "ERROR: Missing "${2}:SW_ZIPPED:" parameter in ${CONF_FILE}"
+          [ "${DEBUG}" ] && ${ECHO} "SW_ZIPPED = ${SW_ZIPPED}"
+          if [ "${SW_ZIPPED}" != "YES" -a "${SW_ZIPPED}" != "NO" ]
+          then
+              abort_script "ERROR: Incorrect "${2}:SW_ZIPPED:" parameter in ${CONF_FILE}"
+          fi
+      elif [ "${SW_BUNDLED}" != "NO" ]
+      then
+          abort_script "ERROR: Incorrect "${2}:SW_BUNDLED:" parameter in ${CONF_FILE}"
+      fi
+
+      SW_UNBUNDLE_DIR=`read_conf_param "${2}:SW_UNBUNDLE_DIR:"`
+      [ "${DEBUG}" ] && ${ECHO} "SW_UNBUNDLE_DIR = ${SW_UNBUNDLE_DIR}"
+      ${ECHO} $SW_UNBUNDLE_DIR | ${EGREP} '^/' > /dev/null 2>&1
+      ERR=$?
+      if [ ${ERR} -eq 0 ]
+      then
+          abort_script "ERROR: Variable SW_UNBUNDLE_DIR begins with a \"/\""
+      fi
+
+      SW_PKG_FORMAT=`read_conf_param "${2}:SW_PKG_FORMAT:"` ||
+                    abort_script "ERROR: Missing "${2}:SW_PKG_FORMAT:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "SW_PKG_FORMAT = ${SW_PKG_FORMAT}"
+      if [ "${SW_PKG_FORMAT}" != "YES" -a "${SW_PKG_FORMAT}" != "NO" ]
+      then
+          abort_script "ERROR: Incorrect "${2}:SW_PKG_FORMAT:" parameter in ${CONF_FILE}"
+      fi
+
+      SW_PKG_LIST=`read_conf_param "${2}:SW_PKG_LIST:" | ${SED} -e 's/,/ /g'` ||
+                  abort_script "ERROR: Missing "${2}:SW_PKG_LIST:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "SW_PKG_LIST = ${SW_PKG_LIST}"
+
+      EXCLUDE_PKGS=`read_conf_param "${2}:EXCLUDE_PKGS:" | ${SED} -e 's/,/ /g'`
+      [ "${DEBUG}" ] && ${ECHO} "EXCLUDE_PKGS = ${EXCLUDE_PKGS}"
+
+      EIS_CD_NUM=`read_conf_param "${2}:EIS_CD_NUM:"` ||
+                 abort_script "ERROR: Missing "${2}:EIS_CD_NUM:" parameter in ${CONF_FILE}"
+      [ "${DEBUG}" ] && ${ECHO} "EIS_CD_NUM = ${EIS_CD_NUM}"
+
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : set_conf_param $1 $2\n"
+}
+
+
+### Function: unpack_recom_patch_cluster ###
+#
+# Unpack Solaris recommended patch cluster
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#*******************************************
+unpack_recom_patch_cluster()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : unpack_recom_patch_cluster"
+
+  #***************************************************************
+  # Handle the difference between Sparc and x86 cluster file names
+  #***************************************************************
+  if [ "$ARCH" = "sparc" ]
+  then
+      CLUSTER_FILE_PREFIX="${VERSION}_Recommended"
+  else
+      CLUSTER_FILE_PREFIX="${VERSION}_x86_Recommended"
+  fi
+
+  GZ_FILE="${PATCH_IN_PRODUCT_DIR}/${CLUSTER_FILE_PREFIX}.tar.gz"
+
+  if [ -f ${GZ_FILE} ]
+  then
+      #********************************************************************
+      [ "${DEBUG}" ] && ${ECHO} "Unpacking recommended patch cluster file:"
+      [ "${DEBUG}" ] && ${ECHO} "${GZ_FILE}"
+      #********************************************************************
+
+      $GZCAT ${GZ_FILE} | (cd ${PATCH_OUT_DIR}; $TAR xBpf -)
+
+  else
+      abort_script "ERROR: Could not find cluster file ${GZ_FILE}"
+  fi
+
+  #****************************************************
+  [ "${DEBUG}" ] && ${ECHO} "Unzipping all patch files"
+  #****************************************************
+  cd ${PATCH_OUT_DIR}
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: cd to ${PATCH_OUT_DIR} - ${ERR}"
+  fi
+
+  ${UNZIP} -qq '*.zip'
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Could not unzip ${PATCH_OUT_DIR}/\*.zip - ${ERR}"
+  fi
+
+  #*************************************************
+  [ "${DEBUG}" ] && ${ECHO} "Deleting all zip files"
+  #*************************************************
+  rm *.zip
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Could not delete ${PATCH_OUT_DIR}/\*.zip - ${ERR}"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : unpack_recom_patch_cluster\n"
+}
+
+
+### Function: unpack_sw_cluster ###
+#
+# Unpack sw cluster
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#**********************************
+unpack_sw_cluster()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : unpack_sw_cluster"
+
+  #********************************************************
+  # Variables for the different software cluster file names
+  #********************************************************
+  GZ_FILE="${SW_IN_PRODUCT_DIR}/${SW_BUNDLE_FILE}.tar.gz"
+  ZIP_FILE="${SW_IN_PRODUCT_DIR}/${SW_BUNDLE_FILE}.zip"
+  BZ2_FILE="${SW_IN_PRODUCT_DIR}/${SW_BUNDLE_FILE}.tar.bz2"
+  TAR_FILE="${SW_IN_PRODUCT_DIR}/${SW_BUNDLE_FILE}.tar"
+
+  #**********************************************
+  # Check for software cluster file and unpack it
+  #**********************************************
+  if [ -s "${GZ_FILE}" ]
+  then
+      #*****************************************************
+      [ "${DEBUG}" ] && ${ECHO} "Unpacking SW cluster file:"
+      [ "${DEBUG}" ] && ${ECHO} "${GZ_FILE}"
+      #*****************************************************
+
+      ${GZCAT} ${GZ_FILE} | (cd ${SW_OUT_PRODUCT_DIR}; ${TAR} xBpf -)
+
+  elif [ -s "${ZIP_FILE}" ]
+  then
+      #*****************************************************
+      [ "${DEBUG}" ] && ${ECHO} "Unpacking SW cluster file:"
+      [ "${DEBUG}" ] && ${ECHO} "${ZIP_FILE}"
+      #*****************************************************
+
+      ${UNZIP} -qq -d ${SW_OUT_PRODUCT_DIR} ${ZIP_FILE}
+   
+  elif [ -s "${BZ2_FILE}" ]
+  then
+      #*****************************************************
+      [ "${DEBUG}" ] && ${ECHO} "Unpacking SW cluster file:"
+      [ "${DEBUG}" ] && ${ECHO} "${BZ2_FILE}"
+      #*****************************************************
+
+      ${BZCAT} ${BZ2_FILE} | (cd ${SW_OUT_PRODUCT_DIR}; ${TAR} xBpf -)
+   
+  elif [ -s "${TAR_FILE}" ]
+  then
+      #*****************************************************
+      [ "${DEBUG}" ] && ${ECHO} "Unpacking SW cluster file:"
+      [ "${DEBUG}" ] && ${ECHO} "${TAR_FILE}"
+      #*****************************************************
+
+      cd ${SW_OUT_PRODUCT_DIR}; ${TAR} xBpf ${TAR_FILE}
+
+  else
+      abort_script "ERROR: Could not find cluster file ${SW_IN_PRODUCT_DIR}/${SW_BUNDLE_FILE}"
+  fi
+
+  #**********************************************
+  # Check if packages are under another directory
+  #**********************************************
+  if [ "${SW_UNBUNDLE_DIR}" ]
+  then
+      #***********************************************
+      # Move the software to the ${SW_OUT_PRODUCT_DIR}
+      #***********************************************
+      ${MV} ${SW_OUT_PRODUCT_DIR}/${SW_UNBUNDLE_DIR}/* ${SW_OUT_PRODUCT_DIR}
+      ERR=$?
+      if [ ${ERR} -ne 0 ]
+      then
+          abort_script "ERROR: Moving ${SW_OUT_PRODUCT_DIR}/${SW_UNBUNDLE_DIR}/* to ${SW_OUT_PRODUCT_DIR} - ${ERR}"
+      fi
+      [ "${DEBUG}" ] && ${ECHO} "Moved ${SW_OUT_PRODUCT_DIR}/${SW_UNBUNDLE_DIR}/* to ${SW_OUT_PRODUCT_DIR}"
+
+      #******************************************
+      # Remove all directories not required
+      # Top level directory in ${SW_UNBUNDLE_DIR}
+      #******************************************
+      DIR_TO_DELETE=`${ECHO} ${SW_UNBUNDLE_DIR} | ${NAWK} -F\/ '{print $1}'`
+
+      ${RM} -rf ${SW_OUT_PRODUCT_DIR}/${DIR_TO_DELETE}
+      ERR=$?
+      if [ ${ERR} -ne 0 ]
+      then
+          abort_script "ERROR: Deleting ${SW_OUT_PRODUCT_DIR}/${DIR_TO_DELETE} - ${ERR}"
+      fi
+      [ "${DEBUG}" ] && ${ECHO} "Deleted ${SW_OUT_PRODUCT_DIR}/${DIR_TO_DELETE}"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : unpack_sw_cluster\n"
+}
+
+
+### Function: usage_msg ###
+#
+# Print out the usage message
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#******************************
+usage_msg() 
+{
+  ${CLEAR}
+  ${ECHO} "Usage: `${BASENAME} $0` -d <EIS date> [ -D ]
+ 
+  options:
+      -d : EIS date in yymmdd format. The directory structure should exist as yymmdd_Oracle
+           under $KITDIR.
+
+      -D : Debug, increased logging."
+}
+
+
+### Function: zip_patches ###
+#
+# Zip the patches back up
+#
+# Arguments:
+#	$1 : Product Type
+# Return Values:
+#	none
+#***********************************
+zip_patches()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : zip_patches $1"
+
+  PATCH_DIR=${TEMP_DIR}/$1
+  PATCH_ORDER=${PATCH_DIR}/patch_order
+
+  if [ -s ${PATCH_ORDER} ]
+  then
+      #************************************************************************
+      # Must cd to directory so as to avoid haveing leading path in the archive
+      #************************************************************************
+      cd ${PATCH_DIR}
+      ERR=$?
+      if [ ${ERR} != 0 ]
+      then
+          abort_script "ERROR: cd to ${PATCH_DIR} - ${ERR}"
+      fi
+
+      for PATCH in `${CAT} ${PATCH_ORDER} | ${NAWK} -F: '{print $1}'`
+      do
+        #************************
+        # Use 7z to zip the patch
+        #************************
+        [ "${DEBUG}" ] && ${ECHO} "${SEVENZ} a ${PATCH}.7z ${PATCH}"
+
+        ${SEVENZ} a ${PATCH}.7z ${PATCH} > /dev/null
+        ERR=$?
+        if [ ${ERR} -ne 0 ]
+        then
+            abort_script "ERROR: Zipping ${PATCH_DIR}/${PATCH} - ${ERR}"
+        fi
+
+        #******************************
+        # change the permissions on the
+        # 7-zipped patch to 755
+        #******************************
+        [ "${DEBUG}" ] && ${ECHO} "${CHMOD} 755 ${PATCH}.7z"
+
+        ${CHMOD} 755 ${PATCH}.7z > /dev/null
+        ERR=$?
+        if [ ${ERR} -ne 0 ]
+        then
+            abort_script "ERROR: Changing permissions on ${PATCH_DIR}/${PATCH}.7z to 755 - ${ERR}"
+        fi
+
+        #******************************
+        # Delete the uncompressed patch
+        #******************************
+        ${RM} -rf ${PATCH_DIR}/${PATCH} > /dev/null
+        ERR=$?
+        if [ ${ERR} -ne 0 ]
+        then
+            abort_script "ERROR: Removing ${PATCH_DIR}/${PATCH} - ${ERR}"
+        fi
+        [ "${DEBUG}" ] && ${ECHO} "Removed ${PATCH_DIR}/${PATCH}"
+      done
+
+      cd ${SCRIPTHOME}
+      ERR=$?
+      if [ ${ERR} != 0 ]
+      then
+          abort_script "ERROR: cd to ${SCRIPTHOME} - ${ERR}"
+      fi
+  else
+      [ "${DEBUG}" ] && ${ECHO} "WARNING: Empty patch order file ${PATCH_ORDER}"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : zip_patches $1\n"
+}
+
+
+#********************************************************************
+#
+# 	Main body of program
+#
+#********************************************************************
+
+#***********
+# Start time
+#***********
+START_TIME=`${DATE} +'%Y%m%d%H%M%S'`
+
+#**************************
+# Parse supplied parameters
+#**************************
+while getopts "d:D" arg
+do
+  case ${arg} in
+    d) EIS_DATE="${OPTARG}" 
+       ;;
+    D) DEBUG="YES"
+       ;;
+    *) usage_msg 
+       exit 1 
+       ;;
+  esac
+done
+if [ `expr ${OPTIND} - 1` -ne ${#} ]
+then
+    ${ECHO} "ERROR: Invalid parameter string '${@}'"
+    sleep 2
+    usage_msg
+    exit
+fi
+
+[ "${DEBUG}" ] && ${ECHO} "Start time: ${START_TIME}"
+
+#************************************
+# Determine absolute path to software
+#************************************
+get_absolute_path
+
+#************************************************
+# Check that the effective id of the user is root
+#************************************************
+check_id_root
+
+#************************************
+# Run once for sparc and once for x86
+#************************************
+for ARCH in "sparc" "i386"
+do
+  ${ECHO} "#************************************"
+  ${ECHO} "Processing ${ARCH} patches and software"
+  ${ECHO} "#************************************"
+
+  #****************
+  # Setup variables
+  #****************
+  if [ ${ARCH} == "sparc" ]
+  then
+      IGNORE_PLATFORM="X"
+  else
+      IGNORE_PLATFORM="S"
+  fi
+  BASEDIR="/NFD_Store/EIS"
+  README_DIR="${BASEDIR}/READMES"
+  CONFDIR="${BASEDIR}/conf"
+  CONF_FILE="${CONFDIR}/PROCESS_EIS.conf"
+  KITDIR="${BASEDIR}/DVD_Kit"
+  EIS_DIR="${KITDIR}/${EIS_DATE}_Oracle"
+  DVD_DIR="${EIS_DIR}/DVD1"
+  DVD_SUN_DIR="${DVD_DIR}/sun"
+  OUT_BASE="${EIS_DIR}/DVD1_Output"
+  if [ ${ARCH} == "sparc" ]
+  then
+      OUT_DIR="${OUT_BASE}/sparc"
+  else
+      OUT_DIR="${OUT_BASE}/i386"
+  fi
+  if [ ${ARCH} == "sparc" ]
+  then
+      PO_COPY_DIR="${BASEDIR}/EIS_patch_orders/${EIS_DATE}_Oracle/DVD1_Output/sparc"
+  else
+      PO_COPY_DIR="${BASEDIR}/EIS_patch_orders/${EIS_DATE}_Oracle/DVD1_Output/i386"
+  fi
+  ADHOC_DIR="${BASEDIR}/ADHOC"
+
+  #**********************
+  # Check Iput parameters
+  #**********************
+  check_input_params
+
+  #****************************************************
+  # Create temporary directory based on OUT_DIR
+  # It will be moved to OUT_DIR if script is successful
+  #****************************************************
+  TEMP_DIR="${OUT_DIR}.tmp"
+  ${MKDIR} -p ${TEMP_DIR} > /dev/null 2>&1
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Creating ${TEMP_DIR} - ${ERR}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "Created ${TEMP_DIR}\n"
+
+  #**********************************************
+  # Create patch order copy directory PO_COPY_DIR
+  #**********************************************
+  ${MKDIR} -p ${PO_COPY_DIR} > /dev/null 2>&1
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Creating ${PO_COPY_DIR} - ${ERR}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "Created ${PO_COPY_DIR}\n"
+
+  #*********************************************************************************
+  [ "${DEBUG}" ] && ${ECHO} "Creating the list of software products to be processed"
+  #*********************************************************************************
+  SW_PRODUCTS=`${CAT} ${CONF_FILE} | ${GREP} -v "^#" |
+                                     ${GREP} ":SOFTWARE_PRODUCT:" |
+                                     ${GREP} -v "^${IGNORE_PLATFORM}:" |
+                                     ${NAWK} -F: '{print $1":"$2}'`
+  ${ECHO} "SW_PRODUCTS = ${SW_PRODUCTS}"
+
+  #******************************************************************************
+  [ "${DEBUG}" ] && ${ECHO} "Creating the list of patch products to be processed"
+  #******************************************************************************
+  PATCH_PRODUCTS=`${CAT} ${CONF_FILE} | ${GREP} -v "^#" |
+                                        ${GREP} ":PATCH_PRODUCT:" |
+                                        ${GREP} -v "^${IGNORE_PLATFORM}:" |
+                                        ${NAWK} -F: '{print $2}'`
+
+  #**********************************************************************
+  # Ensure that if SOLARIS is in the list of patch products
+  # it is processed first. This allows for more efficient
+  # handling of the patch order file
+  [ "${DEBUG}" ] && ${ECHO} "Ensuring SOLARIS is first in PATCH_PRODUCTS"
+  #**********************************************************************
+  TEMP_PP=""
+  for PP in ${PATCH_PRODUCTS}
+  do
+    if [ ! "${TEMP_PP}" ]
+    then
+        TEMP_PP=${PP}
+    elif [ ${PP} == "SOLARIS" ]
+    then
+        TEMP_PP="${PP} ${TEMP_PP}"
+    else
+        TEMP_PP="${TEMP_PP} ${PP}"
+    fi
+  done
+  PATCH_PRODUCTS=${TEMP_PP}
+
+  ${ECHO} "PATCH_PRODUCTS = ${PATCH_PRODUCTS}"
+
+  #***************************************************
+  # Trap all possible interrupts and remove temp files
+  # before exiting
+  #***************************************************
+  trap "abort_script" 1 2 3 14 15
+
+  #****************************
+  # Software Product Processing
+  #****************************
+  if [ "${SW_PRODUCTS}" ]
+  then
+      ${ECHO} "#******************"
+      ${ECHO} "Processing software"
+      ${ECHO} "#******************"
+      #******************************
+      # Process each software product
+      #******************************
+      for PRODUCT in ${SW_PRODUCTS}
+      do
+        #****************************************************
+        # Main function for processing software on the EIS CD
+        #****************************************************
+        ${ECHO} "Processing ${PRODUCT}"
+        process_product_sw ${PRODUCT}
+      done
+  fi
+
+  #*************************
+  # Patch Product Processing
+  #*************************
+  if [ "${PATCH_PRODUCTS}" ]
+  then
+      ${ECHO} "#*****************"
+      ${ECHO} "Processing patches"
+      ${ECHO} "#*****************"
+      #***************************
+      # Process each patch product
+      #***************************
+      for PRODUCT in ${PATCH_PRODUCTS}
+      do
+        #***********************************************************
+        # Main function for processing product patches on the EIS CD
+        #***********************************************************
+        ${ECHO} "Processing ${PRODUCT}"
+        process_product_patches ${PRODUCT}
+      done
+  fi
+
+  #**********************************************
+  # Process each product type directory
+  # Zip up the patches in each of the directories
+  # i.e. at least one of SunOS, 3pp and Veritas
+  #**********************************************
+  cd ${TEMP_DIR}
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: cd to ${TEMP_DIR} - ${ERR}"
+  fi
+
+  ${LS} ${TEMP_DIR} | 
+  while read PRODUCT_TYPE
+  do
+    if [ -f ${TEMP_DIR}/${PRODUCT_TYPE}/patch_order ]
+    then
+        #***************************************
+        # Copy README files to READMES directory
+        #***************************************
+        copy_readmes ${TEMP_DIR}/${PRODUCT_TYPE}
+
+        #*************************************************
+        # Zip up the patches in the product type directory
+        #*************************************************
+        zip_patches ${PRODUCT_TYPE}
+    fi
+  done
+
+  cd ${SCRIPTHOME}
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: cd to ${SCRIPTHOME} - ${ERR}"
+  fi
+
+  #***********************************************
+  # Move the temporary output directory to OUT_DIR
+  #***********************************************
+  ${MV} ${TEMP_DIR} ${OUT_DIR}
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Moving ${TEMP_DIR} to ${OUT_DIR} - ${ERR}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "Moved ${TEMP_DIR} to ${OUT_DIR}"
+
+  #************************************************
+  # Copy patch orders to patch order copy directory
+  #************************************************
+  cd ${OUT_DIR}
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: cd to ${OUT_DIR} - ${ERR}"
+  fi
+
+  [ "${DEBUG}" ] && ${ECHO} "Copying patch_order files from ${OUT_DIR} to ${PO_COPY_DIR}"
+
+  if [ "${DEBUG}" ]
+  then
+      ${FIND} . -name patch_order | xargs ${TAR} cvf - 2>/dev/null | (cd ${PO_COPY_DIR};tar xvf - 2>/dev/null)
+      ${ECHO} ""
+  else
+      ${FIND} . -name patch_order | xargs ${TAR} cvf - 2>/dev/null | (cd ${PO_COPY_DIR};tar xvf - >/dev/null 2>/dev/null)
+  fi
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: Copying patch_order files from ${OUT_DIR} to ${PO_COPY_DIR} - ${ERR}"
+  fi
+
+  ${ECHO} "#*******************"
+  ${ECHO} "Adding adhoc patches"
+  ${ECHO} "#*******************"
+  add_adhoc_patches ${ARCH}
+
+done
+
+${ECHO} "#******************"
+${ECHO} "Processing complete"
+${ECHO} "#******************"
+
+#*********
+# End time
+#*********
+END_TIME=`${DATE} +'%Y%m%d%H%M%S'`
+[ "${DEBUG}" ] && ${ECHO} "End time: ${END_TIME}"

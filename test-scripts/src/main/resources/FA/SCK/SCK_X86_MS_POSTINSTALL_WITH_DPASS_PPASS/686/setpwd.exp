@@ -1,0 +1,14 @@
+#!/usr/local/bin/expect
+
+spawn passwd -r files storadm
+expect "New Password:"
+send "letmein\n"
+expect "Re-enter new Password:"
+send "letmein\n"
+
+spawn passwd -r files storobs
+expect "New Password:"
+send "letmein\n"
+expect "Re-enter new Password:"
+send "letmein\n"
+

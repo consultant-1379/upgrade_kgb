@@ -1,0 +1,11 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="SshMwsSuite">
+    <test name="SshMwsSuite">
+        <classes>
+            <class name="com.ericsson.oss.orchestrator.test.cases.SshMwsUasScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.SshMwsPeerScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.SshMwsEbasScenario" />
+	</classes>
+    </test>
+</suite>
+

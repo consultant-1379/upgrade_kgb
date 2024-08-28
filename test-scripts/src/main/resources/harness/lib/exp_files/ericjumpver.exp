@@ -1,0 +1,32 @@
+#!./expect -- 
+set timeout 120 
+log_user 0
+
+set mws [lindex $argv 2]
+set mws_rootpw [lindex $argv 3]
+
+proc check_package_install {pkg} {
+        global results
+        set pkg_1 $pkg
+        append pkg_1 _1
+        set results($pkg_1) "0"
+        send -- "/usr/bin/pkginfo -l $pkg | grep VERSION: | /usr/bin/sed \'s/VERSION://\'  || echo \"fail\"\r" 
+        expect "\/#"
+        set pkginfo3 $expect_out(buffer)
+        set pkginfo4 [split $pkginfo3 "\r\n"]
+        if {[lindex $pkginfo4 2] == "fail"} {
+                incr results(OVERALL)
+                incr results($pkg_1)
+        }
+        set results($pkg) [lindex $pkginfo4 4]
+}
+
+spawn ssh -ostricthostkeychecking=no root@$mws
+expect -timeout 10 "Are you sure you want to continue connecting" {send "yes\r"; exp_continue}
+expect "Password:"
+send "$mws_rootpw\r"
+expect "\/#"
+sleep 5
+check_package_install ERICjump
+puts "$results(ERICjump)"
+send "exit\r"

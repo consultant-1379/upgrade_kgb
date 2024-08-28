@@ -1,0 +1,23 @@
+#!./expect -- 
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set MWS [lindex $argv 1]
+set MWS_ROOTPW [lindex $argv 2]
+spawn ssh -ostricthostkeychecking=no root@$MWS
+expect -timeout 10 "Are you sure you want to continue connecting" {send "yes\r"; exp_continue}
+expect "Password:"
+send "$MWS_ROOTPW\r"
+expect "\/#"
+sleep 2
+	send -- "/ericsson/jumpstart/bin/manage_pks_rootcerts.bsh -a list\r"
+	expect -timeout 30 "Press return key to continue"
+	send "\r"
+sleep 10
+send "exit\r"
+catch "wait -i $spawn_id" reason
+
+# return status code of spawned process
+exit [ lindex $reason 3 ]
+

@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Tuesday 15th of April 2014 12:05:48
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="UNIT_OM"
+SPEC_UC_NAME="0r_OM_PREPARE_UPGRADE_OK_STATUS_UNIT"
+SPEC_TC_ID=30502
+SPEC_TC_SLOGAN="Checks om_prepare_for_upgrade.bsh will run if status file on remote node with OK status"
+SPEC_TC_TYPE="UNIT"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="low"
+if [ "$ORCH_SERVER_TYPE" = "OMSAS" ]; then
+SPEC_TC_AUTOMATED=1
+else
+SPEC_TC_AUTOMATED=0
+fi
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=300
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xmcgama"
+SPEC_TC_AUTOMATOR="xmcgama"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+# Admin software installed
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#- om_prepare_for_upgrade.bsh -h
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+# END_POST_CONDITIONS

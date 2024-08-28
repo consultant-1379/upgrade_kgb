@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TEST SUITE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Thursday 13th of November 2014 15:54:41
+#
+SPEC_TS_NAME=X86_ORCHA_RESYNC
+SPEC_TS_ID=180
+SPEC_TS_SLOGAN="X86 UPG RESYNC DISC POST UPGRADE "
+SPEC_TS_TIMEOUT=2400
+SPEC_TS_AUTHOR="eolikil"
+SPEC_TS_INDEPENDENT=0
+SPEC_TS_TC_IDS=(32100 33100 34100 35100)

@@ -1,0 +1,298 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# 13_10_14	xdhiilm	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		    # Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+    
+    ######################################################################
+    # TC SETUP Variables
+    ######################################################################
+    source /joe/admin_common_functions.lib
+    orc_header_2 "Performing TC SETUP"
+
+    RES=0
+    NO_OF_ERRORS=0
+    CP_STATUS_FILE="/var/opt/ericsson/sck/data/cp.status"
+    CP_STATUS_FILE_BK="/var/opt/ericsson/sck/data/cp.status_BK"
+    SSH_DIR="/.ssh/"
+    SSH_BACKUP_DIR="/joe/backup_ssh"
+    LOG_FILE="/tmp/pre_tmp22802.log"
+        
+    HOST=`${HNAMECMD}`
+
+    ######################################################################
+    # TC Test key files existence
+    ######################################################################
+    test -f $CP_STATUS_FILE
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+        return 1
+    fi
+
+    ######################################################################
+    # TC Create log file
+    ######################################################################
+
+    touch $LOG_FILE
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: ${LOG_FILE} cannot be created"
+        return 1
+    fi
+      
+    ######################################################################
+    # TC Backup CP Status
+    ######################################################################
+    #Back up CP status file
+    cp $CP_STATUS_FILE $CP_STATUS_FILE_BK
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to move local ${CP_STATUS_FILE} to ${CP_STATUS_FILE_BK}"
+        return 1
+    fi
+
+    ######################################################################
+    # TC Backup SSH DIR
+    ######################################################################
+    cp -r $SSH_DIR $SSH_BACKUP_DIR
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to copy local ${SSH_DIR} to ${SSH_BACKUP_DIR}"
+        return 1
+    fi
+    
+
+      
+	return 0
+
+    
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+    source /joe/admin_common_functions.lib
+    ######################################################################
+    # TC Must be a single node cluster
+    ######################################################################
+    #Set up "Known" CP status file values
+    admin_get_ha_state
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to get HA cluster state"
+        return 1
+    fi
+
+    if [ $ADMIN_STATE != "SINGLE" ]
+    then
+        echo "${ADMIN_STATE} CLUSTER STATE NOT CORRECT"
+        return 1
+    fi
+
+    return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+    
+    ################################################################################
+    # Test 1: Positive run of admin_setup_2k_root_ssh_keys with lower shipment version
+    # on local server then the target
+    #
+    ###############################################################################
+
+    DEBUG="TRUE"
+    source "/joe/admin_common_functions.lib"
+    RES=0
+    # LOG_DIR_BASE=/var/opt/ericsson/sck/log/SUG
+    # L_RELEASE="R4F_LLSV1"
+    # CU_CP_STATUS_FILE=/ericsson/config/.cu_cp_status
+	# CU_CP_STATUS_TMP_FILE=/ericsson/config/.tmp_cu_cp_status
+
+    ######################################################################
+    # UNIT TC 4 break ssh
+    ######################################################################
+    #Set up broken SSH 
+    orc_header_2 "Breaking SSH to make sure this is caught"
+    
+    echo "CP_STATUS OSSRC_O14_4_Shipment_14.3.8 AOM_901110 R2H_EU05" > $CP_STATUS_FILE
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to setup ${CP_STATUS_FILE}"
+        return 1
+    fi
+    
+    chmod 777 /.ssh/authorized_keys
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to chmod 777"
+        return 1
+    fi
+
+    admin_setup_2k_root_ssh_keys
+    RES=$?
+    if [ $RES -ne 2 ]
+    then
+        echo "$RES ERROR: Failed testing failed ssh by chmod (/.ssh/authorized_keys )"
+        chmod 600 /.ssh/authorized_keys
+        return 1
+    fi
+    chmod 600 /.ssh/authorized_keys
+    
+    return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+    source /joe/admin_common_functions.lib
+    orc_header_2 "Postcon"
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+    
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+    source /joe/admin_common_functions.lib
+    CP_STATUS_FILE="/var/opt/ericsson/sck/data/cp.status"
+    CP_STATUS_FILE_BK="/var/opt/ericsson/sck/data/cp.status_BK"
+    SSH_DIR="/.ssh/"
+    SSH_BACKUP_DIR="/joe/backup_ssh"
+    orc_header_2 "Cleaning up test case"
+    ######################################################################
+    # TC Backup CP Status
+    ######################################################################
+    #Back up CP status file
+    
+    cp $CP_STATUS_FILE_BK $CP_STATUS_FILE
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to restore local ${CP_STATUS_FILE} from ${CP_STATUS_FILE_BK}"
+        return 1
+    fi
+
+    ######################################################################
+    # TC Restore Backup SSH DIR
+    ######################################################################
+    rm -r $SSH_DIR
+    mv $SSH_BACKUP_DIR $SSH_DIR
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to restore local ${SSH_DIR} from  ${SSH_BACKUP_DIR}"
+        return 1
+    fi
+    
+    return 0
+}

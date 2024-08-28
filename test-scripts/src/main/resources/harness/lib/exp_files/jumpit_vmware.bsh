@@ -1,0 +1,67 @@
+#!/bin/bash
+
+VCEN_HOSTNAME=$1
+if [ -z "$VCEN_HOSTNAME" ]; then
+	echo "Error - vcentre host name not specified."
+	exit 1
+fi
+VM_NAME=$2
+if [ -z "$VM_NAME" ]; then
+	echo "Error - virtual machine name not specified."
+	exit 1
+fi
+case $VCEN_HOSTNAME in
+	'atrcts23esxi.athtem.eei.ericsson.se')
+		VCEN_USERNAME=root
+		VCEN_PASSWD=abcde_12
+		;;
+	'atesx1375.athtem.eei.ericsson.se')
+		VCEN_USERNAME=root
+		VCEN_PASSWD=abcde_12
+		;;
+	'atdl785esxi.athtem.eei.ericsson.se')
+		VCEN_USERNAME=root
+		VCEN_PASSWD=abcde_12
+		;;
+esac
+if [ -z "$VCEN_USERNAME" ]; then
+	echo "Error - unable to determine username for vcentre $VCEN_HOSTNAME"
+	exit 1
+fi
+if [ -z "$VCEN_USERNAME" ]; then
+	echo "Error - unable to determine password for vcentre $VCEN_USERNAME"
+	exit 1
+fi
+
+source /opt/vmware/vma/bin/vifptarget --set $VCEN_HOSTNAME
+
+full_vm_name=`/usr/bin/vmware-cmd -H $VCEN_HOSTNAME -U $VCEN_HOSTNAME -P $VCEN_PASSWD -l | grep -w ${VM_NAME}`
+if [ -z "$full_vm_name" ]; then
+	echo "Error - failed to get full VM name on vcenter host $VCEN_HOSTNAME"
+	exit 1
+fi
+power_state=`/usr/bin/vmware-cmd -H $VCEN_HOSTNAME -U $VCEN_USERNAME -P $VCEN_PASSWD ${full_vm_name} getstate | awk '{print $3}'`
+
+if [[ ${power_state} == "on" ]]; then
+	echo -en "\n   --- Power off VM ${VM_NAME} \n"
+	/ci/vApp_power.pl --op poweroffvm --vm ${VM_NAME}
+	sleep 5
+fi
+
+echo -en "\n   --- Set boot order = network first for ${VM_NAME} \n"
+/ci/BootOrder.pl  --vmname ${VM_NAME} --bootWith allow:net || {
+	echo "Failed to set boot order network first"
+	exit 1
+}
+echo -en "\n   --- Power on VM ${VM_NAME} \n"
+/ci/vApp_power.pl --op poweronvm --vm ${VM_NAME} || {
+	echo "Failed to boot up vm"
+        exit 1
+}
+sleep 60
+echo -en "\n   --- Set boot order = disk first for ${VM_NAME} \n"
+/ci/BootOrder.pl  --vmname ${VM_NAME} --bootWith allow:hd,net || {
+	echo "Failed to set boot order network first"
+	exit 1
+}
+

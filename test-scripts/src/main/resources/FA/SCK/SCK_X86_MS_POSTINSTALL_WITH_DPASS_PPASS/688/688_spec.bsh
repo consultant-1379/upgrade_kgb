@@ -1,0 +1,129 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Thursday 30th of May 2013 11:36:25
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="SCK"
+SPEC_UC_NAME="SCK_X86_MS_POSTINSTALL_WITH_DPASS_PPASS"
+SPEC_TC_ID=688
+SPEC_TC_SLOGAN="Configuring SSH for LDAP User Administration"
+SPEC_TC_TYPE="KGB"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="high"
+SPEC_TC_AUTOMATED=1
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=4500
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xjithbv"
+SPEC_TC_AUTOMATOR="xjithbv"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+#None
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#Configuring SSH for LDAP User Administration
+#A one-way trust relationship from the O&M Infra/O&M Services Servers or
+#OMSAS to the Master server is required to enable the user administration
+#scripts on those servers to add or remove users on MS.
+#This section must be completed for each O&M Infra/O&M Services Server
+#and OMSAS.
+#18.1 SSH Configuration
+#18.1.1 Configuring SSH in Upgrade or Multiple OSS Domains
+#Verify that a SSH public/private key pair (/.ssh/id_dsa and
+#/.ssh/id_dsa.pub) exist on the O&M Infra/O&M Services.
+##ls -la /.ssh
+#id_dsa id_dsa.pub
+#If /.ssh/id_dsa and /.ssh/id_dsa.pub) already exist, proceed with
+#Section 18.1.3 on page 175.
+#If /.ssh/id_dsa and /.ssh/id_dsa.pub) do NOT exist, then proceed with
+#Section 18.1.2 on page 174.
+#18.1.2 Configuring SSH in Single OSS Domain
+#Generate a public/private key pair by execute the following commands on the
+#O&M Infra/O&M Services or OMSAS:
+#1. Verify the /.ssh directory exists, if not create it
+## mkdir /.ssh
+#2. Change the permissions:
+##chmod 0700 /.ssh
+##cd /.ssh
+#3. Create a public/private key:
+## ssh-keygen -t dsa
+#Generating public/private dsa key pair
+#Enter file in which to save the key (//.ssh/id_dsa):
+#//.ssh/id_dsa
+#Enter passphrase : <Passphrase>
+#Enter same passphrase again: <Passphrase>
+#Your identification has been saved in //.ssh/id_dsa.
+#Your public key has been saved in //.ssh/id_dsa.pub.
+#The key fingerprint is: b6:74:c6:79:03:5a:82:e6:18:9
+#0:ac:e0:b6:78:1d:af
+#4. This creates id_dsa and id_dsa.pub under /.ssh. A phrase
+#value is needed to protect the private key in the file system. It is used
+#once the communication is initiated with the OSS Admin Server. This
+#phrase/password must be different from the OSS Admin Server root
+#password.
+#18.1.3 Configuring SSH for User comnfadm
+#1. On OSS Admin Server, verify that the SSH key authorized_keys2
+#exists for the usercomnfadm in directory /home/comnfadm/.ssh. If the
+#keys already exist in /home/comnfadm/.ssh directory then verify the
+#SSH setup with Step 5 Page 176.
+#2. If the keys do not exist, they must be created. Execute the following on the
+#OSS Admin Server:
+#Verify that the directory /home/comnfadm/.ssh exists, if not create it
+## su - comnfadm
+## mkdir -p /home/comnfadm/.ssh
+## exit
+#3. Securely copy the public key to the OSS Admin Server. Execute the
+#following on the O&M Infra/O&M Services:
+#Note: If OSS Admin Server has been upgraded and the SSH keys are
+#copied using scp from O&M Infra/O&M Services Server to OSS
+#Admin Server, it may prompt for SSH Passphrase instead of root
+#password.
+## scp id_dsa.pub <IP Address of OSS Admin Server>:/home
+#/comnfadm/.ssh/OMINFServer.pub
+#scp id_dsa.pub 10.0.0.22:/home/comnfadm/.ssh/OMINFSe
+#rver.pub
+#The authenticity of host '10.0.0.1 (10.0.0.1)' can't
+#be established.
+#RSA key fingerprint is 23:b0:10:cb:d5:8a:f9:54:84:9a:87
+#:5f:41:58:83:0c
+#Are you sure you want to continue connecting
+#(yes/no)?yes
+#Warning: Permanently added '10.0.0.2' (RSA) to the
+#list of known hosts.
+#Password: <OSS Admin Server Root Password>
+#id_dsa.pub
+#|***************************************************|
+#602 00:00
+## chmod 0600 /.ssh
+#4. Log onto the MS and append the O&M Infra/O&M Services Server public
+#key to the authorized key file:
+##cd /home/comnfadm/.ssh
+## cat OMINFServer.pub >> authorized_keys2
+#Remove the OMINFServer public key from the file system and secure
+#the /.ssh directory:
+##rm OMINFServer.pub
+## chown -R comnfadm:other /home/comnfadm/.ssh/
+## chmod -R 0700 /home/comnfadm/.ssh/
+#5. Test SSH configuration on the O&M Infra/O&M Services:
+## ssh -l comnfadm <OSS-RC Master Server IP address>
+#Enter passphrase for key '/.ssh/id_dsa': <Passphrase>
+#Last login: Wed Jul 30 03:57:41 2008 from
+#v2013e6.eei.eri
+#Sun Microsystems Inc. SunOS 5.10 Generic January 2005
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+#SSH communication is setup between OSS Admin server and O&M Infra
+# END_POST_CONDITIONS

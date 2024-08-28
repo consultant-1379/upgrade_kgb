@@ -1,0 +1,74 @@
+#!/bin/bash -x
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+
+
+
+#MAIN
+DATE=$( date "+%d%m%Y%H%I%S" )
+SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+SCRIPTNAME=$(/bin/basename $0)
+REMOTE_SCRIPT=pkg_build_remote_3pp.bsh
+CLEARCASE_HOST=ath-solaris.lmera.ericsson.se
+CLEARCASE_USER=ossrcci
+CLEARCASE_VIEW=ossrcci_view
+#CLEARCASE_VOB_LOC=/proj/3pp/Jen_test
+BUILD_PACKAGE=FALSE
+COMPRESS_PACKAGE=FALSE
+#PACKAGE_LOCATION=
+P7ZIP=/usr/bin/p7zip
+
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+. $G_SCRIPTDIR/../lib/common_functions.lib
+G_ETCDIR=$( dirname $G_SCRIPTDIR )/etc
+. $G_ETCDIR/build_scripts.ini
+G_SCRIPTNAME=$(/bin/basename $0)
+
+
+
+#commands
+if [ -x /usr/bin/expect ]; then
+	EXPECT=/usr/bin/expect
+elif [ -x /usr/local/bin/expect ]; then
+	EXPECT=/usr/local/bin/expect
+elif [ -x /app/expect/5.43/bin/expect  ]; then
+        EXPECT=/app/expect/5.43/bin/expect
+fi
+
+[ ! -x $EXPECT ] && {
+	echo "Error - unable to find expect binary"
+	exit 1
+}
+
+reqpars="CI_MEDIA CI_PKG_ARCH CI_PKGNAME CI_PKGVERSION CI_CONFIGSPECFILE CI_CLEARCASEVIEW CI_MWS_HOSTNAME CI_MWS_ROOTPW CI_TEAM CI_FQ_SHIPMENT CI_PACKAGE_DEST_DIR CI_SOURCE_DIR CI_PKG_ARCH CI_BUILD_SCRIPT CI_BUILD"
+for par in $reqpars; do
+	if [ -z $(eval echo \$$par) ]; then
+		echo "Error required parameter \"$par\" is not set"
+		exit 1
+	fi
+done
+
+if [ -z "$CI_MWS_HOSTNAME" ]; then
+	echo "Error - CI_MWS_HOSTNAME var not set"
+	exit 1
+fi
+
+#export NEW_PKG=`echo $CI_SOURCE_DIR | awk -F/ '{ print $NF }'`
+#echo "$NEW_PKG"
+
+$EXPECT $G_SCRIPTDIR/ssh_setup2.sh scp "$G_SCRIPTDIR/ssh_setup2.sh $G_SCRIPTDIR/pkg_build_mws_3pp.bsh  $G_SCRIPTDIR/pkg_build_remote_3pp.bsh $G_ETCDIR/config_specs/$CI_CONFIGSPECFILE root@$CI_MWS_HOSTNAME:/var/tmp" $CI_MWS_ROOTPW > /dev/null && 
+$EXPECT $G_SCRIPTDIR/ssh_setup2.sh ssh "root@$CI_MWS_HOSTNAME /var/tmp/pkg_build_mws_3pp.bsh -m $CI_MEDIA  -a $CI_PKG_ARCH -b -p $CI_PKGNAME -o $CI_CLEARCASEVIEW -v $CI_PKGVERSION -c /var/tmp/$CI_CONFIGSPECFILE -t $CI_TEAM -s $CI_FQ_SHIPMENT -n $CI_PACKAGE_DEST_DIR -e $CI_SOURCE_DIR -f $CI_PKG_ARCH -g $CI_BUILD_SCRIPT -i $CI_BUILD" $CI_MWS_ROOTPW 
+

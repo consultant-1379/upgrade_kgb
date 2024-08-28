@@ -1,0 +1,13 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="CDBEngineSuite">
+    <test name="CDBEngineSuite">
+        <classes>
+            <class name="com.ericsson.oss.orchestrator.test.cases.GenericOrchaEngineInvokeScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.MonitorMwsRebootScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.GenericOrchaEngineInvokeAfterMwsRebootScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.AnalyseWorkflowResultsTest" /> 
+            
+	</classes>
+    </test>
+</suite>
+

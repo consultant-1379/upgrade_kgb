@@ -1,0 +1,349 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+	touch /tmp/adtmp23006.log || 1
+       
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+ # find out the log directory
+  . /opt/ericsson/sck/lib/admin_common_functions.lib
+  admin_get_log_dir 
+  if [ -n $$LOGDIRECTORY ]; then
+     echo $LOGDIRECTORY > /tmp/lgdirtmp_23006
+  else
+     echo "unable to determine log dir where the post_upgrade_cronbackup_location.txt should reside"
+     return 1
+  fi
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+
+local L_FAILS=0
+
+ # adjustments to cron copies are in main part of test as we want to retain some info for checking
+ NSMADMFIRSTLINE=""
+ NSMADMADDEDLINE="detect this in test nmsadm 23006"
+ if [ -f /tmp/lgdirtmp_23006 ]; then
+    LGD=`cat /tmp/lgdirtmp_23006`
+    echo "looking for post_upgrade_cronbackup_location.txt in log dir (${LGD})"
+    NSMADMCRONCPY=`awk '{FS=","};{print $2}' ${LGD}/post_upgrade_cronbackup_location.txt`
+    # copy cron copy to one side temporarily if present and adjust contents for test
+    if [ -s ${NSMADMCRONCPY} ]; then
+         cp "${NSMADMCRONCPY}" "${NSMADMCRONCPY}_tmp23006"
+         # add identifiable final line
+         echo "${NSMADMADDEDLINE}" >> ${NSMADMCRONCPY}
+         # save first line contents
+         NSMADMFIRSTLINE=`head -1 ${NSMADMCRONCPY}`
+         # escape any asterisks
+         TMP=$(echo  "${NSMADMFIRSTLINE}" | sed  's/*/\\*/g')
+         NSMADMFIRSTLINE="${TMP}"
+
+         # remove first line
+         sed '1d' ${NSMADMCRONCPY} > ${NSMADMCRONCPY}_sed23006
+         mv  ${NSMADMCRONCPY}_sed23006 ${NSMADMCRONCPY}
+    else
+         echo "nsmadm cron copy ${NSMADMCRONCPY} not found or empty"
+    return 1
+    fi
+  else
+    echo "CRON_BACKUP_LOCATION file /tmp/post_upgrade_cronbackup_location.txt not found"
+    return 1
+  fi
+
+
+
+/opt/ericsson/sck/bin/admin_post_upgrade_tasks.bsh | tee /tmp/adtmp23006.log
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL:module did not complete correctly - returned non-zero"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking for tee output"
+ls -al "/tmp/adtmp23006.log"
+if [ ${?} -ne 0 ]; then
+  echo "console output tee file not found"
+  echo "unable to assess test results"
+  return 1
+fi
+
+echo "checking for syntax errors"
+egrep -i 'ambiguous redirect|Syntax error|unexpected token|parse error|Permission denied|Undefined variable|Stale NFS' /tmp/adtmp23006.log
+if [ ${?} -eq 0 ]; then
+  echo "TEST FAIL: Code Errors were found, please check output."
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checkng for NOK in output"
+egrep -i "NOK" /tmp/adtmp23006.log
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: NOK not found in output"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking logfile exists"
+
+echo "checking logfile referenced in console output"
+#check logfile exists - need to grep the logfile name out of the output & do an ls on it
+egrep -i "Log file is" /tmp/adtmp23006.log | egrep -i "admin_post_upgrade_tasks_"
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: No reference to expected log file in console output"
+  let "L_FAILS = L_FAILS + 1"
+else
+  echo "checking log file exists"
+  LOGF=`egrep -i "Log file is" /tmp/adtmp23006.log | egrep -i "admin_post_upgrade_tasks_" | awk '{ print $5 }'`
+  if [ -f ${LOGF} ]; then
+     echo "checking logfile not empty"
+     if [ -s ${LOGF} ]; then
+        echo "checking logfile reports module failure"
+        egrep -i 'admin_post_upgrade_tasks.bsh module failed with error' ${LOGF}
+        if [ ${?} -ne 0 ]; then
+            echo "TEST FAIL: output does not report failure"
+            let "L_FAILS = L_FAILS + 1"
+        fi
+     else
+        echo "logfile empty"
+        let "L_FAILS = L_FAILS + 1"
+     fi
+  else
+     echo "TEST FAIL: Logfile ${LOGF} not found"
+     let "L_FAILS = L_FAILS + 1"
+  fi
+fi
+
+
+
+# check status file exists
+
+echo "checking for status file"
+ls -al "/ericsson/config/.admin_post_upgrade_tasks_status_file"
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: status file not found"
+  let "L_FAILS = L_FAILS + 1"
+else 
+  echo "checking for NOK in status file"
+  grep -w "NOK" "/ericsson/config/.admin_post_upgrade_tasks_status_file"
+  if [ ${?} -ne 0 ]; then
+    echo "TEST FAIL: status file does not contain NOK"
+    let "L_FAILS = L_FAILS + 1"
+  fi
+fi
+
+
+echo "checking for expected root extra entry information (${NSMADMFIRSTLINE})"
+grep  "${NSMADMFIRSTLINE}" /tmp/adtmp23006.log 
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: output does not report extra line found in current cron"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking for expected root missing entry information (${NSMADMADDEDLINE})"
+egrep -i "${NSMADMADDEDLINE}" /tmp/adtmp23006.log 
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: output does not report missing line from current cron"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking for expected ERROR on cron diff"
+grep 'POST_UPGRADE_TASKS_ERROR: There are differences between Pre and Post upgrade crontab entries' /tmp/adtmp23006.log | grep 'nmsadm' | grep '\[NOK\]'
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: output does not report exit with error"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking for module fail message"
+egrep -i 'admin_post_upgrade_tasks.bsh module failed with error' /tmp/adtmp23006.log
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: output does not report exit with error"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking that sybase health check ran"
+egrep -i "Running Sybase Health Check" /tmp/adtmp23006.log
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: sybase health check should have taken place"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking that crontab diff check ran"
+egrep -i "Comparing the Pre and Post upgrade crontab entries" /tmp/adtmp23006.log
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: cron diffs check should have taken place"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking that system checks ran"
+egrep -i "Perform the Post Upgrade Checks -> system_checks.bsh" /tmp/adtmp23006.log
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: post system check should have taken place"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+echo "checking that MC online ran"
+egrep -i "MCs have started \[OK\]" /tmp/adtmp23006.log
+if [ ${?} -ne 0 ]; then
+  echo "TEST FAIL: online MCs check should have taken place"
+  let "L_FAILS = L_FAILS + 1"
+fi
+ 
+echo "checking that module did not report success"
+egrep -i 'module completed successfully' /tmp/adtmp23006.log
+if [ ${?} -eq 0 ]; then
+  echo "TEST FAIL: output does not report successful completion"
+  let "L_FAILS = L_FAILS + 1"
+fi
+
+if [ ${L_FAILS} != 0 ]; then
+   echo "TEST FAILED: found ${L_FAILS} problems"
+   return 1
+else
+   echo "no problems found"
+   return 0
+fi
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+	
+
+  # restore previous cron copies if tmps were made
+  if [ -f /tmp/lgdirtmp_23006 ]; then
+    LGD=`cat /tmp/lgdirtmp_23006`
+    if [ -f ${LGD}/post_upgrade_cronbackup_location.txt ]; then
+      NSMADMCRONCPY=`awk '{FS=","};{print $2}' ${LGD}/post_upgrade_cronbackup_location.txt`
+      if [ -f ${NSMADMCRONCPY} ]; then
+         mv "${NSMADMCRONCPY}_tmp23006" "${NSMADMCRONCPY}"
+      else
+         echo "nmsadm cron copy ${NSMADMCRONCPY} not found"
+         return 1
+      fi
+    else
+      echo "CRON_BACKUP_LOCATION file ${LGD}/post_upgrade_cronbackup_location.txt not found"
+      return 1
+    fi
+  else 
+    echo "no lgdirtmp_23006 file - so not restoring cron copy contents"
+  fi
+  rm /tmp/lgdirtmp_23006
+  rm -rf /tmp/adtmp23006.log || 1
+
+	return 0
+
+}

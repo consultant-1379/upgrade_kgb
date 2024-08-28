@@ -1,0 +1,609 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	LOCAL_DIR="/tmp/oss_daily_dumps"
+	if [ -e $LOCAL_DIR ]
+	then
+		echo "Mount point already exists"
+		return 1
+	fi
+	
+	# Checks for expected variables. Exit early if these are not set.
+    if [ "${ORCH_CMD_MODE}xxx" = "xxx" ]; then
+        echo "Variable ORCH_CMD_MODE is not set. Check your environment file"
+        return 1
+    fi
+
+    if [ "${ORCH_UPGRADE_DIR}xxx" = "xxx" ]; then
+        echo "Variable ORCH_UPGRADE_DIR is not set. Check your environment file"
+        return 1
+    fi
+
+	if [ "${ORCH_OSSRC_MEDIA}xxx" = "xxx" ]; then
+        echo "Variable ORCH_OSSRC_MEDIA is not set. Check your environment file"
+        return 1
+    fi
+	
+    if [ "${ORCH_TYPE}xxx" = "xxx" ]; then
+        echo "Variable ORCH_TYPE is not set. Check your environment file"
+        return 1
+    fi
+
+    if [ "${ORCH_SERVER}xxx" = "xxx" ]; then
+        echo "Variable ORCH_SERVER is not set. Check your environment file"
+        return 1
+    fi
+
+    if [ "${ORCH_SERVER_LIVE}xxx" = "xxx" ]; then	
+		if [ "${ORCH_TYPE}" != "VAPP" ] && [ "${ORCH_TYPE}" != "SINGLE" ]; then
+        echo "Variable ORCH_SERVER_LIVE is not set. Check your environment file"
+        return 1
+		fi
+    fi
+
+    if [ "${ORCH_ISO_IP}xxx" = "xxx" ]; then
+        echo "Variable ORCH_ISO_IP is not set. Check your environment file"
+        return 1
+    fi
+	
+	if [ "${CI_DAILY_BUILD_SERV}xxx" = "xxx" ]; then
+        echo "Variable CI_DAILY_BUILD_SERV is not set. Check your environment file"
+        return 1
+    fi
+	
+
+    # List the variables to be used in the TC.
+    echo "ORCH_CMD_MODE: ${ORCH_CMD_MODE}"
+    echo "ORCH_UPGRADE_DIR: ${ORCH_UPGRADE_DIR}"
+    echo "ORCH_TYPE: ${ORCH_TYPE}"
+    echo "ORCH_SERVER: ${ORCH_SERVER}"
+    echo "ORCH_ISO_IP: ${ORCH_ISO_IP}"
+	echo "CI_DAILY_BUILD_SERV: ${CI_DAILY_BUILD_SERV}"
+	echo "ORCH_OSSRC_MEDIA: ${ORCH_OSSRC_MEDIA}"
+	
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+    ORCH_CMD_MODE="local"
+    echo "MODE is ${ORCH_CMD_MODE} ...... "
+    echo " "
+    # Calculate drop file name
+    CI_SERV=${CI_DAILY_BUILD_SERV}
+    DAILY_DIR="/JUMP/UPGRADE_SW/daily_builds"
+    LOCAL_DIR="/tmp/oss_daily_dumps"
+    BACKUP_DIR="/JUMP/UPGRADE_SW/backup_packages/"
+    RETVAL=0
+    RETVAL2=0
+    RETVAL3=0
+	
+	
+	
+	echo "=============================="
+	echo " "
+	echo "    #0 Get Dump from mount"
+	echo " "
+	echo " "
+	echo "=============================="
+	
+	echo "MOUNTING DIR:  mount ${CI_SERV}:${DAILY_DIR} ${LOCAL_DIR}"
+    mkdir -p ${LOCAL_DIR}
+    mount ${CI_SERV}:${DAILY_DIR} ${LOCAL_DIR} || return 10
+    cd $LOCAL_DIR
+    
+	echo "=============================="
+	echo " "
+	echo "    #1 Get newest build"
+	echo " "
+	echo " "
+	echo "=============================="
+	
+	DROP_FILE=`ls -t *.tar.gz | head -1`
+    NUMFOUND=`echo $DROP_FILE | wc -w`
+	echo "DROP_FILE: ${DROP_FILE}"
+	echo "Number of matches for ls -t *.tar.gz in mounted dir is ${NUMFOUND}"
+    if [ ${NUMFOUND} -ne 1 ] 
+    then
+       echo "we expected to find exactly one match, but found ${NUMFOUND}"
+       echo "${DROP_FILE}"
+       RETVAL=1
+    else
+       echo "got latest drop file - putting $DROP_FILE in place"
+       DROP_PREFIX=`echo $DROP_FILE | sed 's/\.tar\.gz//'`
+       cp ${LOCAL_DIR}/${DROP_FILE} /JUMP/UPGRADE_SW/
+       RETVAL=$?
+    fi
+    localDirContents=$(ls -al /JUMP/UPGRADE_SW/ | awk {'print $9'})
+    echo "=============================="
+    echo "Local MWS /JUMP/UPGRADE_SW/ Contents : "
+    echo "${localDirContents}"
+    echo " "
+	echo " "
+	echo "=============================="
+
+	
+    TODAY=`date +"%m_%d_%Y_%H%M%S"`
+	mkdir -p ${BACKUP_DIR} || return 1
+    echo "Made Directory: ${BACKUP_DIR}"
+	
+	echo "=============================="
+	echo " "
+	echo "    #2 Check if ERICurwmom exists"
+	echo " "
+	echo " "
+	echo "=============================="
+    NUMFOUND=`ls ${LOCAL_DIR}/ERICurwmom*.pkg | wc -w`
+    echo "Number of matches for ls ${LOCAL_DIR}/ERICurwmom*.pkg in mounted dir is ${NUMFOUND}"
+    if [ ${NUMFOUND} -gt 1 ] 
+    then
+       echo "we expected to find a max of one instance of ${LOCAL_DIR}/ERICurwmom*.pkg, but found ${NUMFOUND}"
+       echo `ls ${LOCAL_DIR}/ERICurwmom*.pkg`
+       RETVAL2=1
+    elif [ -f ${LOCAL_DIR}/ERICurwmom*.pkg ]
+    then
+        newPackage=$(echo `ls ${LOCAL_DIR}/ERICurwmom*.pkg`)
+        oldPackage="${ORCH_OSSRC_MEDIA}/ossrc_base_sw/eric_app/common/ERICurwmom.pkg"
+        newPackageInfo=$(pkginfo -d ${newPackage} -l)
+        oldPackageInfo=$(pkginfo -d ${oldPackage} -l)
+        echo "=============================="
+        echo " "
+        echo "Putting ERICurwmom in place"
+        echo "Old Package Info:"
+        echo "${oldPackageInfo}"
+        echo " "
+        echo "New Package Info:"
+        echo "${newPackageInfo}"
+        echo " "
+        echo "=============================="
+
+        cd ${ORCH_OSSRC_MEDIA}/ossrc_base_sw/eric_app/common
+        mv ERICurwmom.pkg ${BACKUP_DIR}/ERICurwmom.pkg_$TODAY 
+
+        echo "Made Backup: ${BACKUP_DIR}/ERICurwmom.pkg_$TODAY "
+        cp ${LOCAL_DIR}/ERICurwmom*.pkg ${oldPackage}
+        RETVAL2=$?
+        if [ $RETVAL2 -eq 0 ]
+        then
+            rm ERICurwmom.pkg_$TODAY
+            echo "Removed old ERICurwmon"
+        fi
+
+        if [ $RETVAL2 -ne 0 ]
+        then
+            mv  ${BACKUP_DIR}/ERICurwmom.pkg_$TODAY ERICurwmom.pkg
+            echo "Restoring old ERICurwmon"
+        fi
+    fi
+	
+	echo "=============================="
+	echo " "
+	echo "    #3 Check if ERICdmr exists"
+	echo " "
+	echo " "
+	echo "=============================="
+	
+    NUMFOUND=`ls ${LOCAL_DIR}/ERICdmr*.pkg | wc -w`
+    echo "Number of matches for ls ${LOCAL_DIR}/ERICdmr*.pkg in mounted dir is ${NUMFOUND}"
+    if [ ${NUMFOUND} -gt 1 ] 
+    then
+       echo "we expected to find a max of one instance of ${LOCAL_DIR}/ERICdmr*.pkg, but found ${NUMFOUND}"
+       echo `ls ${LOCAL_DIR}/ERICdmr*.pkg`
+       RETVAL3=1
+    elif [ -f ${LOCAL_DIR}/ERICdmr*.pkg ]
+    then
+        echo "Putting ERICdmr in place"
+        cd ${ORCH_OSSRC_MEDIA}/ossrc_base_sw/inst_config/common/ericsson
+        mv ERICdmr.pkg ERICdmr.pkg_$TODAY 
+        cp ${LOCAL_DIR}/ERICdmr*.pkg ${ORCH_OSSRC_MEDIA}/ossrc_base_sw/inst_config/common/ericsson/ERICdmr.pkg
+        RETVAL3=$?
+    fi
+	
+	
+    cd
+	echo "=============================="
+	echo " "
+	echo "    #3.1 umount ${LOCAL_DIR}" 
+	echo " "
+	echo " "
+	echo "=============================="
+	if [ $? -eq 0 ]; then 
+		umount ${LOCAL_DIR}
+		rmdir ${LOCAL_DIR}
+	fi
+   
+    if [ $RETVAL -ne 0 ]
+    then
+        echo "Copy failed of daily tar"
+        return 11
+    fi
+    if [ ${RETVAL2} -ne 0 ]
+    then
+        echo "Copy failed of ERICurwmom.pkg"
+        return 11
+    fi
+    if [ ${RETVAL3} -ne 0 ]
+    then
+        echo "Copy failed of ERICdmr.pkg"
+        return 11
+    fi
+	
+	echo "=============================="
+	echo " "
+	echo "    #4 Unpacking Drop files"
+	echo "    /JUMP/UPGRADE_SW/${DROP_PREFIX}.tar.gz"
+	echo " "
+	echo "=============================="
+    echo "Unpack drop file"
+
+    if [ -f /JUMP/UPGRADE_SW/${DROP_PREFIX}.tar ]
+    then
+        echo "Rename existing tar out of the way"
+        mv /JUMP/UPGRADE_SW/${DROP_PREFIX}.tar /JUMP/UPGRADE_SW/${DROP_PREFIX}.tar_$TODAY
+    fi
+	file /JUMP/UPGRADE_SW/$DROP_FILE
+    gunzip /JUMP/UPGRADE_SW/$DROP_FILE || return 12
+    cd /JUMP/UPGRADE_SW || return 13
+    if [ -d /JUMP/UPGRADE_SW/${DROP_PREFIX} ]
+    then
+        echo "Rename existing drop dir out of the way"
+        mv /JUMP/UPGRADE_SW/${DROP_PREFIX} /JUMP/UPGRADE_SW/${DROP_PREFIX}.$TODAY
+    fi
+	file /JUMP/UPGRADE_SW/${DROP_PREFIX}.tar
+    tar xvf /JUMP/UPGRADE_SW/${DROP_PREFIX}.tar || return 14
+    rm /JUMP/UPGRADE_SW/${DROP_PREFIX}.tar
+    cd /JUMP/UPGRADE_SW/$DROP_PREFIX || return 15
+
+    echo "Unpack omtools"
+    OMTOOLGZ=`ls omtools*.tar.gz`        
+    OM_PREFIX=`echo $OMTOOLGZ | sed 's/\.tar\.gz//'`
+    gunzip $OMTOOLGZ || return 16
+    tar xvf ${OM_PREFIX}.tar || return 17
+    rm ${OM_PREFIX}.tar
+ 
+
+    echo "=============================="
+	echo " "
+	echo "    #5 Put in Place files"
+	echo " "
+	echo " "
+	echo "=============================="
+
+    ##########################################
+    # Liveupgrade
+    ##########################################
+    echo "Put liveupgrade in place"
+    rm -f ${ORCH_UPGRADE_DIR}/slu/Liveupgrade*.tar.gz
+    cp Liveupgrade_*.tar.gz ${ORCH_UPGRADE_DIR}/slu/ || return 18
+    liveupgradeVersion=$(ls  ${ORCH_UPGRADE_DIR}slu/Liveupgrade_*.tar.gz | sed "s:^${ORCH_UPGRADE_DIR}slu/::" | sed 's/Liveupgrade_\(.*\)\.tar.gz/\1/')
+    echo "SLU VERSION: ${liveupgradeVersion}" 
+
+    ##########################################
+    # ERICusck
+    ##########################################
+    echo "Put in place new ERICusck.pkg"
+    cd ${ORCH_OSSRC_MEDIA}/ossrc_base_sw/inst_config/common/upgrade || return 20
+	if [ -f ERICusck.pkg ]; then
+		mv ERICusck.pkg ${BACKUP_DIR}/ERICusck.pkg_$TODAY || return 21
+	fi
+    
+    cp /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICusck.pkg . || return 22
+
+    ericusckVersion=$(pkginfo -d  /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICusck.pkg -l | grep VERSION | awk {'print $2'})
+    echo "ERICusck Version: ${ericusckVersion}"
+
+    ##########################################
+    # ERICorchupg
+    ##########################################
+    echo "Put in place new ERICorchupg.pkg"
+    cd ${ORCH_OSSRC_MEDIA}/ossrc_base_sw/inst_config/i386/upgrade || return 23
+    mv ERICorchupg.pkg ${BACKUP_DIR}/ERICorchupg.pkg_$TODAY || return 24
+    cp /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICorchupg.pkg . || return 25
+
+    ericorchupgVersion=$(pkginfo -d  /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICorchupg.pkg -l | grep VERSION | awk {'print $2'})
+    echo "ERICorchupg Version: ${ericorchupgVersion}"
+
+    ##########################################
+    # ERICorch
+    ##########################################
+    echo "Put in place new ERICorch.pkg"
+    cd /var/tmp || return 30
+    if [ -f ERICorch.pkg ]
+    then
+        mv ERICorch.pkg ${BACKUP_DIR}/ERICorch.pkg_$TODAY || return 26
+    fi
+    cp /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICorch.pkg . || return 27
+
+    ericorchVersion=$(pkginfo -d  /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICorch.pkg -l | grep VERSION | awk {'print $2'})
+    echo "ERICorch Version: ${ericorchVersion}"
+
+    ##########################################
+    # ERICbismrsmc
+    ##########################################
+    echo "Put in place new ERICbismrsmc.pkg"
+    cd ${ORCH_OSSRC_MEDIA}/ossrc_base_sw/eric_app/common || return 28
+    mv ERICbismrsmc.pkg ${BACKUP_DIR}/ERICbismrsmc.pkg_$TODAY || return 29
+    cp /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICbismrsmc.pkg . || return 30
+
+    ericbismrsmcVersion=$(pkginfo -d  /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICbismrsmc.pkg -l | grep VERSION | awk {'print $2'})
+    echo "ERICbismrsmc Version: ${ericbismrsmcVersion}"
+
+	##########################################
+    # ERICcore
+    ##########################################
+    if [ -f /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICcore.pkg ]
+    then
+        echo "Put in place new ERICcore.pkg" 
+		ericoreVersion=$(pkginfo -d  /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICcore.pkg -l | grep VERSION | awk {'print $2'})
+		echo "ERICcore Version: ${ericoreVersion}"
+        cd ${ORCH_OSSRC_MEDIA}/ossrc_base_sw/inst_config/common/install || return 31
+        mv ERICcore.pkg ERICcore.pkg_$TODAY || return 32
+        cp /JUMP/UPGRADE_SW/${DROP_PREFIX}/ERICcore.pkg . || return 33
+    fi
+    ##########################################
+    # OM Tools
+    ##########################################
+    echo "Put in place new om_upgrade_tasks om_common_functions.lib and port ping"
+    omtoolsVersion=$(cat ${ORCH_OM_MEDIA_DIR}/omtools/cxp_info | grep VERSION)
+    echo "OMTOOLS VERSION: ${omtoolsVersion}" 
+    
+    cd ${ORCH_OM_MEDIA_DIR}/omtools || return 40
+    mv om_common_functions.lib ${BACKUP_DIR}/om_common_functions.lib_$TODAY || return 41
+    mv om_upgrade_tasks.bsh ${BACKUP_DIR}/om_upgrade_tasks.bsh_$TODAY || return 42
+	mv port_ping.pl ${BACKUP_DIR}/om_upgrade_tasks.bsh_$TODAY
+    cp /JUMP/UPGRADE_SW/${DROP_PREFIX}/omtools/om_common_functions.lib . || return 44
+    cp /JUMP/UPGRADE_SW/${DROP_PREFIX}/omtools/om_upgrade_tasks.bsh . || return 45
+	cp /JUMP/UPGRADE_SW/${DROP_PREFIX}/omtools/port_ping.pl . || return 45
+
+	
+	##########################################
+    # ERICocs
+    ##########################################
+	echo "Putting in place new ERICocs"
+	NUMFOUND=`ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/19089-CXC1731203*.zip | wc -w`
+    echo "Number of matches for /JUMP/UPGRADE_SW/${DROP_PREFIX}/19089-CXC1731203*.zip in mounted dir is ${NUMFOUND}"
+	if [ ${NUMFOUND} -gt 1 ] 
+    then
+       echo "we expected to find a max of one instance of ERICocs, but found ${NUMFOUND}"
+       echo `ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/19089-CXC1731203*.zip`
+       return 46
+	fi
+	
+	rm -r "/tmp/ERICocs"
+	unzip "/JUMP/UPGRADE_SW/${DROP_PREFIX}/19089-CXC1731203*.zip" -d /tmp/ERICocs || return 47
+	pkgtrans /tmp/ERICocs/ERICocs*.pkg /tmp/ERICocs/ all || return 50
+	pkginfo_ericocs=$(cat /tmp/ERICocs/ERICocs/pkginfo)
+	echo "=============================="
+	echo " "
+	echo "    #ERICOCS"
+	echo " " 
+	echo " ${pkginfo_ericocs}" 
+	echo "=============================="
+	
+	chmod -R 755 /tmp/ERICocs/ERICocs/reloc/ericsson/ocs/lib/*
+	cp -rp /tmp/ERICocs/ERICocs/reloc/ericsson/ocs/lib/* ${ORCH_COMINF_MEDIA}/cominf_install/Solaris_10/i386/ocs/lib/ || return 48
+	echo "Put in place new ERICocs common libs"
+	
+	chmod -R 755 /tmp/ERICocs/ERICocs/reloc/ericsson/ocs/bin/*
+	cp -rp /tmp/ERICocs/ERICocs/reloc/ericsson/ocs/bin/* ${ORCH_COMINF_MEDIA}/cominf_install/Solaris_10/i386/ocs/bin/ || return 49
+
+	echo "Put in place new ERICocs scripts"
+	rm -r "/tmp/ERICocs"
+	
+	##########################################
+    # ERICsinst
+    ##########################################
+	echo "Putting in place new ERICsinst"
+	NUMFOUND=`ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/19089-CXC1727212-*.zip | wc -w`
+	if [ ${NUMFOUND} -gt 1 ] 
+    then
+       echo "we expected to find a max of one instance of ERICsinst, but found ${NUMFOUND}"
+       echo `ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/19089-CXC1727212*.zip`
+       return 47
+	fi
+	
+	rm -r "/tmp/ERICsinst"
+	unzip "/JUMP/UPGRADE_SW/${DROP_PREFIX}/19089-CXC1727212*.zip" -d /tmp/ERICsinst || return 47
+	pkgtrans /tmp/ERICsinst/ERICsinst*.pkg /tmp/ERICsinst/ all || return 50
+	pkginfo_ERICsinst=$(cat /tmp/ERICsinst/ERICsinst/pkginfo)
+	
+	echo "=============================="
+	echo " "
+	echo "    #ERICSINST"
+	echo " OLD VERSION"
+	pkginfo -xd ${ORCH_OMSAS_MEDIA}/omsas_base_sw/pkg/ERICsinst.pkg
+	echo " " 
+	echo "NEW VERSION" 
+	pkginfo -xd /tmp/ERICsinst/ERICsinst.pkg
+	echo " " 
+	echo "=============================="
+	
+	rm ${ORCH_OMSAS_MEDIA}/omsas_base_sw/pkg/ERICsinst.pkg
+	cp -rp  /tmp/ERICsinst/ERICsinst.pkg ${ORCH_OMSAS_MEDIA}/omsas_base_sw/pkg/ERICsinst.pkg
+	echo "Put in place new ERICsinst Package on OMSAS Media"
+	
+	rm -r "/tmp/ERICsinst"
+	echo ""
+    echo "=============================="
+	
+	##########################################
+    # Node Hardening
+    ##########################################
+	echo "Putting in place new Nodehardening"
+	NUMFOUND=`ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/CXP9017504*.tar | wc -w`
+	if [ ${NUMFOUND} -gt 1 ] 
+    then
+       echo "we expected to find a max of one instance of Node Hardening Found, but found ${NUMFOUND}"
+       echo `ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/CXP9017504*`
+       return 66
+	fi
+	
+	if [ ${NUMFOUND} -eq 1 ] 
+	then
+		echo "Unpack CXP9017504 "
+		
+		mkdir -p /tmp/nhardening
+		cd  /tmp/nhardening
+		
+		CXP9017504=`ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/CXP9017504*`    
+		echo ""
+		echo "${CXP9017504}"
+		echo ""
+		echo "=============================="
+		tar xvf $CXP9017504  || return 87
+		chmod -R 755  /tmp/nhardening/  || return 88
+		cp -rf /tmp/nhardening/security/* ${ORCH_OM_MEDIA_DIR}/security/ || return 89
+		
+		cd /var/tmp
+		rm -r "/tmp/nhardening/*"
+		echo "Put in place new CXP9017504 overlay files on OM Media"
+		echo ""
+		echo "=============================="
+	fi
+	
+	##########################################
+	# OMSAS MEDIA
+    ##########################################
+	echo "Putting in place new OMSAS Media Overlay"
+	NUMFOUND=`ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/LZY_214_3550_* | wc -w`
+	if [ ${NUMFOUND} -gt 1 ] 
+    then
+       echo "we expected to find a max of one instance of ERICsinst, but found ${NUMFOUND}"
+       echo `ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/LZY_214_3550_*`
+       return 47
+	fi
+	
+	echo "Unpack LZY_214_3550 "
+	mkdir -p /tmp/omsas_media
+	cd  /tmp/omsas_media
+	
+    LZY_214_3550=`ls /JUMP/UPGRADE_SW/${DROP_PREFIX}/LZY_214_3550*`    
+	echo ""
+	echo "${LZY_214_3550}"
+	echo ""
+	echo "=============================="
+	tar xvf $LZY_214_3550  || return 87
+	chmod -R 755  /tmp/omsas_media/  || return 88
+	cp -rf /tmp/omsas_media/LZY_214_3550/resources/iso/* ${ORCH_OMSAS_MEDIA}/omsas_base_sw/bin || return 89
+	
+	cd /var/tmp
+	rm -r "/tmp/omsas_media"
+	echo "Put in place new LZY_214_3550 overlay files on OMSAS Media"
+	echo ""
+    echo "=============================="
+	
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+    return 0
+}

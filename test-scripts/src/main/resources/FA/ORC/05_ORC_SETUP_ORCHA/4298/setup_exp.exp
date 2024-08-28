@@ -1,0 +1,30 @@
+#!/usr/local/bin/expect
+
+set O_INPFILE [lindex $argv 0]
+set timeout 240
+
+spawn su - orcha -c "/ericsson/orchestrator/bin/setup_orcha_user.bsh -f $O_INPFILE"
+expect {
+        "Enter password to be used for the orcha user:" {send_user "sending orcha password\r"; send "Orch@12A\r" }
+          eof {send_user "eof detected waiting for orcha password prompt\r"; exit 98}
+          timeout {send_user "timeout detected waiting for orcha password prompt\r"; exit 99}
+}
+
+expect {
+        "Re-enter orcha user Password:" {send_user "sending re-entry of orcha password\r";  send "Orch@12A\r" }
+         eof {send_user "eof detected waiting for orcha re-enter password prompt\r"; exit 98}
+         timeout {send_user "timeout detected waiting for orcha re-enter password promptp\r"; exit 99}
+}
+
+set count 0
+# No loop required - we are now waiting for the process to complete
+  expect {
+          eof {send_user "eof detected as expected\r"}
+          timeout {send_user "timeout detected waiting for script to finish\r"; exit 99}
+  }
+
+catch "wait -i $spawn_id" reason
+# return status code of spawned process
+set retstatus [ lindex $reason 3 ]
+send_user "returning status code of spawned process: $retstatus\r"
+exit [ lindex $reason 3 ]

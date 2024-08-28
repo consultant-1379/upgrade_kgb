@@ -1,0 +1,324 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+#
+#
+#   Provides a set of library functions related to DCHP
+#   Functions provided:
+#     DNS_SERVER_INSTALLED
+#     DNS_SERVER_RUNNING
+#     DNS_LOOKUP
+#
+#
+
+### Function DNS_SERVER_INSTALLED
+#
+#   Check if the DNS Server is installed on this box
+#
+# Arguments:
+#       none
+# Return Values:
+#       0 if installed, 1 if not installed
+#
+function DNS_SERVER_INSTALLED()
+{
+    rpm -qa 2>/dev/null | grep -q '^bind-9' 
+    return $?
+}
+
+
+### Function DNS_SERVER_RUNNING
+#
+#   Check if the DNS Server is running on this box
+#
+# Arguments:
+#       $1 Box to ssh onto to check (optional)
+# Return Values:
+#       0 if running, 1 if not running
+#
+function DNS_SERVER_RUNNING()
+{
+	[ $# -eq 0 ] && {
+    	service named status > /dev/null 2>&1
+		retval=$?
+	} 
+	[ $# -eq 1 ] && {
+		ssh root@$1 'service named status > /dev/null 2>&1'
+		retval=$?
+	}
+    return $retval
+}
+
+### Function DNS_LOOKUP
+#
+#   Check if DNS lookup works
+#
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function DNS_LOOKUP_RESOLVE()
+{
+    # Create a temporary file name to hold the output of 'nslookup'. This avoids
+    # performing 2 'nslookup's
+    target=$1
+    pid=$$
+    lookup="/tmp/DNS_LOOKUP_RESOLVE.${pid}"
+    nslookup ${target} 2>/dev/null > ${lookup}
+    grep -iq name ${lookup}
+    look=$?
+    grep -q Non-author ${lookup}
+    [ $? -eq 1 ]
+    author=$?
+    # Remove the temporary file.
+    rm -f ${lookup}
+    [ ${look} -eq 0 -a ${author} -eq 0 ]
+    return $?
+}
+
+### Function CHECK_NAMED_CONF()
+#
+#   Check files in the named.conf and search for those files in /var/named/ direcory 
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+
+function CHECK_NAMED_CONF()
+{
+#!/usr/bin/bash
+
+for file in  $(awk '/^file/{print $2}' /etc/named.conf); do
+        tmp=${file%%\";}
+        tmp=${tmp##\"}
+        echo $tmp
+        if [[ ! -s /var/named/$tmp ]]; then
+                echo "Zone file [/var/named/$tmp] does not exist!"
+                 return 1
+        fi
+done
+
+return 0
+}
+
+### Function FILES_EXISTENCE()
+#
+#   Check files  NAMED.CONF, NSSWITCH.CONF, RESOLV.CONF exists and are not empty under /etc/ direcory
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function FILES_EXISTENCE()
+{
+	[ -f /etc/named.conf ] || { echo "ERROR!! named.conf does not exists"; return 3; }
+        [ -s /etc/named.conf ] || { echo "ERROR!! named.conf is EMPTY"; return 4; }
+
+        [ -f /etc/nsswitch.conf ] || { echo "ERROR!! nsswitch.conf does not exists"; return 5; }
+        [ -s /etc/nsswitch.conf ] || { echo "ERROR!! nsswitch.conf is EMPTY"; return 6; }
+
+        [ -f /etc/resolv.conf ] || { echo "ERROR!! resolv.conf does not exists"; return 7; }
+        [ -s /etc/resolv.conf ] || { echo "ERROR!! resolv.conf is EMPTY"; return 8; }
+}
+
+### Function  OM_SERV_SLAVE()
+#
+#   Check  OM_SLAVE is up and running and has a password-less connection
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function OM_SERV_SLAVE()
+{
+	grep "om_serv_master" /ericsson/config/ericsson_use_config > /dev/null || { echo "ERROR!! Script is not running on the OM SERV MASTER"; return 1; }
+	
+	slave=$(ssh om_serv_slave  cat /ericsson/config/ericsson_use_config) > /dev/null
+        if [ ! "$slave" = "config=om_serv_slave"  ]; then
+        echo "om_serv_slave is not installed or down"
+        return 2
+        fi
+}
+
+### Function DOMAIN_EXISTENCE()
+#
+#   Check the domain VTS.COM exists 
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function DOMAIN_EXISTENCE()
+{
+	host=$(hostname)
+	host1=$(ssh om_serv_slave hostname)
+	grep "[$host].vts.com" /etc/hosts > /dev/null || { echo "ERROR!! $host.vts.com does not exists in host file"; return 2; }
+	grep "[$host1].vts.com" /etc/hosts > /dev/null || { echo "ERROR!! $host1.vts.com does not exists in host file"; return 3; }
+	grep "domain vts.com" /etc/resolv.conf > /dev/null || { echo "ERROR!! domain vts.com does not exists in resolv.conf file"; return 9; }
+
+########Testing the servers as client in resolv.conf file
+
+	ip=$(ifconfig e1000g0|grep inet|awk '{print $2}')
+	grep "nameserver $ip" /etc/resolv.conf > /dev/null || { echo "ERROR!! nameservers are NOT configured properly"; return 4; }
+
+	ip1=$(ssh om_serv_slave ifconfig e1000g0|grep inet|awk '{print $2}')
+        grep "nameserver $ip1" /etc/resolv.conf > /dev/null || { echo "ERROR!! nameservers are NOT configured properly"; return 5; }
+
+########Test whether /etc/nsswitch.conf file is properly configured
+
+	catch=$(cat /etc/nsswitch.conf | grep "hosts:      files"| awk '{print $3}')	
+	catch1=$(cat /etc/nsswitch.conf | grep "ipnodes:    files"| awk '{print $3}')
+	if [[ "$catch" != "dns" || "$catch1" != "dns" ]]; then
+	echo "ERROR!! /etc/nsswitch.conf needs to be updated"
+	return 1
+	exit
+	fi	
+	
+}
+
+### Function OM_SERV_MASTER()
+#
+#   Check the script is running on OM_SERV_MASTER
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function OM_SERV_MASTER()
+{
+grep "om_serv_master" /ericsson/config/ericsson_use_config > /dev/null || { echo "ERROR!! Script is not running on OM_SERV_MASTER"; return 10; }
+}
+
+### Function DNS_SERVICE_RUNNING()
+#
+#   Check the DNS service is online on the server
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function DNS_SERVICE_RUNNING()
+{
+	svcs -a | grep dns/server > service
+        grep svc:/network/dns/server:default ./service > /dev/null || { echo "Service dns/server is not online!!"; return 11; }
+
+        test=$(ssh om_serv_slave svcs -H svc:/network/dns/server:default | awk '{ print $1 }' )
+        if [ ! "$test" = online ]; then
+        echo "svc:/network/dns/server:default is not online"
+        return 12
+        fi
+}
+
+### Function LOCAL_HOST_EXISTS()
+#
+#   Check LOCAL HOST resolves on the server
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function LOCAL_HOST_EXISTS()
+{
+	dig -x 127.0.0.1 > tmp.txt
+        grep "0.0.127.in-addr.arpa." tmp.txt > /dev/null || { echo "ERROR!! LocalHost entry does not exist"; return 7; }
+	nslookup localhost > tmp.txt
+	grep "localhost" tmp.txt || /dev/null || { echo "ERROR!! LocalHost entry does not exist"; return 10; } 
+	grep "Address: 127.0.0.1" tmp.txt /dev/null || { echo "ERROR!! LocalHost entry does not exist"; return 9; }
+}
+
+### Function RNDC_STATUS_CHECK()
+#
+#   Check LOCAL HOST resolves on the server
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function RNDC_STATUS_CHECK()
+{
+	rndc status > /dev/null || { echo "ERROR!! rndc issues with the server, please check"; return 1; }
+}
+
+### Function IPV4_CHECK()
+#
+#   Check IPV4 address on both servers and resolves them
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function IPV4_CHECK()
+{
+	host=$(hostname)
+	nslookup $host | grep "[$host].vts.com" > /dev/null || { echo "ERROR Domain $host.vts.com does not exist on $host"; return 1; }
+
+	ip=$(ifconfig e1000g0|grep inet|awk '{print $2}')
+	nslookup $ip | grep "[$host].vts.com" > /dev/null || { echo "ERROR Domain $host.vts.com does not exist on $host"; return 2; }
+
+
+	host1=$(ssh om_serv_slave hostname)
+	nslookup $host1 | grep "[$host1].vts.com" > /dev/null || { echo "ERROR Domain $host1.vts.com does not exist on $host"; return 3; }
+
+	ip1=$(ssh om_serv_slave ifconfig e1000g0|grep inet|awk '{print $2}')
+	nslookup $ip1 | grep "[$host1].vts.com" > /dev/null || { echo "ERROR Domain $host1.vts.com does not exist on $host"; return 4; }
+
+	ssh om_serv_slave nslookup $host | grep "[$host].vts.com" > /dev/null || { echo "ERROR Domain $host.vts.com does not exist in the $host1"; return 5; }
+	
+	ssh om_serv_slave nslookup $ip | grep "[$host].vts.com" > /dev/null || { echo "ERROR IP for Domain $host.vts.com does not exist in the $host1"; return 6; }
+
+	ssh om_serv_slave nslookup $host1 | grep "[$host1].vts.com" > /dev/null || { echo "ERROR Domain $host1.vts.com does not exist in the $host1"; return 7; }
+
+	ssh om_serv_slave nslookup $ip1 | grep "[$host1].vts.com" > /dev/null || { echo "ERROR IP for Domain $host1.vts.com does not exist in the $host1"; return 8; }
+}
+
+### Function IPV6_CHECK()
+#
+#   Check IP6 on both servers; Chopping off /64, /128 or /32 at the end of IPV6 address
+# By : ESHMUNA
+# Arguments:
+#       none
+# Return Values:
+#       0 if sucess, 1 if not sucess
+#
+function IPV6_CHECK()
+{
+
+	ip6=$(cat /etc/hostname6.e1000g0 | awk '{print $2}')
+	ip6=${ip6%%\/64}
+	ip6=${ip6%%\/128}
+	ip6=${ip6%%\/32}
+	nslookup $ip6 | grep "vts.com" || { echo "ERROR IPV6 setup is not configured properly"; return 1; }
+
+	ip6_1=$(ssh om_serv_slave cat /etc/hostname6.e1000g0 | awk '{print $2}')
+        ip6_1=${ip6%%\/64}
+        ip6_1=${ip6%%\/128}
+        ip6_1=${ip6%%\/32}
+        
+	nslookup $ip6_1 | grep "vts.com" || { echo "ERROR IPV6 setup is not configured properly"; return 2; }
+
+	ssh om_serv_slave nslookup $ip6 | grep "vts.com" > /dev/null || { echo "ERROR IPV6 setup is not configured properly"; return 3; }
+
+	ssh om_serv_slave nslookup $ip6_1 | grep "vts.com" > /dev/null || { echo "ERROR IPV6 setup is not configured properly"; return 4; }
+}

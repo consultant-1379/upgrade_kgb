@@ -1,0 +1,80 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+expect "#"
+set timeout 1000
+#send "/tmp/dmr1\r"
+send "/ericsson/dmr/bin/dmtool ro a\r"
+expect "How many mirrors should be defined"
+send "\r"
+expect -timeout 15 "Continue (y/n)" {send "y\r"; exp_continue}
+expect -re "\[0-9]\{1,2\}\[ ]\{2\}\[c]\[0-9]\[t]\[0-9]\[d]\[0-9]s\[0-9]\[ ]\[ ]"
+set root1 [lindex $expect_out(0,string) 0]
+expect -re "\[0-9]\{1,2\}\[ ]\{2\}\[c]\[0-9]\[t]\[0-9]\[d]\[0-9]s\[0-9]\[ ]\[ ]"
+set root2 [lindex $expect_out(0,string) 0]
+set root2name [lindex $expect_out(0,string) 1]
+sleep 10
+send "$root1\r"
+sleep 10
+# 7  c0t5006016646E0634Ad6s2    6006016074602D0042A2E8186C7AE111        -/(ossdg)       atrcxb2220:c0t5006016646E0634Ad6s2/disk2
+expect "Enter all DATA disks for Mirror 1"
+expect -re "\[0-9]\{1,2\}\[ ]\{2\}(\[A-Za-z0-9]+)\[ ]+(\[A-Za-z0-9]+)\[ ]+-/\\(ossdg\\)(\[A-Za-z0-9 :]+)/disk2\r\n"
+set data1 [lindex $expect_out(0,string) 0]
+expect -re "\[0-9]\{1,2\}\[ ]\{2\}(\[A-Za-z0-9]+)\[ ]+(\[A-Za-z0-9]+)\[ ]+-/\\(sybasedg\\)(\[A-Za-z0-9 :]+)/disk3\r\n"
+set data2 [lindex $expect_out(0,string) 0]
+sleep 10
+send "$data1 $data2\r"
+expect "Enter selection"
+sleep 10
+send "$root2\r"
+expect "Enter all DATA disks for Mirror 2"
+expect -re "\[0-9]\{1,2\}\[ ]\{2\}(\[A-Za-z0-9]+)\[ ]+(\[A-Za-z0-9]+)\[ ]+-/\\(ossdg\\)(\[A-Za-z0-9 :]+)/disk2mirr\r\n"
+set data3 [lindex $expect_out(0,string) 0]
+expect -re "\[0-9]\{1,2\}\[ ]\{2\}(\[A-Za-z0-9]+)\[ ]+(\[A-Za-z0-9]+)\[ ]+-/\\(sybasedg\\)(\[A-Za-z0-9 :]+)/disk3mirr\r\n"
+set data4 [lindex $expect_out(0,string) 0]
+sleep 10
+send "$data3 $data4\r"
+
+expect "Is this correct (y/n)"
+send "y\r"
+sleep 120 
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "<-"
+sleep 600
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "#"
+sleep 1200
+send "rm -rf /ossrc/upgrade/R*\r"
+expect "#"
+send "exit\r"
+expect "#"
+exit 0

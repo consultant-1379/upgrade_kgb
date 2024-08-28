@@ -1,0 +1,38 @@
+#!./expect -- 
+set timeout 300 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+
+set timeout 300
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+		}	
+	}
+sleep 2
+
+expect "#"
+send "/ericsson/core/etc/clear_scsi3_keys\r"
+expect "Are you sure you wish to continue*"
+send "y\r"
+expect "#"
+send "exit\r"
+catch "wait -i $spawn_id" reason
+
+# return status code of spawned process
+exit [ lindex $reason 3 ]
+

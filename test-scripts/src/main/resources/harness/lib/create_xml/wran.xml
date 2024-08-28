@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_3.dtd">
+<Model version="1" importVersion="6.3">
+	<Create>
+		<Site userLabel="ath001">
+			<altitude string="0"/>
+			<location string="ath001"/>
+			<longitude string="0"/>
+			<latitude string="0"/>
+			<worldTimeZoneId string="GB-Eire"/>
+			<freeText string=""/>
+			<datum string="wgs84"/>
+		</Site>
+              <SubNetwork userLabel="rnc123" networkType="UTRAN">
+              	<Group userLabel="RbsGrp1" groupType="RBSGroup" networkType="WCDMA"></Group>
+         <ManagedElement sourceType="CELLO">
+            <ManagedElementId string="RBS1"/>
+            <primaryType type="RBS"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=ath001"/>
+            <nodeVersion string=""/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string=""/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <neMIMVersion string="K.2.3"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://10.0.0.0:80/em/index.html"/>
+                  <ipAddress ip_v4="10.0.0.0"/>
+                  <hostname string=""/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="CORBA"/>
+                     <port int="0"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string="http://10.0.0.0:80/cello/ior_files/nameroot.ior"/>
+                     <namingPort int="0"/>
+                     <notificationIRPAgentVersion string="3.2"/>
+                     <alarmIRPAgentVersion string="3.2"/>
+                     <notificationIRPNamingContext context="NOTIFICATION_IRP_VERSION_1_1"/>
+                     <alarmIRPNamingContext context="ALARM_IRP_VERSION_1_1"/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="RBS1"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="RBS1"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-back-atrcus123" AssociationType="ManagedElement_to_ftpBackupStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-key-atrcus123" AssociationType="ManagedElement_to_ftpLicenseKeyStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-sws-atrcus123" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=aifwran" AssociationType="ManagedElement_to_autoIntegration"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=rnc123,Group=RbsGrp1" AssociationType="Group_to_MeContext"/>
+            </Relationship>
+	</ManagedElement>
+         <ManagedElement sourceType="CELLO">
+            <ManagedElementId string="RBS2"/>
+            <primaryType type="RBS"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=ath001"/>
+            <nodeVersion string=""/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string=""/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <neMIMVersion string="K.2.3"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://10.0.0.1:80/em/index.html"/>
+                  <ipAddress ip_v4="10.0.0.1"/>
+                  <hostname string=""/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="CORBA"/>
+                     <port int="0"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string="http://10.0.0.1:80/cello/ior_files/nameroot.ior"/>
+                     <namingPort int="0"/>
+                     <notificationIRPAgentVersion string="3.2"/>
+                     <alarmIRPAgentVersion string="3.2"/>
+                     <notificationIRPNamingContext context="NOTIFICATION_IRP_VERSION_1_1"/>
+                     <alarmIRPNamingContext context="ALARM_IRP_VERSION_1_1"/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="RBS2"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="RBS2"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-back-atrcus123" AssociationType="ManagedElement_to_ftpBackupStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-key-atrcus123" AssociationType="ManagedElement_to_ftpLicenseKeyStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-sws-atrcus123" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=aifwran" AssociationType="ManagedElement_to_autoIntegration"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=rnc123,Group=RbsGrp1" AssociationType="Group_to_MeContext"/>
+            </Relationship>
+	</ManagedElement>
+         <ManagedElement sourceType="CELLO">
+            <ManagedElementId string="RBS3"/>
+            <primaryType type="RBS"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=ath001"/>
+            <nodeVersion string=""/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string=""/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <neMIMVersion string="K.2.3"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://10.0.0.2:80/em/index.html"/>
+                  <ipAddress ip_v4="10.0.0.2"/>
+                  <hostname string=""/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="CORBA"/>
+                     <port int="0"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string="http://10.0.0.2:80/cello/ior_files/nameroot.ior"/>
+                     <namingPort int="0"/>
+                     <notificationIRPAgentVersion string="3.2"/>
+                     <alarmIRPAgentVersion string="3.2"/>
+                     <notificationIRPNamingContext context="NOTIFICATION_IRP_VERSION_1_1"/>
+                     <alarmIRPNamingContext context="ALARM_IRP_VERSION_1_1"/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="RBS3"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="RBS3"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-back-atrcus123" AssociationType="ManagedElement_to_ftpBackupStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-key-atrcus123" AssociationType="ManagedElement_to_ftpLicenseKeyStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-sws-atrcus123" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=aifwran" AssociationType="ManagedElement_to_autoIntegration"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=rnc123,Group=RbsGrp1" AssociationType="Group_to_MeContext"/>
+            </Relationship>
+	</ManagedElement>
+         <ManagedElement sourceType="CELLO">
+            <ManagedElementId string="RBS4"/>
+            <primaryType type="RBS"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=ath001"/>
+            <nodeVersion string=""/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string=""/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <neMIMVersion string="K.2.3"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://10.0.0.3:80/em/index.html"/>
+                  <ipAddress ip_v4="10.0.0.3"/>
+                  <hostname string=""/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="CORBA"/>
+                     <port int="0"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string="http://10.0.0.3:80/cello/ior_files/nameroot.ior"/>
+                     <namingPort int="0"/>
+                     <notificationIRPAgentVersion string="3.2"/>
+                     <alarmIRPAgentVersion string="3.2"/>
+                     <notificationIRPNamingContext context="NOTIFICATION_IRP_VERSION_1_1"/>
+                     <alarmIRPNamingContext context="ALARM_IRP_VERSION_1_1"/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="RBS4"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="RBS4"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-back-atrcus123" AssociationType="ManagedElement_to_ftpBackupStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-key-atrcus123" AssociationType="ManagedElement_to_ftpLicenseKeyStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-sws-atrcus123" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=aifwran" AssociationType="ManagedElement_to_autoIntegration"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=rnc123,Group=RbsGrp1" AssociationType="Group_to_MeContext"/>
+            </Relationship>
+	</ManagedElement>
+         <ManagedElement sourceType="CELLO">
+            <ManagedElementId string="RBS5"/>
+            <primaryType type="RBS"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=ath001"/>
+            <nodeVersion string=""/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string=""/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <neMIMVersion string="K.2.3"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://10.0.0.4:80/em/index.html"/>
+                  <ipAddress ip_v4="10.0.0.4"/>
+                  <hostname string=""/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="CORBA"/>
+                     <port int="0"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string="http://10.0.0.4:80/cello/ior_files/nameroot.ior"/>
+                     <namingPort int="0"/>
+                     <notificationIRPAgentVersion string="3.2"/>
+                     <alarmIRPAgentVersion string="3.2"/>
+                     <notificationIRPNamingContext context="NOTIFICATION_IRP_VERSION_1_1"/>
+                     <alarmIRPNamingContext context="ALARM_IRP_VERSION_1_1"/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="RBS5"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="RBS5"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-back-atrcus123" AssociationType="ManagedElement_to_ftpBackupStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-key-atrcus123" AssociationType="ManagedElement_to_ftpLicenseKeyStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-sws-atrcus123" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=aifwran" AssociationType="ManagedElement_to_autoIntegration"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=rnc123,Group=RbsGrp1" AssociationType="Group_to_MeContext"/>
+            </Relationship>
+	</ManagedElement>
+         <ManagedElement sourceType="CELLO">
+            <ManagedElementId string="rnc123"/>
+            <primaryType type="RNC"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=ath001"/>
+            <nodeVersion string=""/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string=""/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <neMIMVersion string="K.9.5"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/em/index.html"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string=""/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="CORBA"/>
+                     <port int="0"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string="http://0.0.0.0:80/cello/ior_files/nameroot.ior"/>
+                     <namingPort int="0"/>
+                     <notificationIRPAgentVersion string="3.2"/>
+                     <alarmIRPAgentVersion string="3.2"/>
+                     <notificationIRPNamingContext context="NOTIFICATION_IRP_VERSION_1_1"/>
+                     <alarmIRPNamingContext context="ALARM_IRP_VERSION_1_1"/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="rnc123"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="rnc123"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-back-atrcus123" AssociationType="ManagedElement_to_ftpBackupStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-key-atrcus123" AssociationType="ManagedElement_to_ftpLicenseKeyStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-atrcus123,FtpService=w-sws-atrcus123" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+		</SubNetwork>
+	</Create>
+</Model>

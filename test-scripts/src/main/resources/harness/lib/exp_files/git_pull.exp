@@ -1,0 +1,7 @@
+cd /NFDStore/gitrepos/cominf_test/
+spawn /usr/local/bin/git pull
+expect -timeout 10 {
+ "Are you sure you want to continue connecting" {send "yes\r"}
+}
+
+

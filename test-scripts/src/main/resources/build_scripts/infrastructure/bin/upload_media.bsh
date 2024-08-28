@@ -1,0 +1,86 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# epatnat Feb 2014
+
+
+
+#MAIN
+DATE=$( date "+%d%m%Y%H%I%S" )
+SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+SCRIPTNAME=$(/bin/basename $0)
+CLEARCASE_HOST=selid1t010.lmera.ericsson.se
+CLEARCASE_USER=ossrcci
+CLEARCASE_PW=Ericsson1
+BUILD_PACKAGE=FALSE
+COMPRESS_PACKAGE=FALSE
+P7ZIP=/usr/bin/p7zip
+MWSCONFIGURESHIPSCRIPT=$MWSGITREPOBINDIR/configure_shipment.bsh
+MWSBUILDPACKAGESCRIPT=$MWSGITREPOBINDIR/build_package_mws.bsh
+MWSCOPYJUMPSCRIPT=/home/ossrcci/test_area.bsh
+AJUMP=$SCRIPTS_LOC/test_area.sh
+SJUMP=$SCRIPTS_LOC/test_jump.exp
+
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+. $G_SCRIPTDIR/../lib/common_functions.lib
+G_ETCDIR=$( dirname $G_SCRIPTDIR )/etc
+. $G_ETCDIR/build_scripts.ini
+G_SCRIPTNAME=$(/bin/basename $0)
+G_EXPDIR=$SCRIPTDIR/../../../harness/lib/exp_files
+
+
+
+#commands
+if [ -x /usr/bin/expect ]; then
+	EXPECT=/usr/bin/expect
+elif [ -x /usr/local/bin/expect ]; then
+	EXPECT=/usr/local/bin/expect
+elif [ -x /app/expect/5.40.1/bin/expect  ]; then
+        EXPECT=/app/expect/5.40.1/bin/expect
+fi
+
+[ ! -x $EXPECT ] && {
+	echo "Error - unable to find expect binary"
+	exit 1
+}
+     $EXPECT $SCRIPTDIR/ssh_setup2.sh scp "${SCRIPTDIR}/test_area.bsh ${CLEARCASE_USER}@$CLEARCASE_HOST:/home/ossrcci" $CLEARCASE_PW || { error "failed to copy test_area"
+     return 1
+} 
+
+     $EXPECT $SCRIPTDIR/ssh_setup2.sh scp "${G_EXPDIR}/test_jump.exp ${CLEARCASE_USER}@$CLEARCASE_HOST:/home/ossrcci" $CLEARCASE_PW || { error "failed to copy test_jump.exp"
+     return 1
+}
+
+     $EXPECT $SCRIPTDIR/ssh_setup2.sh scp "${SCRIPTDIR}/mailto.bsh ${CLEARCASE_USER}@$CLEARCASE_HOST:/home/ossrcci" $CLEARCASE_PW || { error "failed to copy mailto.bsh"
+     return 1
+}
+
+
+reqpars="CI_MWS_HOSTNAME CI_MWS_ROOTPW CI_TEAM CI_FQ_SHIPMENT CI_PKG_NAME"
+for par in $reqpars; do
+	if [ -z $(eval echo \$$par) ]; then
+		echo "Error required parameter \"$par\" is not set"
+		exit 1
+	fi
+done
+
+"Building $CI_TEAM media for shipment $CI_FQ_SHIPMENT"
+$EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "${CLEARCASE_USER}@$CLEARCASE_HOST $MWSCOPYJUMPSCRIPT ${CI_PKG_NAME} -t $CI_TEAM -s OSSRC_${CI_FQ_SHIPMENT}" $CLEARCASE_PW || {
+	error "Problem occured building $CI_TEAM shipment $CI_FQ_SHIPMENT" 
+	return 1
+}
+
+

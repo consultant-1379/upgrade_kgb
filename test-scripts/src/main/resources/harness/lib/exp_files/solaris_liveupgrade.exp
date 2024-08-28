@@ -1,0 +1,215 @@
+#!./expect -- 
+
+set timeout 120 
+#exp_internal 1
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set OMPATH [lindex $argv 2]
+set SOLARISPATH [lindex $argv 3]
+set CHECK [lindex $argv 4]
+set MWSIP [lindex $argv 5]
+set NEWD [lindex $argv 6]
+set d1 "\$1" 
+set d2 "\$2"
+set d3 "\$3"
+set d4 "\$4"
+
+
+proc liveupgraderun {} {
+	global SOLARISPATH
+	global OMPATH
+	global MWSIP
+	global ADMIN2
+	set timeout 9200 
+ 	send -- "umount /var/tmp/OM\r"
+        expect "#"
+        send -- "umount /var/tmp/BOOT\r"
+        expect "#"
+        send -- "rmdir /var/tmp/OM/\r"
+        expect "#"
+        send -- "rmdir /var/tmp/BOOT\r"
+        expect "#"
+	send -- "mkdir /var/tmp/OM\r"
+	expect " #"
+	send -- "mkdir /var/tmp/BOOT\r"
+	expect " #"
+	send -- "mount ${MWSIP}:${OMPATH} /var/tmp/OM\r"
+	expect " #"
+	send -- "mount ${MWSIP}:${SOLARISPATH} /var/tmp/BOOT\r"
+	expect " #"
+	send -- "showrev -p | grep IDR && patchrm IDR143108-01\r"
+	expect " #"
+	send -- "df -h / \r"
+	expect " #"
+	send -- "ls /a && rm -rf /a \r"
+	expect " #"
+	if {$ADMIN2 != "NO"} {
+		send "/opt/ericsson/sck/bin/system_checks.bsh -f update_cluster_ini_files\r"
+		expect "#"
+		sleep 60 
+		send "hastop -all\r"
+		expect "#"
+		sleep 300 
+		set timeout 120 
+		set count 0
+		while {$count < 25} {
+                	send "hastatus -sum\r"
+
+                	expect {
+                        	"VCS ERROR V-16-1-10600 Cannot connect to VCS engine" {
+                        	expect "#"
+                        	sleep 5
+                        	break}
+
+                	timeout {
+                        	puts "timeout"
+                        	set count [expr $count+1]}
+               			}
+		}
+		if {$count == "25"} {
+                    exit 1
+                }
+	}
+	set timeout 14200
+	send -- "/var/tmp/OM/Liveupgrade/liveupgrade.bsh -c -s /var/tmp/BOOT/ -D /var/tmp/OM/Patches/ -U\r"
+	expect "Are you sure you wish to continue with LiveUpgrade"
+	sleep 5
+	send -- "Yes\r"
+	while 1 {
+        	expect {
+                	"Live Upgrade successfull" {
+                       		sleep 5 
+                        	break}
+                	eof {
+                        	puts "warning: timed out"
+                        	exit 1}
+                	timeout {
+                        	puts "warning: timed out"
+                        	exit 1}
+                	}
+        	}
+
+}
+
+#main
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${ADMIN1}.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"
+			}
+		#"login: " {
+		#	send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "Warning: timed out 1"
+
+			exit 1}
+ 		timeout {
+			puts "Warning: timed out 2"
+			exit 1}
+		"#" {
+			break}
+		}
+	}
+#expect "#"
+
+send "date\r"; expect "201"
+
+if {$ADMIN2 != "NO"} {
+	send "ssh ${ADMIN2}-priv\r"
+	while 1 {
+        	expect {
+                	"${ADMIN2}\{root\} #" {
+                        	break}
+
+                	timeout {
+                        	puts "warning: timed out 3"
+                        	exit 1}
+                	}
+        }
+}
+
+if {$CHECK == "NO"} {
+	liveupgraderun
+} else {
+	set timeout 200 
+	send -- "echo \"Going to Check\"\r"
+	expect " #"
+	send -- "cat /etc/release | head -1 | nawk '{print $d2, $d3, $d4}'\r"
+	expect " #"
+	set a1 $expect_out(buffer)
+	set a2 [split $a1 "\r\n"]
+	set server [lindex $a2 2]
+	if {$CHECK != $server} {
+		liveupgraderun
+	} else {
+		send -- "echo \"!!!!!!!!!Live Upgrade not required!!!!!!!!!\"\r"
+		expect " #"
+		send "exit\r"
+		exit 2
+	}
+}
+
+		set timeout 9200 
+		send -- "svcadm disable svc:/network/finger:default\r"
+		expect "#"
+		send -- "svcadm disable svc:/network/rpc/rusers:default\r"
+		expect "#"
+ 		if {$ADMIN2 != "NO"} {
+			send "hastart\r"
+                	expect "#"
+			set timeout 120 
+			set count 0
+			while {$count < 15} {
+                		send "hastatus -sum | grep \"Oss \"| grep ${ADMIN2} | grep -v \"W_\"\r"
+                			expect {
+                        			" ONLINE" {
+                        				expect "#"
+                        				sleep 5
+                        				break}
+
+                				timeout {
+                        				puts "timeout"
+                        				set count [expr $count+1]}
+                				}
+				}
+			if {$count == "15"} {
+				exit 1
+			}
+			set timeout 3600
+			send "/opt/ericsson/sck/bin/system_checks.bsh -f update_new_boot_env $NEWD\r" 
+			expect "#"
+		}
+		send -- "/var/tmp/OM/Liveupgrade/manage_be.bsh -A -b $NEWD\r"
+                expect "Are you sure you wish to activate the Boot Environment"
+                sleep 5
+                send -- "Yes\r"
+		expect -timeout 20  "#"
+		send -- "umount /var/tmp/OM\r"
+		expect -timeout 20 "#"
+		send -- "umount /var/tmp/BOOT\r"
+		expect -timeout 20 "#"
+		send -- "rmdir /var/tmp/OM/\r"
+		expect -timeout 20 "#"
+		send -- "rmdir /var/tmp/BOOT\r"
+		expect -timeout 20 "#"
+		send "init 6\r"
+		while 1 {
+        		expect {
+                		"closed" {
+                        		exit 0}
+                		eof {
+                        		exit 0}
+                		timeout {
+                        		exit 1}
+                		}
+        		}
+
+		

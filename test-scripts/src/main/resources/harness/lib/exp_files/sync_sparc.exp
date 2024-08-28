@@ -1,0 +1,61 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$ADMIN1.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+expect "#"
+set timeout 160
+send -- "/ericsson/dmr/bin/dmtool s p\r"
+while 1 {
+        expect {
+
+               "RUNNING" {
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+set timeout 10800
+send -- "/ericsson/dmr/bin/dmtool sy\r"
+expect "The synchronization can take some time"
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "<-"
+sleep 600
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "#"
+sleep 1200
+send "rm -rf /ossrc/upgrade/R*\r"
+expect "#"
+send "exit\r"
+expect "#"

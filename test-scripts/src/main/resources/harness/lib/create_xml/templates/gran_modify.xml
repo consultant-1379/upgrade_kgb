@@ -1,0 +1,2834 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_3.dtd">
+<Model version="1" importVersion="6.3">
+   <Modify>
+      <FtpServer userLabel="SMRSSLAVE-%slave%">
+         <FtpServerId string="SMRSSLAVE-%slave%"/>
+         <ipAddress ip_v4="10.42.33.4"/>
+         <hostname string="%slave%"/>
+         <dataPortId int="0"/>
+         <controlPortId int="0"/>
+         <directoryPath string=""/>
+         <serviceSecurityState string="ON"/>
+                 <FtpService userLabel="swstore-%slave%">
+            <name string="swstore-%slave%"/>
+            <directoryPath string="/GRAN/CommonPersistent/Software/#NE-TYPE#/"/>
+            <type string="SwStore"/>
+            <networkType string="Geran"/>
+            <Tss>
+               <Entry>
+                  <System string="swstore-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="swstore-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+               <Entry>
+                  <System string="swstore-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="swstore-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+         <FtpService userLabel="pmup-%slave%">
+            <name string="pmup-%slave%"/>
+            <directoryPath string="/GRAN/%slave%/#NE-NAME#/NeTransientUp/"/>
+            <type string="neTransientPmUp"/>
+            <networkType string="Geran"/>
+            <Tss>
+               <Entry>
+                  <System string="pmup-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="pmup-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+               <Entry>
+                  <System string="pmup-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="pmup-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+         <FtpService userLabel="keystore-%slave%">
+            <name string="keystore-%slave%"/>
+            <directoryPath string=""/>
+            <type string="LicenseKeyStore"/>
+            <networkType string=""/>
+            <Tss>
+               <Entry>
+                  <System string="keystore-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="keystore-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+               <Entry>
+                  <System string="keystore-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="keystore-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+         <FtpService userLabel="cmup-%slave%">
+            <name string="cmup-%slave%"/>
+            <directoryPath string=""/>
+            <type string="neTransientCmUp"/>
+            <networkType string=""/>
+            <Tss>
+               <Entry>
+                  <System string="cmup-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="cmup-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+               <Entry>
+                  <System string="cmup-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="cmup-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+         <FtpService userLabel="cmdown-%slave%">
+            <name string="cmdown-%slave%"/>
+            <directoryPath string=""/>
+            <type string="neTransientCmDown"/>
+            <networkType string=""/>
+            <Tss>
+               <Entry>
+                  <System string="cmdown-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="cmdown-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+               <Entry>
+                  <System string="cmdown-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="cmdown-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+         <FtpService userLabel="backup-%slave%">
+            <name string="backup-%slave%"/>
+            <directoryPath string=""/>
+            <type string="BackupStore"/>
+            <networkType string=""/>
+            <Tss>
+               <Entry>
+                  <System string="backup-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="backup-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+               <Entry>
+                  <System string="backup-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="backup-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+ </FtpServer>
+<FtpServer userLabel="SMRSSLAVE-%slave%">
+         <FtpServerId string="SMRSSLAVE-%slave%"/>
+         <ipAddress ip_v4="0.0.0.0"/>
+         <hostname string="host"/>
+         <dataPortId int="0"/>
+         <controlPortId int="0"/>
+         <directoryPath string="/test"/>
+         <serviceSecurityState string="ON"/>
+                 <FtpService userLabel="pmup-%slave%">
+            <name string="pmup-%slave%"/>
+            <directoryPath string="/GRAN/host/#NE-NAME#/NeTransientUp/"/>
+            <type string="neTransientPmUp"/>
+            <networkType string="Geran"/>
+            <Tss>
+               <Entry>
+                  <System string="pmup-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="pmup-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+         <FtpService userLabel="backup-%slave%">
+            <name string="backup-%slave%"/>
+            <directoryPath string="/GRAN/CommonPersistent/BackupCM/#NE-TYPE#/#NE-NAME#/"/>
+            <type string="BackupStore"/>
+            <networkType string="Geran"/>
+            <Tss>
+               <Entry>
+                  <System string="backup-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="backup-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+ </FtpServer>
+      <Site userLabel="GRAN_SITE1">
+         <altitude string="0"/>
+         <location string="GRAN_SITE1"/>
+         <longitude string="0"/>
+         <latitude string="0"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSBAF03">
+         <altitude string="550"/>
+         <location string="N58-25-12/E16-14-15"/>
+         <longitude string="58455500"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSBAF05">
+         <altitude string="450"/>
+         <location string="N58-25-12/E16-3-50"/>
+         <longitude string="57830500"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSBAF07">
+         <altitude string="600"/>
+         <location string="N58-25-12/E16-19-28"/>
+         <longitude string="58768000"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSBAF09">
+         <altitude string="500"/>
+         <location string="N58-25-12/E16-9-3"/>
+         <longitude string="58143000"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSMAF01">
+         <altitude string="200"/>
+         <location string="N58-25-12/E15-37-48"/>
+         <longitude string="56268000"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSMAF02">
+         <altitude string="250"/>
+         <location string="N58-25-12/E15-43-0"/>
+         <longitude string="56580500"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSMAF03">
+         <altitude string="300"/>
+         <location string="N58-25-12/E15-48-13"/>
+         <longitude string="56893000"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSMAF04">
+         <altitude string="350"/>
+         <location string="N58-25-12/E15-53-25"/>
+         <longitude string="57205500"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <SubNetwork userLabel="0100-S1" networkType="IPRAN">
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="STN-SIU-F001"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF03"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.150:80/"/>
+                  <ipAddress ip_v4="9.9.152.150"/>
+                  <hostname string="STN-SIU-F001"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-SIU-F001"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-SIU-F001"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-SIU-F001"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-SIU-F001"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="STN-SIU-F002"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF03"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.151:80/"/>
+                  <ipAddress ip_v4="9.9.152.151"/>
+                  <hostname string="STN-SIU-F002"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-SIU-F002"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-SIU-F002"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-SIU-F002"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-SIU-F002"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F002,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F002,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F002,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+      </SubNetwork>
+      <SubNetwork userLabel="0100-S3" networkType="IPRAN">
+         <ManagedElement sourceType="PICO">
+            <ManagedElementId string="STN-PICO-F001"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF03"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.46:80/"/>
+                  <ipAddress ip_v4="9.9.152.46"/>
+                  <hostname string="STN-PICO-F001"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-PICO-F001"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-PICO-F001"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-PICO-F001"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-PICO-F001"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="PICO">
+            <ManagedElementId string="STN-PICO-F002"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF03"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.47:80/"/>
+                  <ipAddress ip_v4="9.9.152.47"/>
+                  <hostname string="STN-PICO-F002"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-PICO-F002"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-PICO-F002"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-PICO-F002"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-PICO-F002"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F002,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F002,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F002,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+      </SubNetwork>
+      <SubNetwork userLabel="0200-S1" networkType="IPRAN">
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="STN-SIU-F011"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF05"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.160:80/"/>
+                  <ipAddress ip_v4="9.9.152.160"/>
+                  <hostname string="STN-SIU-F011"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-SIU-F011"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-SIU-F011"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-SIU-F011"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-SIU-F011"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F011,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F011,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F011,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="STN-SIU-F012"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF05"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.161:80/"/>
+                  <ipAddress ip_v4="9.9.152.161"/>
+                  <hostname string="STN-SIU-F012"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-SIU-F012"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-SIU-F012"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-SIU-F012"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-SIU-F012"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F012,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F012,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F012,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="STN-SIU-F013"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF05"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.162:80/"/>
+                  <ipAddress ip_v4="9.9.152.162"/>
+                  <hostname string="STN-SIU-F013"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-SIU-F013"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-SIU-F013"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-SIU-F013"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-SIU-F013"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F013,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F013,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F013,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+      </SubNetwork>
+      <SubNetwork userLabel="0300-S1" networkType="IPRAN">
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="STN-SIU-F017"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF07"/>
+            <nodeVersion string="07B"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.166:80/"/>
+                  <ipAddress ip_v4="9.9.152.166"/>
+                  <hostname string="STN-SIU-F017"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-SIU-F017"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-SIU-F017"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-SIU-F017"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-SIU-F017"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F017,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F017,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F017,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="STN-SIU-F018"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF07"/>
+            <nodeVersion string="07B"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.167:80/"/>
+                  <ipAddress ip_v4="9.9.152.167"/>
+                  <hostname string="STN-SIU-F018"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-SIU-F018"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-SIU-F018"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-SIU-F018"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-SIU-F018"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F018,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F018,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F018,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+      </SubNetwork>
+      <SubNetwork userLabel="0300-S3" networkType="IPRAN">
+         <ManagedElement sourceType="PICO">
+            <ManagedElementId string="STN-PICO-F045"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF07"/>
+            <nodeVersion string="07B"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.90:80/"/>
+                  <ipAddress ip_v4="9.9.152.90"/>
+                  <hostname string="STN-PICO-F045"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-PICO-F045"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-PICO-F045"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-PICO-F045"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-PICO-F045"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F045,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F045,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F045,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="PICO">
+            <ManagedElementId string="STN-PICO-F046"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF07"/>
+            <nodeVersion string="07B"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.91:80/"/>
+                  <ipAddress ip_v4="9.9.152.91"/>
+                  <hostname string="STN-PICO-F046"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="STN-PICO-F046"/>
+                  <Type string="NORMAL"/>
+                  <User string="STN-PICO-F046"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="STN-PICO-F046"/>
+                  <Type string="SECURE"/>
+                  <User string="STN-PICO-F046"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F046,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F046,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F046,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+      </SubNetwork>
+      <SubNetwork userLabel="NETSim" networkType="GSM">
+         <ManagedElement sourceType="AXE">
+            <ManagedElementId string="BAF03"/>
+            <primaryType type="BSC"/>
+            <managedElementType types="TRC"/>
+            <associatedSite string="Site=MSBAF03"/>
+            <nodeVersion string="08B"/>
+            <platformVersion string="AXE 105 07/217 R1A"/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <AXE>
+                  <nodeSecurityState state="OFF"/>
+                  <neOSSHostname string="dummyhost"/>
+                  <APG ioType="APG40">
+                     <ioApplications applications="APIO,STS"/>
+                     <IPAddressing>
+                        <ioIpAddressCluster ip_v4="9.9.152.7"/>
+                        <ioIpAddressNodeA ip_v4="9.9.152.8"/>
+                        <ioIpAddressNodeB ip_v4="9.9.152.9"/>
+                        <hostname string="BAF03"/>
+                        <ftpRoot string="/"/>
+                        <securedFtpRoot string="/L:/fms/data/tmp"/>
+                        <ftpArea string="L:\fms\data\tmp"/>
+                        <securedFtpArea string="L:\fms\data\tmp"/>
+                     </IPAddressing>
+                     <AxeProtocol number="0">
+                        <protocolType string="FTP"/>
+                        <port int="21"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="1">
+                        <protocolType string="SFTP"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="2">
+                        <protocolType string="SSH"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="3">
+                        <protocolType string="TELNET"/>
+                        <port int="23"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                  </APG>
+                  <WinFiol>
+                     <loginType string="tgwsingle"/>
+                     <wfDangerousCmdsFile0 string=""/>
+                     <wfDangerousCmdsFile1 string=""/>
+                  </WinFiol>
+                  <Browser>
+                     <browser string="alexremote"/>
+                     <browserURL string="http://masterservice/cgi-bin/alexserv"/>
+                     <bookname string="APZ 211 10 R2, APT 210 08 R5"/>
+                  </Browser>
+               </AXE>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF03"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF03"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=MAF02" AssociationType="BSC_to_MSC"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" AssociationType="FirewallFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F002,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F002,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F001,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F001,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="NETSCREEN">
+            <ManagedElementId string="BAF03-FW"/>
+            <primaryType type="Firewall"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF03"/>
+            <nodeVersion string="Netscreen-1000"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string="BAF03-FW"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF03-FW"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF03-FW"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="BAF03-FW"/>
+                  <Type string="SECURE"/>
+                  <User string="BAF03-FW"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="FirewallFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F002,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F001,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F002,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F001,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="RTS">
+            <ManagedElementId string="BAF03-RTS"/>
+            <primaryType type="TimeServer"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF03"/>
+            <nodeVersion string="06B"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string="BAF03-RTS"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF03-RTS"/>
+                  <Type string="SECURE"/>
+                  <User string="BAF03-RTS"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="BAF03-RTS"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF03-RTS"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F002,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F002,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S1,ManagedElement=STN-SIU-F001,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0100-S3,ManagedElement=STN-PICO-F001,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="AXE">
+            <ManagedElementId string="BAF05"/>
+            <primaryType type="BSC"/>
+            <managedElementType types="TRC"/>
+            <associatedSite string="Site=MSBAF05"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string="AXE 105 07/216 R1A"/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <AXE>
+                  <nodeSecurityState state="OFF"/>
+                  <neOSSHostname string="dummyhost"/>
+                  <APG ioType="APG40">
+                     <ioApplications applications="APIO,STS"/>
+                     <IPAddressing>
+                        <ioIpAddressCluster ip_v4="9.9.152.13"/>
+                        <ioIpAddressNodeA ip_v4="9.9.152.14"/>
+                        <ioIpAddressNodeB ip_v4="9.9.152.15"/>
+                        <hostname string="BAF05"/>
+                        <ftpRoot string="/"/>
+                        <securedFtpRoot string="/L:/fms/data/tmp"/>
+                        <ftpArea string="L:\fms\data\tmp"/>
+                        <securedFtpArea string="L:\fms\data\tmp"/>
+                     </IPAddressing>
+                     <AxeProtocol number="0">
+                        <protocolType string="FTP"/>
+                        <port int="21"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="1">
+                        <protocolType string="SFTP"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="2">
+                        <protocolType string="SSH"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="3">
+                        <protocolType string="TELNET"/>
+                        <port int="23"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                  </APG>
+                  <WinFiol>
+                     <loginType string="tgwsingle"/>
+                     <wfDangerousCmdsFile0 string=""/>
+                     <wfDangerousCmdsFile1 string=""/>
+                  </WinFiol>
+                  <Browser>
+                     <browser string="alexremote"/>
+                     <browserURL string="http://masterservice/cgi-bin/alexserv"/>
+                     <bookname string="APZ 211 10 R2, APT 210 08 R5"/>
+                  </Browser>
+               </AXE>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF05"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF05"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=LANS-F010" AssociationType="BSC_to_LANSwitch"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=LANS-F009" AssociationType="BSC_to_LANSwitch"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05,BssFunction=BSS_ManagedFunction" AssociationType="FirewallFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F011,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F012,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F013,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="NETSCREEN">
+            <ManagedElementId string="BAF05-FW"/>
+            <primaryType type="Firewall"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF05"/>
+            <nodeVersion string="Netscreen-1000"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string="BAF05-FW"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF05-FW"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF05-FW"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="BAF05-FW"/>
+                  <Type string="SECURE"/>
+                  <User string="BAF05-FW"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="FirewallFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F011,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F012,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F013,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="RTS">
+            <ManagedElementId string="BAF05-RTS"/>
+            <primaryType type="TimeServer"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF05"/>
+            <nodeVersion string="06B"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string="BAF05-RTS"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF05-RTS"/>
+                  <Type string="SECURE"/>
+                  <User string="BAF05-RTS"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="BAF05-RTS"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF05-RTS"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F012,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F011,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0200-S1,ManagedElement=STN-SIU-F013,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF05-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="AXE">
+            <ManagedElementId string="BAF07"/>
+            <primaryType type="BSC"/>
+            <managedElementType types="TRC"/>
+            <associatedSite string="Site=MSBAF07"/>
+            <nodeVersion string="07B"/>
+            <platformVersion string="AXE 105 07/215 R1A"/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <AXE>
+                  <nodeSecurityState state="OFF"/>
+                  <neOSSHostname string="dummyhost"/>
+                  <APG ioType="APG40">
+                     <ioApplications applications="APIO,STS"/>
+                     <IPAddressing>
+                        <ioIpAddressCluster ip_v4="9.9.152.19"/>
+                        <ioIpAddressNodeA ip_v4="9.9.152.20"/>
+                        <ioIpAddressNodeB ip_v4="9.9.152.21"/>
+                        <hostname string="BAF07"/>
+                        <ftpRoot string="/"/>
+                        <securedFtpRoot string="/L:/fms/data/tmp"/>
+                        <ftpArea string="L:\fms\data\tmp"/>
+                        <securedFtpArea string="L:\fms\data\tmp"/>
+                     </IPAddressing>
+                     <AxeProtocol number="0">
+                        <protocolType string="FTP"/>
+                        <port int="21"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="1">
+                        <protocolType string="SFTP"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="2">
+                        <protocolType string="SSH"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="3">
+                        <protocolType string="TELNET"/>
+                        <port int="23"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                  </APG>
+                  <WinFiol>
+                     <loginType string="tgwsingle"/>
+                     <wfDangerousCmdsFile0 string=""/>
+                     <wfDangerousCmdsFile1 string=""/>
+                  </WinFiol>
+                  <Browser>
+                     <browser string="alexremote"/>
+                     <browserURL string="http://masterservice/cgi-bin/alexserv"/>
+                     <bookname string="APZ 211 10 R2, APT 210 08 R5"/>
+                  </Browser>
+               </AXE>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF07"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF07"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" AssociationType="FirewallFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F018,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F045,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F017,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F046,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="NETSCREEN">
+            <ManagedElementId string="BAF07-FW"/>
+            <primaryType type="Firewall"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF07"/>
+            <nodeVersion string="Netscreen-1000"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string="BAF07-FW"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF07-FW"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF07-FW"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="BAF07-FW"/>
+                  <Type string="SECURE"/>
+                  <User string="BAF07-FW"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF07,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="FirewallFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F017,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F018,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F046,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F045,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="RTS">
+            <ManagedElementId string="BAF07-RTS"/>
+            <primaryType type="TimeServer"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF07"/>
+            <nodeVersion string="06B"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string="BAF07-RTS"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF07-RTS"/>
+                  <Type string="SECURE"/>
+                  <User string="BAF07-RTS"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="BAF07-RTS"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF07-RTS"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F017,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S1,ManagedElement=STN-SIU-F018,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F045,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=0300-S3,ManagedElement=STN-PICO-F046,StnFunction=STN_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF07-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="AXE">
+            <ManagedElementId string="BAF09"/>
+            <primaryType type="BSC"/>
+            <managedElementType types="TRC"/>
+            <associatedSite string="Site=MSBAF09"/>
+            <nodeVersion string="06B"/>
+            <platformVersion string="AXE 105 07/213 R1A"/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <AXE>
+                  <nodeSecurityState state="OFF"/>
+                  <neOSSHostname string="dummyhost"/>
+                  <APG ioType="APG40">
+                     <ioApplications applications="APIO,STS"/>
+                     <IPAddressing>
+                        <ioIpAddressCluster ip_v4="9.9.152.25"/>
+                        <ioIpAddressNodeA ip_v4="9.9.152.26"/>
+                        <ioIpAddressNodeB ip_v4="9.9.152.27"/>
+                        <hostname string="BAF09"/>
+                        <ftpRoot string="/"/>
+                        <securedFtpRoot string="/L:/fms/data/tmp"/>
+                        <ftpArea string="L:\fms\data\tmp"/>
+                        <securedFtpArea string="L:\fms\data\tmp"/>
+                     </IPAddressing>
+                     <AxeProtocol number="0">
+                        <protocolType string="FTP"/>
+                        <port int="21"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="1">
+                        <protocolType string="SFTP"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="2">
+                        <protocolType string="SSH"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="3">
+                        <protocolType string="TELNET"/>
+                        <port int="23"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                  </APG>
+                  <WinFiol>
+                     <loginType string="tgwsingle"/>
+                     <wfDangerousCmdsFile0 string=""/>
+                     <wfDangerousCmdsFile1 string=""/>
+                  </WinFiol>
+                  <Browser>
+                     <browser string="alexremote"/>
+                     <browserURL string="http://masterservice/cgi-bin/alexserv"/>
+                     <bookname string="APZ 211 10 R2, APT 210 08 R5"/>
+                  </Browser>
+               </AXE>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF09"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF09"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=LANS-F018" AssociationType="BSC_to_LANSwitch"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=LANS-F017" AssociationType="BSC_to_LANSwitch"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=MAF03" AssociationType="BSC_to_MSC"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF09-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF09,BssFunction=BSS_ManagedFunction" AssociationType="FirewallFunction_to_BssFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="NETSCREEN">
+            <ManagedElementId string="BAF09-FW"/>
+            <primaryType type="Firewall"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF09"/>
+            <nodeVersion string="Netscreen-1000"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string="BAF09-FW"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF09-FW"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF09-FW"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="BAF09-FW"/>
+                  <Type string="SECURE"/>
+                  <User string="BAF09-FW"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF09,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=NETSim,ManagedElement=BAF09-FW,FirewallFunction=FIREWALL_ManagedFunction" AssociationType="FirewallFunction_to_BssFunction"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="RTS">
+            <ManagedElementId string="BAF09-RTS"/>
+            <primaryType type="TimeServer"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF09"/>
+            <nodeVersion string="06B"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://0.0.0.0:80/"/>
+                  <ipAddress ip_v4="0.0.0.0"/>
+                  <hostname string="BAF09-RTS"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="BAF09-RTS"/>
+                  <Type string="SECURE"/>
+                  <User string="BAF09-RTS"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="BAF09-RTS"/>
+                  <Type string="NORMAL"/>
+                  <User string="BAF09-RTS"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="EXTREME">
+            <ManagedElementId string="LANS-F009"/>
+            <primaryType type="LANSwitch"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF05"/>
+            <nodeVersion string="Summit48si"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="telnet://9.9.152.194/"/>
+                  <ipAddress ip_v4="9.9.152.194"/>
+                  <hostname string="LANS-F009"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="2">
+                     <protocolType string="TELNET"/>
+                     <port int="23"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="LANS-F009"/>
+                  <Type string="NORMAL"/>
+                  <User string="LANS-F009"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="LANS-F009"/>
+                  <Type string="SECURE"/>
+                  <User string="LANS-F009"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05" AssociationType="BSC_to_LANSwitch"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="EXTREME">
+            <ManagedElementId string="LANS-F010"/>
+            <primaryType type="LANSwitch"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF05"/>
+            <nodeVersion string="Summit48si"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="telnet://9.9.152.195/"/>
+                  <ipAddress ip_v4="9.9.152.195"/>
+                  <hostname string="LANS-F010"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="2">
+                     <protocolType string="TELNET"/>
+                     <port int="23"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="LANS-F010"/>
+                  <Type string="SECURE"/>
+                  <User string="LANS-F010"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="LANS-F010"/>
+                  <Type string="NORMAL"/>
+                  <User string="LANS-F010"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF05" AssociationType="BSC_to_LANSwitch"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="EXTREME">
+            <ManagedElementId string="LANS-F017"/>
+            <primaryType type="LANSwitch"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF09"/>
+            <nodeVersion string="Summit48si"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="telnet://9.9.152.202/"/>
+                  <ipAddress ip_v4="9.9.152.202"/>
+                  <hostname string="LANS-F017"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="2">
+                     <protocolType string="TELNET"/>
+                     <port int="23"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="LANS-F017"/>
+                  <Type string="SECURE"/>
+                  <User string="LANS-F017"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="LANS-F017"/>
+                  <Type string="NORMAL"/>
+                  <User string="LANS-F017"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF09" AssociationType="BSC_to_LANSwitch"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="EXTREME">
+            <ManagedElementId string="LANS-F018"/>
+            <primaryType type="LANSwitch"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF09"/>
+            <nodeVersion string="Summit48si"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="telnet://9.9.152.203/"/>
+                  <ipAddress ip_v4="9.9.152.203"/>
+                  <hostname string="LANS-F018"/>
+                  <nodeSecurityState state="OFF"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="2">
+                     <protocolType string="TELNET"/>
+                     <port int="23"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="LANS-F018"/>
+                  <Type string="NORMAL"/>
+                  <User string="LANS-F018"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="LANS-F018"/>
+                  <Type string="SECURE"/>
+                  <User string="LANS-F018"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF09" AssociationType="BSC_to_LANSwitch"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="AXE">
+            <ManagedElementId string="MAF01"/>
+            <primaryType type="MSC"/>
+            <managedElementType types="VLR"/>
+            <associatedSite string="Site=MSMAF01"/>
+            <nodeVersion string="R12.2"/>
+            <platformVersion string="AXE 106 30/2 R1A"/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <AXE>
+                  <nodeSecurityState state="OFF"/>
+                  <neOSSHostname string="dummyhost"/>
+                  <APG ioType="APG40">
+                     <ioApplications applications="APIO,STS"/>
+                     <IPAddressing>
+                        <ioIpAddressCluster ip_v4="9.9.152.34"/>
+                        <ioIpAddressNodeA ip_v4="9.9.152.35"/>
+                        <ioIpAddressNodeB ip_v4="9.9.152.36"/>
+                        <hostname string="MAF01"/>
+                        <ftpRoot string="/"/>
+                        <securedFtpRoot string="/L:/fms/data/tmp"/>
+                        <ftpArea string="L:\fms\data\tmp"/>
+                        <securedFtpArea string="L:\fms\data\tmp"/>
+                     </IPAddressing>
+                     <AxeProtocol number="0">
+                        <protocolType string="FTP"/>
+                        <port int="21"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="1">
+                        <protocolType string="SFTP"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="2">
+                        <protocolType string="SSH"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="3">
+                        <protocolType string="TELNET"/>
+                        <port int="23"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                  </APG>
+                  <WinFiol>
+                     <loginType string="tgwsingle"/>
+                     <wfDangerousCmdsFile0 string=""/>
+                     <wfDangerousCmdsFile1 string=""/>
+                  </WinFiol>
+                  <Browser>
+                     <browser string="alexremote"/>
+                     <browserURL string="http://masterservice/cgi-bin/alexserv"/>
+                     <bookname string="APZ 211 10 R2, APT 210 08 R5"/>
+                  </Browser>
+               </AXE>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="MAF01"/>
+                  <Type string="NORMAL"/>
+                  <User string="MAF01"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="AXE">
+            <ManagedElementId string="MAF02"/>
+            <primaryType type="MSC"/>
+            <managedElementType types="VLR"/>
+            <associatedSite string="Site=MSMAF02"/>
+            <nodeVersion string="R12.2"/>
+            <platformVersion string="AXE 106 30/2 R1A"/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <AXE>
+                  <nodeSecurityState state="OFF"/>
+                  <neOSSHostname string="dummyhost"/>
+                  <APG ioType="APG40">
+                     <ioApplications applications="APIO,STS"/>
+                     <IPAddressing>
+                        <ioIpAddressCluster ip_v4="9.9.152.37"/>
+                        <ioIpAddressNodeA ip_v4="9.9.152.38"/>
+                        <ioIpAddressNodeB ip_v4="9.9.152.39"/>
+                        <hostname string="MAF02"/>
+                        <ftpRoot string="/"/>
+                        <securedFtpRoot string="/L:/fms/data/tmp"/>
+                        <ftpArea string="L:\fms\data\tmp"/>
+                        <securedFtpArea string="L:\fms\data\tmp"/>
+                     </IPAddressing>
+                     <AxeProtocol number="0">
+                        <protocolType string="FTP"/>
+                        <port int="21"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="1">
+                        <protocolType string="SFTP"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="2">
+                        <protocolType string="SSH"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="3">
+                        <protocolType string="TELNET"/>
+                        <port int="23"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                  </APG>
+                  <WinFiol>
+                     <loginType string="tgwsingle"/>
+                     <wfDangerousCmdsFile0 string=""/>
+                     <wfDangerousCmdsFile1 string=""/>
+                  </WinFiol>
+                  <Browser>
+                     <browser string="alexremote"/>
+                     <browserURL string="http://masterservice/cgi-bin/alexserv"/>
+                     <bookname string="APZ 211 10 R2, APT 210 08 R5"/>
+                  </Browser>
+               </AXE>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="MAF02"/>
+                  <Type string="NORMAL"/>
+                  <User string="MAF02"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03" AssociationType="BSC_to_MSC"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="AXE">
+            <ManagedElementId string="MAF03"/>
+            <primaryType type="MSC"/>
+            <managedElementType types="VLR"/>
+            <associatedSite string="Site=MSMAF03"/>
+            <nodeVersion string="R13.0"/>
+            <platformVersion string="AXE 106 30/2 R1A"/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <AXE>
+                  <nodeSecurityState state="OFF"/>
+                  <neOSSHostname string="dummyhost"/>
+                  <APG ioType="APG40">
+                     <ioApplications applications="APIO,STS"/>
+                     <IPAddressing>
+                        <ioIpAddressCluster ip_v4="9.9.152.40"/>
+                        <ioIpAddressNodeA ip_v4="9.9.152.41"/>
+                        <ioIpAddressNodeB ip_v4="9.9.152.42"/>
+                        <hostname string="MAF03"/>
+                        <ftpRoot string="/"/>
+                        <securedFtpRoot string="/L:/fms/data/tmp"/>
+                        <ftpArea string="L:\fms\data\tmp"/>
+                        <securedFtpArea string="L:\fms\data\tmp"/>
+                     </IPAddressing>
+                     <AxeProtocol number="0">
+                        <protocolType string="FTP"/>
+                        <port int="21"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="1">
+                        <protocolType string="SFTP"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="2">
+                        <protocolType string="SSH"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="3">
+                        <protocolType string="TELNET"/>
+                        <port int="23"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                  </APG>
+                  <WinFiol>
+                     <loginType string="tgwsingle"/>
+                     <wfDangerousCmdsFile0 string=""/>
+                     <wfDangerousCmdsFile1 string=""/>
+                  </WinFiol>
+                  <Browser>
+                     <browser string="alexremote"/>
+                     <browserURL string="http://masterservice/cgi-bin/alexserv"/>
+                     <bookname string="APZ 211 10 R2, APT 210 08 R5"/>
+                  </Browser>
+               </AXE>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="MAF03"/>
+                  <Type string="NORMAL"/>
+                  <User string="MAF03"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF09" AssociationType="BSC_to_MSC"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+         <ManagedElement sourceType="AXE">
+            <ManagedElementId string="MAF04"/>
+            <primaryType type="MSC"/>
+            <managedElementType types="VLR"/>
+            <associatedSite string="Site=MSMAF04"/>
+            <nodeVersion string="R13.0"/>
+            <platformVersion string="AXE 106 30/2 R1A"/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <AXE>
+                  <nodeSecurityState state="OFF"/>
+                  <neOSSHostname string="dummyhost"/>
+                  <APG ioType="APG40">
+                     <ioApplications applications="APIO,STS"/>
+                     <IPAddressing>
+                        <ioIpAddressCluster ip_v4="9.9.152.43"/>
+                        <ioIpAddressNodeA ip_v4="9.9.152.44"/>
+                        <ioIpAddressNodeB ip_v4="9.9.152.45"/>
+                        <hostname string="MAF04"/>
+                        <ftpRoot string="/"/>
+                        <securedFtpRoot string="/L:/fms/data/tmp"/>
+                        <ftpArea string="L:\fms\data\tmp"/>
+                        <securedFtpArea string="L:\fms\data\tmp"/>
+                     </IPAddressing>
+                     <AxeProtocol number="0">
+                        <protocolType string="FTP"/>
+                        <port int="21"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="1">
+                        <protocolType string="SFTP"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="2">
+                        <protocolType string="SSH"/>
+                        <port int="22"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                     <AxeProtocol number="3">
+                        <protocolType string="TELNET"/>
+                        <port int="23"/>
+                        <protocolVersion string=""/>
+                     </AxeProtocol>
+                  </APG>
+                  <WinFiol>
+                     <loginType string="tgwsingle"/>
+                     <wfDangerousCmdsFile0 string=""/>
+                     <wfDangerousCmdsFile1 string=""/>
+                  </WinFiol>
+                  <Browser>
+                     <browser string="alexremote"/>
+                     <browserURL string="http://masterservice/cgi-bin/alexserv"/>
+                     <bookname string="APZ 211 10 R2, APT 210 08 R5"/>
+                  </Browser>
+               </AXE>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="MAF04"/>
+                  <Type string="NORMAL"/>
+                  <User string="MAF04"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>
+      </SubNetwork>
+   </Modify>
+</Model>

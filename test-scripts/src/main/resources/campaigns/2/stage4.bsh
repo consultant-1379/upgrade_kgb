@@ -1,0 +1,14 @@
+#   CHANGE THESE FOR EVERY NEW RELEASE OR SHIPMENT  #
+#####################################################
+# release version and ci shipment
+export RELEASE=O14_2
+export CI_SHIPMENT=14.2.8
+#####################################################
+
+# STAGE FOUR
+export G_HARNESS_HOST=localhost
+export CI_TYPE=UG
+export CI_TEAM=sol_patches
+export USER_VAR1=
+export CI_FQ_SHIPMENT=${RELEASE}/${CI_SHIPMENT}
+

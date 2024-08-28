@@ -1,0 +1,59 @@
+#!/bin/tcsh
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/08/2012    edavmax         First version
+
+
+#MAIN
+
+if ( $# != 3 ) then
+	echo "Error - incorrect # args"
+	exit 1
+endif
+
+set G_CLEARCASE_VIEW=$1
+set G_VOB_LOCATION=$2
+set G_SMRS_PKGNAME=$3
+
+set G_SMRSPKGPATH="$G_VOB_LOCATION/pkg_template"
+
+
+
+# delete old packages
+/usr/atria/bin/cleartool setview -exec "/bin/rm -f ${G_SMRSPKGPATH}/${G_SMRS_PKGNAME}" ${G_CLEARCASE_VIEW}
+/bin/rm -f /var/tmp/${G_SMRS_PKGNAME} >& /dev/null 
+
+# rebuild package
+/usr/atria/bin/cleartool setview -exec "cd ${G_VOB_LOCATION};/proj/jkadm100/bin/lxb clearmake deep" ${G_CLEARCASE_VIEW}
+if ( $? != 0 && -f ${G_SMRSPKGPATH}/${G_SMRS_PKGNAME} ) then
+	echo "Error - failed to build package"
+	exit 1
+else
+	echo "Package $G_SMRS_PKGNAME built successfully"
+endif
+
+# copy package to temp location
+/usr/atria/bin/cleartool setview -exec "/bin/cp -f ${G_SMRSPKGPATH}/${G_SMRS_PKGNAME} /var/tmp" ${G_CLEARCASE_VIEW} 
+if ( $? != 0 ) then
+	echo "Error failed to copy package ${G_SMRS_PKGNAME} from vob"
+	exit 1
+endif
+
+
+exit 0
+	
+
+

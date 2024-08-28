@@ -1,0 +1,221 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+    sleep 1
+
+  touch /tmp/pre_tmp6019_${AT_JOB}.log || return 1
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+   # Checks for expected variables. Exit early if these are not set.
+    echo "checking env vars"
+    if [ "${ORCH_CMD_MODE}xxx" = "xxx" ]; then
+        echo "Variable ORCH_CMD_MODE is not set. Check your environment file"
+        return 1
+    else echo "ORCH_CMD_MODE: ${ORCH_CMD_MODE}"
+    fi
+
+    if [ "${ORCH_UPGRADE_DIR}xxx" = "xxx" ]; then
+        echo "Variable ORCH_UPGRADE_DIR is not set. Check your environment file"
+        return 1
+    else echo "ORCH_UPGRADE_DIR: ${OORCH_UPGRADE_DIR}"
+    fi
+
+    if [ "${ORCH_TYPE}xxx" = "xxx" ]; then
+        echo "Variable ORCH_TYPE is not set. Check your environment file"
+        return 1
+    else echo "ORCH_TYPE: ${ORCH_TYPE}"
+    fi
+
+    if [ "${ORCH_SERVER}xxx" = "xxx" ]; then
+        echo "Variable ORCH_SERVER is not set. Check your environment file"
+        return 1
+    else echo "ORCH_SERVER: ${ORCH_SERVER}"
+    fi
+
+    if [ "${ORCH_SERVER_LIVE}xxx" = "xxx" ]; then
+		  if [ "${ORCH_TYPE}" != "VAPP" ] && [ "${ORCH_TYPE}" != "SINGLE" ]; then
+        echo "Variable ORCH_SERVER_LIVE is not set. Check your environment file"	
+        return 1
+		  fi
+    else echo "ORCH_SERVER_LIVE: ${ORCH_SERVER_LIVE}"
+    fi
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+# module will fail due to invalid optional parameter
+local L_TMP
+local L_TMP2
+local L_TMP3
+local L_TLOG=/tmp/pre_tmp6019_${AT_JOB}.log
+local L_ORCH_CMD_MODE="local"
+echo "MODE changed explicitly for this TC"
+echo "MODE is ${L_ORCH_CMD_MODE} ...... "
+echo " "
+case ${L_ORCH_CMD_MODE} in
+        local)       echo "run locally on the box"
+                     su - orcha /ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh -k | tee ${L_TLOG}
+                     L_TMP=( ${PIPESTATUS[0]} )
+                     ;;
+        *)           echo "ORCH_CMD_MODE ${L_ORCH_CMD_MODE} not valid for this test - should be locally overridden to local"
+                     return 1
+                     ;;
+esac
+
+echo ""
+echo ""
+echo ""
+
+egrep -i 'Invalid option k supplied' ${L_TLOG}
+L_TMP2=( ${?} )
+
+egrep -i 'ambiguous redirect|Syntax error|unexpected token|parse error|Permission denied|Undefined variable|Stale NFS' ${L_TLOG}
+L_TMP3=( ${?} )
+
+if [ ${L_TMP} -ne 1 ]; then
+   echo "Test fail: test should have returned a failure code of 1, but returned ${L_TMP}"
+   return 1
+else 
+   echo "module failed as expected"
+fi
+if [ ${L_TMP2} -ne 0 ]; then
+   echo "Test fail: Match not found for expected error message"
+   return 1
+else 
+   echo "expected error message found"
+fi
+if [ ${L_TMP3} -eq 0 ]; then
+   echo "Test fail: Code errors found"
+   return 1
+else 
+   echo "no code errors found"
+fi
+
+return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+	rm -rf /tmp/pre_tmp6019_${AT_JOB}.log || return 1
+  return 0
+
+}

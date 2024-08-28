@@ -1,0 +1,34 @@
+#!/bin/bash
+
+X86_vApp_install-3pp() {
+        local l_cloud_master_script=/export/scripts/CLOUD/bin/master.sh
+        local l_etcdir=${AT_ROOT}/build_scripts/infrastructure/etc
+        local l_cloud_media_cfg_template=$l_etcdir/oss_cloud_install_media_config.template
+        local l_configfile=/export/scripts/CLOUD/configs/templates/oss_box/variables_sfs_full.txt
+        local l_scriptsrv_cfgdir=/export/scripts/CLOUD/configs/ta_specific/INFRASTRUCTURE
+		local l_partial_ii_dir=/export/scripts/CLOUD/configs/templates/oss_box/variables_sfs_ENIQ_nat.txt
+
+
+        X86_vApp_prepare_install || return 1
+        local l_mediaconfigfile=$( basename ${l_cloud_media_cfg_template%.template} ).${G_CLOUD_VAPP}
+        local l_logfile=install_infra_${G_CLOUD_VAPP}.log
+
+        $EXPECT $AT_BIN/ssh_setup2.sh ssh "root@$G_CLOUD_SCRIPT_SERVER_IP /bin/rm -f /tmp/$l_logfile  < /dev/null > /dev/null  2>&1 " $G_CLOUD_SCRIPT_SERVER_ROOTPW
+        echo "Starting building of OSS Cloud Private Testbox on $G_CLOUD_VAPP."
+        echo "This will take a while...."
+        # note when calling harness on remote server we redirect stdout and stdin to files
+        # to prevent remote ssh session hanging see http://www.snailbook.com/faq/background-jobs.auto.html
+        echo "Using command:"
+        echo "$EXPECT $AT_BIN/ssh_setup2.sh ssh \"root@$G_CLOUD_SCRIPT_SERVER_IP $l_cloud_master_script -c $l_configfile:$l_partial_ii_dir:$l_scriptsrv_cfgdir/$l_mediaconfigfile -g $G_CLOUD_VAPP -f rollout_config\""
+        
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@$G_CLOUD_SCRIPT_SERVER_IP $l_cloud_master_script -c $l_configfile:$l_partial_ii_dir:$l_scriptsrv_cfgdir/$l_mediaconfigfile -g $G_CLOUD_VAPP -f rollout_config < /dev/null > /tmp/$l_logfile 2>&1" $G_CLOUD_SCRIPT_SERVER_ROOTPW
+        retcode=$?
+        echo "Return code from vApp installation is $retcode"
+        /bin/rm -rf /tmp/$l_logfile > /dev/null 2>&1
+        $EXPECT $AT_BIN/ssh_setup2.sh scp "root@$G_CLOUD_SCRIPT_SERVER_IP:/tmp/$l_logfile /tmp"  $G_CLOUD_SCRIPT_SERVER_ROOTPW &&
+        cat /tmp/$l_logfile
+        if [ $retcode -ne 0 ]; then
+                echo "**Warning** vApp installation script returned non-zero code \"$retcode\""
+                #return 1
+        fi
+}

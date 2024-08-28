@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_3.dtd">
+<Model version="1" importVersion="6.3">
+	<Delete>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=rnc123,MeContext=RBS1,ManagedElement=1"/>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=rnc123,MeContext=RBS2,ManagedElement=1"/>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=rnc123,MeContext=RBS3,ManagedElement=1"/>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=rnc123,MeContext=RBS4,ManagedElement=1"/>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=rnc123,MeContext=RBS5,ManagedElement=1"/>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=rnc123,MeContext=rnc123,ManagedElement=1"/>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=rnc123,Group=RbsGrp1"/>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=rnc123"/>
+		<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=ath001"/>
+	</Delete>
+</Model>

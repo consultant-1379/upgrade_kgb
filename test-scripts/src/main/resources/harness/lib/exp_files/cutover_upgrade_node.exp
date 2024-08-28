@@ -1,0 +1,66 @@
+set force_conservative 1
+set UGBUPIP2 [lindex $argv 0]
+set MWS_HOSTNAME [lindex $argv 1]
+set MWS_ROOTPW [lindex $argv 2]
+set timeout 54
+
+spawn telnet $MWS_HOSTNAME
+expect "login:"
+send "root\r"
+expect "assword:"
+send "$MWS_ROOTPW\r"
+expect "#"
+send "ssh ${UGBUPIP2}\r"
+while 1 {
+expect {
+ "Are you sure you want to continue connecting" {send "yes\r"}
+ "assword" {
+                send "shroot\r"
+                break }
+ timeout        {exit 1}
+ }
+}
+expect "#"
+send "touch /var/opt/ericsson/sck/log/HA_cutover_time_`date +%Y-%m-%d-%H-%M`\r"
+expect " #"
+set timeout 5400
+send "/opt/ericsson/sck/bin/split_cluster cutover_system\r"
+while 1 {
+expect {
+ 	"ERROR" { exit 1 }
+ 	" #" 	{break}
+ 	timeout {exit 1}
+ 	}
+}
+set timeout 180
+send "svcadm clear svc:/network/ldap/client:default\r"
+expect " #"
+send "/opt/ericsson/sck/bin/update_jds_menus -all\r"
+expect " #"
+send "svcadm restart svc:/system/cron:default\r"
+expect " #"
+send "/opt/ericsson/sck/bin/maintain_ldap.bsh\r"
+while 1 {
+        expect {
+                "Continue to update LDAP" {
+                        send "y\r"}
+                "LDAP domain name DN" {
+                        send "\r"}
+                "LDAP DS IP address list" {
+                        send "\r"}
+                "LDAP maintenance bind DN" {
+                        send "\r"}
+                "Are the values ok" {
+                        send "y\r"}
+                "LDAP maintenance bind password:" {
+                        send "ldapadmin\r"}
+                "No LDAP update required" {
+                        break}
+		" #"     {
+			break }
+                timeout {
+                        puts "Timeout"
+                        exit 1}
+                }
+        }
+sleep 10

@@ -1,0 +1,15 @@
+SPEC_CP_NAME="X86_ORCHA_UPGRADE"
+SPEC_CP_ID=21
+SPEC_CP_DESC="X86 Upgrade using Orcha "
+SPEC_CP_AUTHOR=1
+SPEC_CP_CONTINUEONFAILURE=0
+SPEC_CP_TIMEOUT=3000000
+SPEC_CP_OBJ_IDS=(TS170 TS168 TS173 TC2100 TC13100 TC31100 TS172)
+# eolikil 30/09/2014 Not in service yet 
+# 170 prep for orcha upgrade 
+# 845 Split cluster 
+# 173 ORCHA SLU on ADmin 
+# 2100 wait for reboot
+# 13100 post reboot
+# 31100 om upgrade 
+# 172 Oss upgrade 

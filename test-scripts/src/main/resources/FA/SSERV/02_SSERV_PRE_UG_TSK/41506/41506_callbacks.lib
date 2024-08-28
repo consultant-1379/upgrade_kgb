@@ -1,0 +1,359 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+##################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# 29.10.14	xphilco	Test for sserv_pre_upgrade_tasks module
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+    # Coded to fail in case TC_AUTOMATED=1 before automation completed
+    # Change return code as required
+
+    touch /tmp/tmp41506_${AT_JOB}.log || return 1
+    return 0
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+        echo "checking env vars"
+        if [ "${ORCH_CMD_MODE}xxx" = "xxx" ]; then
+            echo "Variable ORCH_CMD_MODE is not set. Check your environment file"
+            return 1
+        else
+            echo "ORCH_CMD_MODE: ${ORCH_CMD_MODE}"
+        fi
+    
+    case ${ORCH_CMD_MODE} in 
+        ssh_fab)     if [ "${STUB_USER}xxx" = "xxx" ]; then
+                        echo "Variable STUB_USER is not set. Check your environment file"
+                        return 1
+                     else
+                         echo "STUB_USER: ${STUB_USER}"
+                     fi
+                     if [ "${STUB_LOC}xxx" = "xxx" ]; then
+                        echo "Variable STUB_LOC is not set. Check your environment file"
+                        return 1
+                     else
+                        echo "STUB_LOC: ${STUB_LOC}"
+                     fi
+                     if [ "${ORCH_SERVER}xxx" = "xxx" ]; then
+                        echo "Variable ORCH_SERVER is not set. Check your environment file"
+                        return 1
+                     else
+                         echo "ORCH_SERVER: ${ORCH_SERVER}"
+                     fi
+                     if [ "${ORCH_USER}xxx" = "xxx" ]; then
+                         echo "Variable ORCH_USER is not set. Check your environment file"
+                         return 1
+                     else
+                         echo "ORCH_USER: ${ORCH_USER}"
+                     fi
+                     ;;
+        local_fab)   if [ "${ORCH_SERVER}xxx" = "xxx" ]; then
+                        echo "Variable ORCH_SERVER is not set. Check your environment file"
+                        return 1
+                     else
+                         echo "ORCH_SERVER: ${ORCH_SERVER}"
+                     fi
+                     if [ "${ORCH_USER}xxx" = "xxx" ]; then
+                        echo "Variable ORCH_USER is not set. Check your environment file"
+                        return 1
+                     else
+                         echo "ORCH_USER: ${ORCH_USER}"
+                     fi
+                     ;;
+        ssh_frm_mws) if [ "${ORCH_ISO_IP}xxx" = "xxx" ]; then
+                        echo "Variable ORCH_ISO_IP  is not set. Check your environment file"
+                        return 1
+                     else
+                         echo "ORCH_ISO_IP: ${ORCH_ISO_IP}"
+                     fi
+                     ;;
+    esac
+
+	return 0
+
+}
+###
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+    echo "MODE is ${ORCH_CMD_MODE} ...... "
+    local L_TMP
+    local L_TMP2
+    local L_TMP3
+    local L_TLOG=/tmp/tmp41506_${AT_JOB}.log
+    #local RELEASE_SCRIPT=/opt/ericsson/sck/lib/releases
+    #local REL=${RELEASE=$( grep RELEASE= ${RELEASE_SCRIPT} | head -1 | nawk-F= '{ print $2 }' | sed "s/\"//g" )}
+    #local REL=$( echo ${RELEASE} | sed "s/ //g" )
+    #local L_REL=$(ls -tr /var/opt/ericsson/sck/log/SUG/${REL})
+    local L_ORCH_LOG="/var/ericsson/log/SSERV/sserv_pre_upgrade_tasks_"
+    local L_LOG_EXIST
+    local L_LOG_HAS_CONTENT
+    local L_MODULE_STATUS
+    local FAILURE_STRING="ERROR: Invalid option m supplied"
+
+    #############################################################################
+    #
+    # Run the sserv_pre_upgrade_tasks.bsh module, dependent on the type of
+    # environment we are working in
+    #
+    #############################################################################
+
+    #NOTE: Define these variables in 41506 env file: ORCH_ISO_IP, CI_MWS_BIP   
+    # In this test the module runs successfully
+
+    echo "MODE is ${ORCH_CMD_MODE} ...... "
+    echo "temporary tee file is ${L_TLOG}"
+    echo " "
+    case ${ORCH_CMD_MODE} in 
+        local)       echo "Option 1 - run locally on the box"
+                     /var/tmp/sserv/sserv_pre_upgrade_tasks.bsh | tee ${L_TLOG}
+                     L_TMP=( ${PIPESTATUS[0]} )
+                     ;;
+        ssh_fab)     echo "Option 2 - Run locally on box but ssh back to MWS to Run via Fabric"
+                     ssh -o StrictHostKeyChecking=no $STUB_USER@$STUB_LOC "fab -H $ORCH_SERVER -f /tmp/stub.py -u $ORCH_USER sserv_pre_upgrade_tasks:options=" | tee ${L_TLOG}
+                     L_TMP=( ${PIPESTATUS[0]} )
+                     ;;
+        local_fab)   echo "Option 3 - Run via fabric from MWS"
+    	             fab -H $ORCH_SERVER -f /tmp/stub.py -u $ORCH_USER sserv_pre_upgrade_tasks:options="-m",server_type=${ORCH_SERVER_TYPE},mws_ip=${CI_MWS_IP},sserv_media=${ORCH_OMSAS_MEDIA},path_to_orch_depot=${ORCH_UPGRADE_DIR} | tee ${L_TLOG}
+                     L_TMP=( ${PIPESTATUS[0]} )
+                     ;;
+        ssh_frm_mws) echo "Option 4 - Run via SSH from MWS"
+    	             su - orcha -c "ssh -o StrictHostKeyChecking=no orcha@$ORCH_ISO_IP 'PATH=$PATH:/usr/sbin:/sbin; /usr/local/bin/sudo /var/tmp/sserv/sserv_pre_upgrade_tasks.bsh -m' ${ORCH_SERVER_TYPE} ${CI_MWS_BIP} ${ORCH_OMSAS_MEDIA} ${ORCH_UPGRADE_DIR}" | tee ${L_TLOG}
+                     L_TMP=( ${PIPESTATUS[0]} )
+                     ;;
+        *)         echo "You have not selected an ORCH_CMD_MODE correctly in your Environment File."
+                     return 1
+                     ;;
+    esac
+
+    # Check the return status of slu_pre_upgrade_verification.bsh whichever way it was run.
+    #
+    if [ ${L_TMP} -eq 0 ]; then
+        echo "TEST FAIL: module completed successfully. This was not expected."
+        return 1
+    fi
+
+    # Check that the logfile created above exists
+    #
+    echo "checking console tee file exists"
+    ls "${L_TLOG}" > /dev/null 2>&1
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        echo "TEST FAIL: console output tee file found."
+        return 1
+    fi
+
+    # Check to see if any commands failed during execution of the module
+    #
+    echo "checking for syntax errors etc"
+    egrep -i 'ambiguous redirect|Syntax error|unexpected token|parse error|Permission denied|Undefined variable|Stale NFS' ${L_TLOG}
+    retVal=$?
+    if [ ${retVal} -eq 0 ]; then
+        echo "TEST FAIL: Code Errors were found, please check output."
+        return 1
+    fi
+
+    # Output from the module includes "NOK" if there are any errors. Check for these in the log file.
+    #
+    echo "checking no NOK in output"
+    egrep -i "\[NOK\]" ${L_TLOG}
+    retVal=$?
+    if [ ${retVal} -eq 0 ]; then
+        echo "TEST FAIL: NOK found in output"
+    fi
+    # 
+
+    # Check for the expected failure string in the console file
+    echo "Checking for failure string in the console log file"
+    egrep -i "${FAILURE_STRING}" ${L_TLOG} > /dev/null
+    retVal=$?
+    if [ ${retVal} -ne 0 ] ; then
+        echo "TEST FAIL: Expected failure string not found in console output."
+        return 1
+    fi
+
+    # Extract the name of the module log file from the console output file
+    echo "Checking for orchestrator logfile in console output"
+    #LOGF=$(cat ${L_TLOG} | egrep -i "Logfile location:" | egrep -i "${L_ORCH_LOG}" | sed 's/.*Logfile location: //'  | sed 's/.log .*/.log/')
+    LOGF=$(cat ${L_TLOG} | egrep -i "Refer to logfile" | egrep -i "${L_ORCH_LOG}" | sed 's/.*Refer to logfile //'  | sed 's/.log .*/.log/')
+    if [ "${LOGF}" != "" ]; then
+        # If log file name is extracted this is an error
+        echo "TEST FAIL: Module log file name was found in console output."
+        return 1
+    else
+        return 0
+    fi
+
+    # Get details of the module log file dependant on how we are running
+    case ${ORCH_CMD_MODE} in
+        local)	# Does the log file exist
+                test -f ${LOGF}
+                L_LOG_EXIST=$?
+
+                # Does the log file have any content
+                echo "Checking the module logfile."
+                test -s ${LOGF}
+                L_LOG_HAS_CONTENT=$?
+
+                # Did the module complete successfully according to the log file
+                cat ${LOGF} | grep -i 'module completed successfully'
+                L_MODULE_STATUS=$?
+                ;;
+        *)	# Does the log file exist
+                su - orcha -c "ssh -o StrictHostKeyChecking=no orcha@$ORCH_ISO_IP \"test -f ${LOGF}\""
+		L_LOG_EXIST=$?
+
+                # Does the log file have any content
+                su - orcha -c "ssh -o StrictHostKeyChecking=no orcha@$ORCH_ISO_IP \"test -s ${LOGF}\""
+                L_LOG_HAS_CONTENT=$?
+
+                # Did the module complete successfully according to the log file
+                su - orcha -c "ssh -o StrictHostKeyChecking=no orcha@$ORCH_ISO_IP \"egrep -i 'module completed successfully' ${LOGF}\"" > /dev/null 2>&1
+                L_MODULE_STATUS=$?
+                ;;
+    esac
+
+    # Exit  with error if the module log file does not exist
+    if [ ${L_LOG_EXIST} -ne 0 ]; then
+        echo "ERROR: Log file ${LOGF} does not exist."
+        return 1
+    fi
+
+    # Exit with error if the module log file has no content.
+    if [ ${L_LOG_HAS_CONTENT} -ne 0 ]; then
+        echo "ERROR: Log file ${LOGF} has no content."
+        return 1
+    fi
+
+    # Check for the expected failure string in the log file
+    echo "Checking for failure string in the log file"
+    egrep -i "${FAILURE_STRING}" ${L_TLOG} > /dev/null
+    retVal=$?
+    if [ ${retVal} -ne 0 ] ; then
+        echo "TEST FAIL: Expected failure string not found in console output."
+        return 1
+    fi
+
+    # Exit with error if the module failed.
+    if [ ${L_MODULE_STATUS} -eq 0 ]; then
+        echo "ERROR: Log file ${LOGF} shows the module run succeeded."
+        return 1
+    fi
+
+    return 0
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+
+        rm -f /tmp/tmp41506_${AT_JOB}.log || return 1
+
+        return 0
+
+}

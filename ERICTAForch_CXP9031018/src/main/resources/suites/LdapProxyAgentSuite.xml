@@ -1,0 +1,8 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="LdapProxyAgentSuite">
+    <test name="LdapProxyAgentSuite">
+        <classes>
+            <class name="com.ericsson.oss.orchestrator.test.cases.LdapProxyAgentPwdScenario" />
+        </classes>
+    </test>
+</suite>

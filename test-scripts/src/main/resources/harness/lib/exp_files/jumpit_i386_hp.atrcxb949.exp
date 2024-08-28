@@ -1,0 +1,154 @@
+set force_conservative 1
+set timeout -1 
+set core [lindex $argv 4]
+set gran [lindex $argv 5]
+set wran [lindex $argv 6]
+set option [lindex $argv 7]
+set cifip [lindex $argv 2]
+set server [lindex $argv 1]
+set ilom [lindex $argv 8]
+set prompt "^.*-> $"
+set prompt_dm "> $"
+set state 0
+set timeout 5400
+spawn telnet atrcx1089.athtem.eei.ericsson.se 
+expect "login:"
+send "root\r"
+expect "assword:"
+send "dmbld23\r"
+expect "#"
+send "bash\r"
+expect "#"
+send "/usr/bin/ssh Administrator@$ilom set /system1/bootconfig1/bootsource5 bootorder=1\r"
+expect -timeout 10 "Are you sure you want to continue connecting (yes/no)" {send "yes\r"; exp_continue}
+expect "password: "
+send "shroot12\r"
+expect -re $prompt 
+send_user "Initiating Network Connection...\n"
+expect "#" 
+send_user "Connection to HP BLADE ILO...\n"
+send "ssh Administrator@$ilom\r"
+expect "password: "
+send "shroot12\r"
+expect -re $prompt 
+
+set timeout 200
+send "vsp\r"
+exec sleep 5
+send "\r"
+
+expect -timeout 10 "login:" {send "root\r"}
+expect -timeout 10 "Password:" {send "shroot\r"}
+expect -timeout 10 "#" {send "/ericsson/core/etc/clear_scsi3_keys\r"}
+expect -timeout 10 "Are you sure you wish to continue (y/n)? \\\[y] " {send "y\r"}
+exec sleep 15
+send \033(
+exec sleep 5
+
+
+
+send "reset /system1\r"
+expect -re $prompt
+exec sleep 200
+send "set /system1/bootconfig1/bootsource3 bootorder=1\r"
+expect -re $prompt
+send "stop /system1/oemhp_vsp1\r"
+expect -re $prompt
+send "vsp\r"
+set timeout 2800
+send_user "Connected..\1"
+expect -timeout 10 "Enter disks for first Plex of ossdg" {send "\r"; exp_continue}
+expect_after timeout exit
+set timeout 21600
+while 1 {
+expect {
+ "Disks for vxfendg1 disk group <c0t5006016F44604B47d0 c0t5006016F44604B47d1 c0t5006016F44604B47d2> >>"  {send "\r"}
+ "Disks for vxfendg2 disk group <c0t5006016F44604B47d3 c0t5006016F44604B47d4 c0t5006016F44604B47d5> >>"  {send "\r"}
+ "Are you sure you wish to continue (y/n)"  {send "\r"}
+ "Stage (R)e-Start, (A)bort or (C)ontinue.  <Continue> >"  {send "\r"}
+ "\\\[c0t5006016F44604B47d6]:"  {send "\r"}
+ "\\\[c0t5006016F44604B47d7]:"  {send "\r"}
+ "\\\[c0t5006016F44604B47d8]:"  {send "\r"}
+ "\\\[c0t5006016F44604B47d9]:"  {send "\r"}
+ "Stage (R)e-Start, (A)bort or (C)ontinue.  <Continue> >"  {send "\r"}
+ "Enter the cluster name  <ossrc_cluster> >>"  {send "\r"}
+ "Do you wish to accept this Cluster ID <YES>"  {send "\r"}
+ "Stage (R)e-Start, (A)bort or (C)ontinue.  <Continue> >"  {send "\r"}
+ "Do you want to accept these defaults (YES/NO) <YES> >"  {send "\r"}
+ "Stage (R)e-Start, (A)bort or (C)ontinue.  <Continue> >"  {send "\r"}
+ "Test IP Address for  bnxe4: <0.0.0.0>         >>"  {send "10.44.193.106\r"} 
+ "Test IP Address for  bnxe5: <0.0.0.0>         >>"  {send "10.44.193.107\r"} 
+ "Storage VIP Address         <0.0.0.0>         >>"  {send "10.44.193.108\r"}
+ "Netmask                     <255.255.255.0>   >>"  {send "\r"}
+ "Stage (R)e-Start, (A)bort or (C)ontinue.  <Continue> >"  {send "\r"}
+ "OSS System Identifier                 <oss1>            >>"  {send "xb947\r"}
+ "NAS master Password                   <>                >>"  {send "master\r"}
+ "NAS support Password                  <>                >>"  {send "symantec\r"}
+ "IP address for NAS1 server            <0.0.0.0>         >>"  {send "10.44.193.227\r"}
+ "IP address for NAS2 server            <0.0.0.0>         >>"  {send "10.44.193.227\r"}
+ "IP address for NAS Console            <0.0.0.0>         >>"  {send "10.44.193.204\r"}
+ "Stage (R)e-Start, (A)bort or (C)ontinue.  <Continue> >"  {send "\r"}
+ "Test IP Address for  bnxe0: <0.0.0.0>         >>"  {send "10.44.192.120\r"}
+ "Test IP Address for  bnxe1: <0.0.0.0>         >>"  {send "10.44.192.121\r"}
+ "Default router IP Address   <0.0.0.0>         >>"  {send "10.44.192.1\r"}
+ "Netmask                     <255.255.255.0>   >>"  {send "\r"}
+ "IP Address for NIC   bnxe6: <200.200.200.15>  >>"  {send "\r"}
+ "Netmask                     <255.255.255.0>   >>"  {send "\r"}
+ "IP Address for NIC   bnxe7: <0.0.0.0>         >>"  {send "10.0.2.88\r"}
+ "Netmask                     <255.255.255.0>   >>"  {send "\r"}
+ "Virtual IP address for OSSFS        <0.0.0.0>         >>"  {send "10.44.192.122\r"}
+ "Virtual IP address for PMS          <10.44.192.122>   >>"  {send "\r"}
+ "Virtual IP address for CMS          <10.44.192.122>   >>"  {send "\r"}
+ "Virtual IP address for Sybase       <0.0.0.0>         >>"  {send "10.44.192.125\r"}
+ "Virtual IP address for SNMP         <0.0.0.0>         >>"  {send "10.44.192.126\r"}
+ "Virtual IP address for OSS bkup     <0.0.0.0>         >>"  {send "10.0.2.89\r"}
+ "Virtual IP address for Sybase bkup  <0.0.0.0>         >>"  {send "10.0.2.90\r"}
+ "Stage (R)e-Start, (A)bort or (C)ontinue.  <Continue> >"  {send "\r"}
+ "Total number of GSM Cells"  {send "0\r"}
+ "Total number of UTRAN Cells"  {send "100\r"}
+ "Total number of LTE Cells"  {send "0\r"}
+ "Total number of Core Nodes" {send "2\r"}
+ "Total number of  TDRAN Cells" {send "0\r"}
+ "How many AXD based nodes are to be supported (0-75)" {send "0\r"}
+ "Will the TGR application be used" {send "YES\r"}
+ "How many TeS nodes" {send "0\r"}
+ "Allocate space for SGW" {send "YES\r"}
+ "Allocate space for PMS" {send "YES\r"}
+ "Allocate space for EBSW" {send "YES\r"}
+ "Allocate space for EBS-S" {send "YES\r"}
+ "Please enter the number of sites that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the combined number of cells on all OSS-RC servers that will be audited by IRATHOM application" {send "0\r"}
+ "Please enter the number of STN nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of MGW nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of SGSN nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of SGSN MME nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of GGSN nodes per OSS-RC" {send "0\r"}
+ "Please enter the number of 2G/3G SAUs per OSS-RC" {send "0\r"}
+ "Please enter the number of 4G SAUs per OSS-RC" {send "0\r"}
+ "Please enter the number of APG43 nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of Redback SmartEdge nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of SASN based nodes with SARA functionality that the OSS-RC installation will support" {send "0\r"}
+ " \\\[ii]" {send "ii\r"}
+ "The hostname of the OSS server" {send "\r"}
+ "Enter the Netgroup name" {send "\r"}
+ "The default password for the OSS-RC sybase users" {send "sybase11\r"}
+ "The timezone for your geographical region" {send "GB-Eire\r"} "defaultrouter IP address" {send "\r"}
+ "NAMESERVERS" {send "159.107.173.3\r"}
+ "DNSDOMAIN" {send "athtem.eei.ericsson.se\r"}
+ "LDAPDOMAIN" {send "athtem.eei.ericsson.se\r"}
+ "SLS_SERVER" {send "\r"}
+ "SENTINEL_LICENSE_FILE_PATH" {send "\r"}
+ "SEC_TYPE" {send "\r"}
+ "VXVMLIC" {send "[lindex $argv 2]\r"}
+ "NETWORK_TYPE" {send "\r"}
+ "IM_ROOT" {send "ONRM_ROOT_MO\r"}
+ "X29_SUFF" {send "\r"}
+ "NT_SERVER_IPADDRESS" {send "\r"}
+ "WAS_IP_1" {send "\r"}
+ "Are these values ok" {send "y\r"}
+ "Successfully executed core" {break}
+ timeout	{break}
+ }
+}
+exec sleep 600
+send "exit\r"

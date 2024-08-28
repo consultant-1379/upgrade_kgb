@@ -1,0 +1,7 @@
+SPEC_CP_NAME="Sol_only_test_setup"
+SPEC_CP_ID=13
+SPEC_CP_DESC="Campaign for solaris only install and configure SFS test environment"
+SPEC_CP_AUTHOR=1
+SPEC_CP_CONTINUEONFAILURE=1
+SPEC_CP_TIMEOUT=3000000
+SPEC_CP_OBJ_IDS=(TS108 TC1423 TC1366 TC1439 TC1448)

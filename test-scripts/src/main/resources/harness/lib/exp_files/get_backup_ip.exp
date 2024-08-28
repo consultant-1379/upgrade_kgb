@@ -1,0 +1,90 @@
+#!./expect -- 
+
+set timeout 20 
+#exp_internal 1
+log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set d2 "\$2"
+set d3 "\$3"
+set d4 "\$4"
+set connected_over_backup "NO"
+
+
+#main
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${ADMIN1}.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+ 		timeout {
+			spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${ADMIN2}.athtem.eei.ericsson.se
+				while 1 {
+        				expect {
+                				"Are you sure you want to continue connecting" {
+                        					send "yes\r"}
+
+                				"Password:" {
+                        					send "shroot\r"
+                        					break}
+                				timeout {exit 1}
+						}
+					}
+			expect "#"
+			send "ssh ${ADMIN1}-priv\r"
+        			while 1 {
+                			expect {
+                        			"${ADMIN1}\{root\}" { 
+							set connected_over_backup "YES"
+                                			break}
+
+                        		timeout {
+                                		puts "warning: timed out"
+                                		exit 1}
+                        			}
+        				}
+			break
+			}
+		}
+	}
+	
+expect "#"
+
+send "ifconfig bnxe7 inet | grep inet | awk '{print $d2}'\r"
+expect -re "\[0-9]\{1,3\}\[\.]\[0-9]\{1,3\}\[\.]\[0-9]\{1,3\}\[\.]\[0-9]\{1,3\}"
+set backupip1 [lindex $expect_out(0,string) 0]
+expect "#"
+send "grep $backupip1 /ericsson/config/cluster.ini > /dev/null  && echo ok || echo fault\r"
+        expect "#"
+        set c1 $expect_out(buffer)
+        set c2 [split $c1 "\r\n"]
+        if {[lindex $c2 2] != "ok"} {
+	exit 1
+        }
+send "grep block /etc/ipf/*.conf > /dev/null && echo ISOLATED || echo LIVE\r"
+        expect "#"
+        set d1 $expect_out(buffer)
+        set d2 [split $d1 "\r\n"]
+        if {[lindex $d2 2] == "LIVE" || [lindex $d2 2] == "ISOLATED" } {
+		set status [lindex $d2 2]
+	} else {
+	send_user "problem 1 [lindex $d2 2]"
+
+	exit 1
+        }
+
+if {$status == "LIVE" && $connected_over_backup == "NO" } {
+		send_user "LIVE;$backupip1"
+		exit 0
+        }
+if {$status == "ISOLATED" && $connected_over_backup == "YES" } {
+		send_user "ISOLATED;$backupip1"
+                exit 0
+        }
+exit 1

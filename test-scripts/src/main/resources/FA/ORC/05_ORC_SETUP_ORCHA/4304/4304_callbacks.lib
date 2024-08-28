@@ -1,0 +1,253 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+    
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+	local retVal=0
+	local TMPORCHAFILE=/tmp/4304_orcha_list_${AT_JOB}.tmp
+	local TMPF=/tmp/4304_serv_list_${AT_JOB}.tmp
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+	echo "checking env vars"
+	if [ "${ORCH_TYPE}xxx" = "xxx" ]; then
+		echo "Variable ORCH_TYPE is not set. Check your environment file"
+		return 1
+	else 
+		echo "ORCH_TYPE: ${ORCH_TYPE}"
+	fi
+	
+	# Build the List of Servers and Passwords
+	
+	if [ "${ORCH_TYPE}" = "CLUSTER" ]; then
+		echo "Setting up orcha keys for ORCH_TYPE CLUSTER List"
+        echo "ADMIN,$ORCH_SERVER,$ORCH_PASS" > $TMPF
+        if [ "$ORCH_SERVER_LIVE" != "" ]; then
+            echo "ADMIN,$ORCH_SERVER_LIVE,$ORCH_PASS_LIVE" > $TMPF
+        fi
+    elif [ "${ORCH_TYPE}" = "VAPP" ]; then
+        local LIST_SERV
+		echo "Setting up orcha keys for ORCH_TYPE VAPP List"	
+        echo "ADMIN,ossmaster,shroot" >> $TMPF
+    else
+        echo "ORCH_TYPE ${ORCH_TYPE} not recognised"
+        retVal=$?
+		if [ "${retVal}" -ne 0 ] ; then
+			echo "Test Case Failed"
+			return 1
+		fi
+	fi
+	
+	OIFS=$IFS
+	IFS=,
+	# Change the server password
+	while read host_type host passwd; do
+		echo "Changing password for $host_type server $host to $passwd"
+		./set_root_password_exp_vapp.exp "$host" "$passwd"
+        retVal=$?
+		if [ "${retVal}" -ne 0 ] ; then
+			echo "Test Case Failed top change password"
+			return 1
+		fi
+	done < $TMPF
+	
+	echo "ADMIN,${ORCH_SERVER},"'-O=R5ch*?/4' > $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},"'OR4ch!"$%^&*()_+' >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},"'-OR2ch!$%^&*()?/_+' >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},"'-ORch$182' >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},""OR7ch=#~\4" >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},"'OR8ch=#~@' >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},""ORC9ch{'|}" >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},""ORC6ch;:" >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},""ORC6ch<>,." >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},"'zyxw$1ZX' >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},""OrC{}@12A" >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},"'O|r#@12A' >> $TMPORCHAFILE
+	echo "ADMIN,${ORCH_SERVER},"'Orch@12A' >> $TMPORCHAFILE
+	
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+
+    TMPF=/tmp/4304_serv_list_${AT_JOB}.tmp
+	TMPORCHAFILE=/tmp/4304_orcha_list_${AT_JOB}.tmp
+	TMPF_single=/tmp/4304_serv_single_${AT_JOB}.tmp
+	if [ ! -f "$TMPF" ]; then
+		echo "Test Case Failed: File $TMPF does not exist"
+		return 1
+	fi
+	
+	OIFS=$IFS
+	IFS=,
+	while read host_type host passwd; do
+		echo "=============================================="
+		echo "Changing Orcha User password for $host_type server $host to $passwd"
+		echo "=============================================="
+		su - orcha -c "/ericsson/orchestrator/bin/setup_orcha_user.bsh -r -f $TMPF"
+		if [ "${ORCH_TYPE}" = "CLUSTER" ]; then
+			echo "Setting up orcha keys for ORCH_TYPE CLUSTER"
+			./setup_exp_cluster.exp $TMPF "$passwd"
+			retVal=$?
+			if [ "${retVal}" -ne 0 ] ; then
+				echo "Test Case Failed to change password"
+			return 1
+			fi
+		elif [ "${ORCH_TYPE}" = "VAPP" ]; then
+			./setup_exp_vapp.exp $TMPF "$passwd"
+			retVal=$?
+			if [ "${retVal}" -ne 0 ] ; then
+				echo "Test Case Failed to change password"
+			return 1
+			fi
+		else
+			echo "ORCH_TYPE ${ORCH_TYPE} not recognised"
+			return 1
+		fi
+		
+		#Have to use file, as Fabric does not like special characters being passed
+		echo "ADMIN,${host},${passwd}" > $TMPF_single
+		fab -H ${CI_MWS_BIP} -f /var/tmp/platform_taf/useful/test_ssh_connection.py ssh_remote_server_file:$TMPF_single,orcha
+		retVal=$?
+		if [ "${retVal}" -ne 0 ] ; then
+			echo "Test Case Failed to change password"
+			return 1
+		fi
+	done < $TMPORCHAFILE
+	echo "=============================================="
+	echo "The Following Orcha Password Combinations where SUCCESSFUL"
+	echo "=============================================="
+	cat $TMPORCHAFILE
+	echo "=============================================="
+    return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	TMPF=/tmp/4304_serv_list_${AT_JOB}.tmp
+	OIFS=$IFS
+	IFS=,
+	echo "\t ========================================"
+	echo "ATTEMPTING Remove existing accounts"
+	echo "\t ========================================"
+	su - orcha -c "/ericsson/orchestrator/bin/setup_orcha_user.bsh -r -f $TMPF"
+	
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+
+    return 0
+
+}

@@ -1,0 +1,50 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set ARCH [lindex $argv 1]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$ADMIN1.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+expect "#"
+set timeout 560
+send -- "find /var/opt/ericsson/nms_cif_ist -name '*.txt' -mtime +2 -exec rm {} \\;\r"
+expect "#"
+send -- "rm  /var/opt/ericsson/log/*.3\r" 
+expect "#"
+send -- "rm  /var/opt/ericsson/log/*.2\r" 
+expect "#"
+send -- "rm  /var/opt/ericsson/log/*.1\r" 
+expect "#"
+
+if {$ARCH == "sparc"} {
+send -- "find /var/opt/ericsson/ddc_data/ -name '*.gz' -mtime +2 -exec rm {} \\;\r"
+expect "#"
+send -- "find /var/opt/ericsson/ddc_data  -type d -mtime +2 -name '*12' -exec rm -rf {} \\;\r"
+expect "#"
+}

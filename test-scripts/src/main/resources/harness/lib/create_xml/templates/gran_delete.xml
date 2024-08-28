@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_0.dtd">
+<Model version="1" importVersion="6.0">
+<Delete>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0100-S1,ManagedElement=STN-SIU-F001"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0100-S1,ManagedElement=STN-SIU-F002"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0100-S3,ManagedElement=STN-PICO-F001"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0100-S3,ManagedElement=STN-PICO-F002"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0200-S1,ManagedElement=STN-SIU-F011"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0200-S1,ManagedElement=STN-SIU-F012"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0200-S1,ManagedElement=STN-SIU-F013"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0300-S1,ManagedElement=STN-SIU-F017"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0300-S1,ManagedElement=STN-SIU-F018"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0300-S3,ManagedElement=STN-PICO-F045"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0300-S3,ManagedElement=STN-PICO-F046"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF03"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF03-FW"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF03-RTS"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF03-FW"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF03-RTS"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF05"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF05-FW"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF05-RTS"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF05-FW"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF05-RTS"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF07"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF07-FW"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF07-RTS"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF07-FW"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF07-RTS"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF09"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF09-FW"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF09-RTS"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF09-FW"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=BAF09-RTS"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=LANS-F009"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=LANS-F010"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=LANS-F017"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=LANS-F018"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=MAF01"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=MAF02"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=MAF03"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim,ManagedElement=MAF04"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,ManagedElement=MLPPPRouter"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0100-S1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0100-S3"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0200-S1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0300-S1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=0300-S3"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=NETSim"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=FtpServer_GRAN,FtpService=gran_pmup"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=FtpServer_GRAN,FtpService=gran_backupstore"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=FtpServer_GRAN"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=GRAN_SITE1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSBAF03"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSBAF05"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSBAF07"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSBAF09"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSMAF01"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSMAF02"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSMAF03"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSMAF04"/>
+</Delete>
+</Model>

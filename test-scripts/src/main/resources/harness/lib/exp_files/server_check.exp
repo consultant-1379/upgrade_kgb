@@ -1,0 +1,67 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+
+spawn ssh -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 100
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+send "cat /var/opt/ericsson/sck/data/cp.status\r"
+expect "#"
+send "hasys -state ${SERVER}\r"
+while 1 {
+        expect {
+                "RUNNING" {
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+expect "#"
+send "/ericsson/dmr/bin/dmtool check_for_two_good_mirrors\r"
+set timeout 180
+while 1 {
+        expect {
+                "Found these good mirrors: 1 2" {
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+expect "#"
+send "hastatus -sum\r"
+expect "#"
+send "smtool -l | grep -v started\r"
+expect "#"

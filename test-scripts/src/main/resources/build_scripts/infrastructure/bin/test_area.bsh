@@ -1,0 +1,163 @@
+#!/bin/bash
+#
+# Script to ftp a 3PP Solaris Package to a jump area
+#
+# epatnat 20/01/2014 second version - jenkins
+
+HERE=`pwd`
+BUILD_SERVER=atnfdvm16.athtem.eei.ericsson.se
+ME=`who am I | awk '{print $1}'`
+PKG_NAME=$1
+TEAM_NAME=$3
+echo $TEAM_NAME
+SHIPMENT=$5
+echo $SHIPMENT
+EXPECT=/usr/local/opt/apssystem/cede/r12/lib/jtex/bin/expect
+AT_EXPECT=/home/ossrcci
+JUMP_AREA=/export/jumpstart/teams/${TEAM_NAME}/${SHIPMENT}/test_packages/ossrc_base_sw
+COMMON_ERICjump=$JUMP_AREA/common/
+SPARC_ERICjump=$JUMP_AREA/sparc/
+X86_SPARC_ERICjump=$JUMP_AREA/i386/
+SPARC_EXTRjump=$JUMP_AREA/sparc/
+X86_EXTRjump=$JUMP_AREA/i386/
+COMMON_EXTRjump=$JUMP_AREA/common/
+X86_EXTRsybjump=$JUMP_AREA/i386/
+SPARC_EXTRsybjump=$JUMP_AREA/sparc/
+SHARED_PKG_LOC=/proj/3pp_jenkins/3ppci_shared
+
+cd ${SHARED_PKG_LOC} 
+
+[ ! -f $PKG_NAME.pkg ] && echo "Cant find any $PKG_NAME package, exiting..." && exit 1
+
+PKGINFO=`/usr/bin/pkginfo -ld $PKG_NAME.pkg | grep VERSION`
+PKGNAME=`/usr/bin/pkginfo -ld $PKG_NAME.pkg | grep NAME`
+PKGARCH=`/usr/bin/pkginfo -ld $PKG_NAME.pkg | grep ARCH`
+PKGPRODNUM=`/usr/bin/pkginfo -ld $PKG_NAME.pkg | grep VSTOCK`
+
+touch $ME
+touch $@
+
+DATE=`date '+%y%m%d_%H%M%S'`
+NAME=${PKG_NAME}_${DATE}
+FTP_LOG=~/3PP_FTP_LOG_$DATE.log
+
+#  Determine the jump directory
+
+if [[ $PKG_NAME = ERIC* ]]
+then
+	if [[ $PKG_NAME = ERIChpov ]] || [[ $PKG_NAME = ERICbrlndSPARC ]]
+	then
+		PKG_DIR=$SPARC_ERICjump
+B
+	elif [[ $PKG_NAME = ERICbrlndi86 ]]
+	then	
+		PKG_DIR=$X86_SPARC_ERICjump
+	else
+		PKG_DIR=$COMMON_ERICjump
+	fi
+else
+	if [[ $PKG_NAME = EXTRsyb ]]
+	then
+		if [[ $PKGARCH = "      ARCH:  i386" ]]
+		then
+			PKG_DIR=$X86_EXTRsybjump
+		elif [[ $PKGARCH = "      ARCH:  sparc" ]]
+		then
+			PKG_DIR=$SPARC_EXTRsybjump
+		else
+			echo "This is neither a sparc or an x86 package. Please check the ARCH field in the pkginfo"
+			exit 1
+		fi
+	elif [[ $PKGARCH = "      ARCH:  sparc,i386" ]] || [[ $PKGARCH = "      ARCH:  i386,sparc" ]]
+	then
+		PKG_DIR=$COMMON_EXTRjump
+	elif [[ $PKGARCH = "      ARCH:  sparc" ]] || [[ $PKGARCH = "      ARCH:  SPARC" ]]
+	then
+		echo "gone inthis loop"
+		PKG_DIR=$SPARC_EXTRjump
+	elif [[ $PKGARCH = "      ARCH:  i386" ]]
+	then
+		PKG_DIR=$X86_EXTRjump
+	else
+		echo "This is neither a sparc, x86, or common package. Please check the ARCH field in the pkginfo"
+		exit 1
+	fi
+fi
+
+
+
+	echo ""
+	echo -en '\E[47;34m'"\033[1mUploading $PKG_NAME.pkg :  $PKGINFO!!!\033[0m"
+	echo ""
+	echo ""
+	echo -en '\E[47;34m'"\033[1mBuilt for Architecture : $PKGARCH\033[0m"
+	echo ""
+	echo ""
+	echo -en '\E[47;34m'"\033[1mProd num : $PKGPRODNUM\033[0m"
+	echo ""
+	echo ""
+	echo -en '\E[31;7m'"\033[5m *** N.B. !! Please ensure that the above PRODUCT NUMBER is correct for this package and architecture!! *** \033[0m"
+        echo ""
+        echo ""
+	echo -en '\E[47;34m'"\033[1mTarget Jump area : $PKG_DIR\033[0m"
+	echo ""
+	echo ""
+	echo -en '\E[47;34m'"\033[1mTarget Jumpserver : $BUILD_SERVER\033[0m"
+	echo ""
+	echo ""
+	echo -en '\E[47;34m'"\033[1mTarget Jumpserver directory : $PKG_DIR\033[0m"
+	echo ""
+        echo ""
+	echo -en '\E[41;32m'"\033[1mCheck the timestamp on the Target Jumpserver directory HERE: \033[0m"
+        echo ""
+        echo ""
+	TIMESTAMP=`ls -altrh /net/atnfdvm16.athtem.eei.ericsson.se/$PKG_DIR | grep $PKG_NAME` 
+	echo $TIMESTAMP
+	echo ""
+        echo ""
+
+	if [[ $PKG_NAME = EXTR* ]];then
+		echo "EXTR"
+		7z a $PKG_NAME.pkg.7z $PKG_NAME.pkg
+		ftp -n -v -i <<-EOF  
+		open $BUILD_SERVER
+                user root shr@@t123
+                bin
+                cd $PKG_DIR
+                put $PKG_NAME.pkg.7z
+		close	
+		quit
+		EOF
+                echo $TEAM_NAME
+                ${EXPECT} ${AT_EXPECT}/test_jump.exp ${SHIPMENT} ${BUILD_SERVER} ${TEAM_NAME}
+
+ 	else	
+		#echo "non_EXTR"
+		ftp -i -n $BUILD_SERVER <<-EOF 
+                user root shr@@t123
+                bin
+                cd $PKG_DIR
+                put $PKG_NAME.pkg
+		EOF
+
+                ${EXPECT} ${AT_EXPECT}/test_jump.exp  ${SHIPMENT} ${BUILD_SERVER} ${TEAM_NAME}
+
+          
+	fi
+   if [ $? -eq 0 ];
+     then
+	echo ""
+	echo -en '\E[41;32m'"\033[1mSUCCESS!!\033[0m"
+	echo ""
+        echo ""; echo -en '\E[43;30m'"\033[1m$ME has uploaded $PKG_NAME.pkg, $PKGINFO, built for $PKGARCH, with prod num $PKGPRODNUM to $BUILD_SERVER, directory $PKG_DIR for testing, on `date` for testing\033[0m" >> $FTP_LOG
+        /vobs/3pp/Solaris/CIF/test/upload_scripts/mailto.bsh "$PKG_NAME" "$PKGINFO" "$PKGNAME" "$PKGARCH" "$PKGPRODNUM" "$0" "$PKG_DIR" "$TIMESTAMP"
+        
+		fi
+
+echo ""
+echo -en '\E[47;34m'"\033[1mSee log $FTP_LOG for result\033[0m"
+echo ""
+echo ""
+cat $FTP_LOG
+echo ""
+exit 0

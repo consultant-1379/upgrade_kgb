@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Friday 23rd of May 2014 16:02:55
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="SCK"
+SPEC_UC_NAME="SCK_X86_MS_POSTINSTALL_WITH_DPASS_PPASS"
+SPEC_TC_ID=642
+SPEC_TC_SLOGAN="Expanding Databases to their Final Sizes"
+SPEC_TC_TYPE="KGB"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="high"
+SPEC_TC_AUTOMATED=1
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=4500
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xjithbv"
+SPEC_TC_AUTOMATOR="estenea"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+#- Admin 1 has been installed
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#- Run the following commands depending on the r-state of ERICsck:
+#
+## /opt/ericsson/sck/bin/config_ossrc_server -a -U 0 -G 0 -C 0 -L 0 -i 0 -F | tee /tmp/config_ossrc_logs
+#
+#or
+#
+## /opt/ericsson/sck/bin/config_ossrc_server -a -UTRAN 0 -GSM 0 -CORE 0 -LTE 0 -IRAT 0 -F | tee /tmp/config_ossrc_logs
+#
+#NB: Syntax for config_ossrc_server changed in ERICsck R24C05
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+#- Databases have been expanded according to cell dimensioning information.  Expansion will fail if there is not enough space.
+# END_POST_CONDITIONS

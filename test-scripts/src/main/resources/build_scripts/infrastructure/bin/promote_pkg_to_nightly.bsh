@@ -1,0 +1,36 @@
+#!/bin/bash
+#WORKSPACE="/home/eeidle/repos/cominf_test"
+#EXPECT="/app/expect/5.45/LMWP3/bin/expect"
+CI_FQ_SHIPMENT="O14_3/14.3.7.daily"
+export CI_TEAM=infra
+export CI_PKG_ARCH=common
+export CI_PKG='ERICdmr.pkg'
+export dir=ossrc_base_sw
+CI_MWS_HOSTNAME=atnfdvm16.athtem.eei.ericsson.se
+CI_MWS_ROOTPW=shr@@t123
+source_path="/export/jumpstart/teams/${CI_TEAM}/OSSRC_${CI_FQ_SHIPMENT}/test_packages/$dir/$CI_PKG_ARCH/ERICdmr.pkg"
+file_exist=`$EXPECT ${WORKSPACE}/SOURCES/build_scripts/infrastructure/bin/ssh_setup2.sh ssh "root@${CI_MWS_HOSTNAME} '\'test -f $source_path\''"  $CI_MWS_ROOTPW` #||  echo "Error - $source_path file not found" && exit 1 
+if [ $? == 0 ]; then
+     echo "Success - ${CI_PKG} exists in ${CI_TEAM} team test packages folder ${source_path}"
+else
+     echo "Error - ${CI_PKG} does not exist in ${CI_TEAM} team test packages folder ${source_path}"
+     exit 1
+fi
+
+#$EXPECT ${WORKSPACE}/SOURCES/build_scripts/infrastructure/bin/ssh_setup2.sh ssh "root@${CI_MWS_HOSTNAME} '\'test -f $source_path\''"  $CI_MWS_ROOTPW
+
+# copy package from infra team on MWS to ci team folder for nightly jumps
+file_copy=`$EXPECT ${WORKSPACE}/SOURCES/build_scripts/infrastructure/bin/ssh_setup2.sh ssh "root@${CI_MWS_HOSTNAME} '\'cp /export/jumpstart/teams/${CI_TEAM}/OSSRC_${CI_FQ_SHIPMENT}/test_packages/$dir/${CI_PKG_ARCH}/${CI_PKG} /export/jumpstart/teams/ci/OSSRC_${CI_FQ_SHIPMENT}/test_packages/$dir/${CI_PKG_ARCH}/\''" ${CI_MWS_ROOTPW}`
+
+echo "$file_copy"
+
+dest_path="/export/jumpstart/teams/ci/OSSRC_${CI_FQ_SHIPMENT}/test_packages/$dir/$CI_PKG_ARCH/${CI_PKG}"
+file_exist=`$EXPECT ${WORKSPACE}/SOURCES/build_scripts/infrastructure/bin/ssh_setup2.sh ssh "root@${CI_MWS_HOSTNAME} '\'test -f $dest_path\''"  $CI_MWS_ROOTPW`
+#$EXPECT ~/repos/cominf_test/SOURCES/build_scripts/infrastructure/bin/ssh_setup2.sh ssh "root@${CI_MWS_HOSTNAME} '\'test -f $dest_path\''"  $CI_MWS_ROOTPW
+if [ $? == 0 ]; then
+     echo "Success - ${CI_PKG} is in nightly build"
+else
+     echo "Error - failed to copy ${CI_PKG} to nightly build ${dest_path}"
+     exit 1
+fi
+

@@ -1,0 +1,34 @@
+set force_conservative 1
+set BUIP2 [lindex $argv 0]
+set MWS_HOSTNAME [lindex $argv 1]
+set MWS_ROOTPW [lindex $argv 2]
+set timeout 54
+set D "\$"
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${MWS_HOSTNAME}
+expect "assword:"
+send "$MWS_ROOTPW\r"
+expect "#"
+send "ssh ${BUIP2}\r"
+while 1 {
+expect {
+ "Are you sure you want to continue connecting" {send "yes\r"}
+ "assword" {
+                send "shroot\r"
+                break }
+ timeout        {exit 1}
+ }
+}
+set timeout 3600 
+expect "#"
+send "/opt/ericsson/nms_cif_sm/bin/smtool -offline fth_bootstrap -reason=upgrade -reasontext=upgrade\r"
+expect "#"
+sleep 20
+send "/opt/ericsson/nms_cif_sm/bin/smtool -offline fth_1 -reason=upgrade -reasontext=upgrade\r"
+expect "#"
+sleep 20
+send "/opt/ericsson/sck/bin/split_cluster isolate_system\r"
+expect " #"
+send "/opt/ericsson/sck/bin/split_cluster rmip_backup\r"
+expect " #"
+sleep 20

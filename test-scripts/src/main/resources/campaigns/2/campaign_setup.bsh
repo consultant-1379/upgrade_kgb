@@ -1,0 +1,122 @@
+#!/bin/bash
+
+SCRIPTNAME="campaign_setup.bsh"
+SOURCEPATH=~/var/tmp/platform_taf/SOURCES
+CAT=/bin/cat
+
+usage() {
+${CAT} << EOF
+
+Usage:  ${SCRIPTNAME} [-h] [-c <campaign ID>] [-s <campaign stage number>] [-i <test case ID>] [-n <envfile>] 
+
+This script is to be used to set up and run whole test campaigns or a specific test case in a specific stage in a test campaign through Java TAF.
+
+It's purpose is to initialise and export global variables used in the campaign's execution and then run the required campaign or run a 
+specific test case in a specific stage of a specific campaign using campaign.bsh or atcominf.bsh respectively.
+
+A file called "allStages.bsh" is necessary for this script to run successfully. The file must contain all export variables necessary to run the entire campaign.
+The file must also be in the campaign's directory on the test harness, eg. /SOURCES/campaigns/<campaign ID>/allStages.bsh
+
+# In future revisions this script will split the file using the export variables prepends such as "CP_STG1_" and "CP_STG2_" etc .
+
+-h      Print help.
+
+-c <campaign ID>
+	specify the ID number of the campaign to be run. A specified stage from the campaign can be
+	run using the -s flag as well. If the -s flag is not used, the entire campaign will be run.
+
+-s <campaign stage number>
+	specify what stage to run in the campaign specified by the -c flag.
+	MUST be used with the -c flag.
+
+-i <test case ID>
+	specify what test case to run. The test case is run as a single part of a specified stage 
+	in a specified campaign. MUST be used with the -c and -s flags.
+
+-n <envfile>
+        specify env file containing environmental variables such as hardware details etc. These
+        variables can be accessed by the test cases. Env file path is relative to test harness root
+
+EOF
+
+        return 0
+}
+
+option_c=0
+option_s=0
+option_i=0
+option_n=0
+while getopts "hc:s:i:n:" option; do
+  case "$option" in
+    c)  option_c=1
+	CAMPAIGN="$OPTARG"
+	;;
+    s)  option_s=1
+	STAGE="$OPTARG"
+	;;
+    i)  option_i=1
+	TESTID="$OPTARG"
+	;;
+    n)  option_n=1
+	ENVFILE="$OPTARG"
+	;;
+    h)  usage
+        exit 0 
+        ;;
+    ?)  printf "Run \"${SCRIPTNAME} -h\" for help\n" 
+        exit 1
+        ;;
+  esac
+done    
+
+shift $((${OPTIND} - 1))
+if [ "$#" -ne 0 ]; then
+        usage
+        exit 1
+fi
+
+# checks -c flag and -s flag are not both used
+#[[ $option_c -eq 1 && $option_s -eq 1 ]] && echo "ERROR: -c flag and -s flag can not both be selected!\nExiting.." && exit 1
+
+# environment file to use - mandatory argument
+if [[ $option_n -eq 1 ]]; then
+	if [[ ! -s "$ENVFILE" ]]; then
+   		printf "ERROR: Specified environment file \"$ENVFILE\" does not exist or is empty!\nExiting.."
+   		exit 1
+	fi
+else
+	printf "ERROR: Environment file must be specified!\nExiting.."
+	exit 1
+fi
+
+# check specified campaign has a setup script and runs it before running the campaign
+if [[ $option_c -eq 1 ]]; then
+	if [[ $option_s -eq 1 ]]; then
+		STAGEPATH=$SOURCEPATH/campaigns/$CAMPAIGN/stage$STAGE.bsh
+		TESTPATH=$SOURCEPATH/FA
+		if [[ ! -s "$STAGEPATH" ]]; then
+			printf "Specified stage setup script \"$STAGEPATH\" does not exist!\nExiting.."
+			exit 1
+		else 
+			result=""
+			find $TESTPATH -name $TESTID > $result
+			if [[ -z "$result" ]]; then
+				printf "Specified test case script \"$TESTID\" does not exist in harness!\nExiting.."	
+				exit 1
+			fi
+			${STAGEPATH}
+			${SOURCEPATH}/harness/bin/atcominf.bsh -i ${TESTID} -n $ENVFILE
+		fi
+	else
+		CAMPAIGNPATH=$SOURCEPATH/campaigns/$CAMPAIGN/allStages.bsh
+		if [[ ! -s "$CAMPAIGNPATH" ]]; then	
+			printf "Specified setup script \"$CAMPAIGNPATH\" does not exist!"	
+			exit 1
+		fi
+		${CAMPAIGNPATH}
+		${SOURCEPATH}/harness/bin/campaign.bsh -i ${CAMPAIGN} -n $ENVFILE
+	fi
+else
+	printf "ERROR: A campaign number must be specified!\nExiting.."
+	exit 1
+fi

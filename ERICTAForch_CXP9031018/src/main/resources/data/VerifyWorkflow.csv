@@ -1,0 +1,2 @@
+wfile,args,exitCode
+/ericsson/orchestrator/etc/verify_upgrade_status_workflow.xml,-p execute -y --nospinner -o 2,0

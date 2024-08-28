@@ -1,0 +1,324 @@
+echo "=============================="
+echo " "
+echo "   Aggregating Test Results"
+echo " "
+echo "=============================="
+
+
+# Set up variables
+declare TXT_JOB_RESULT="${WORKSPACE}/${BUILD_ID}/results/${BUILD_ID}/atcominf_results_job_*.txt"
+declare HTML_JOB_RESULT="${WORKSPACE}/${BUILD_ID}/results/${BUILD_ID}/index.html"
+declare SED_REMOVE_SLASH="s/ |/,/g"
+declare ENV_FILE_PATH="${WORKSPACE}/SOURCES/build_scripts/infrastructure/etc/env/${ENV_FILE}"
+declare FULL_RESULTS_FILE="/home/ossrcdm/jenkins/workspace/TEST_PIPELINE_FULL_RESULTS.csv"
+declare BRANC_RESULTS_FILE="${WORKSPACE}/TEST_PIPELINE_BRANCH_RESULTS.csv"
+declare FULL_HTML_RESULTS_FILE="/home/ossrcdm/jenkins/workspace/TEST_PIPELINE_FULL_RESULTS.html"
+declare BRANC_HTML_RESULTS_FILE="${WORKSPACE}/TEST_PIPELINE_BRANCH_RESULTS.html"
+declare CLEAN=""
+declare FULL_RESULTS_FILE_ORGINAL="${WORKSPACE}/${BUILD_ID}/results/${BUILD_ID}/TEST_PIPELINE_FULL_RESULTS_ORGINAL.csv"
+declare BRANC_RESULTS_FILE_ORGINAL="${WORKSPACE}/${BUILD_ID}/results/${BUILD_ID}/TEST_PIPELINE_BRANCH_RESULTS_ORGINAL.csv"
+
+function check_supplied_params()
+{
+
+	if [ "${ENV_FILE}xxx" = "xxx" ]; then
+	    echo "Variable ENV_FILE is not set."
+		return 1
+	fi
+
+	if [ "${WORKSPACE}xxx" = "xxx" ]; then
+	    echo "Variable WORKSPACE is not set."
+		return 1
+	fi
+	
+	if [ "${JOB_NAME}xxx" = "xxx" ]; then
+	    echo "Variable JOB_NAME is not set."
+		return 1
+	fi
+	
+	if [ "${BUILD_ID}xxx" = "xxx" ]; then
+	    echo "BUILD ID NOT SET"
+		return 1
+	fi
+	
+	if [ ! -f ${TXT_JOB_RESULT} ]; then
+		echo "Test result file doest not exist: ${TXT_JOB_RESULT}"
+		return 1
+	fi
+	 
+	if [ ! -f ${ENV_FILE_PATH} ]; then
+		echo "ENV file doest not exist: ${ENV_FILE_PATH}"
+		return 1
+	fi
+	
+	# Checks for expected variables. Exit early if these are not set.
+	
+	echo "ENV FILE=${ENV_FILE}"
+	echo "WORKSPACE=${WORKSPACE}"
+	echo "JOB_NAME=${JOB_NAME}"
+	echo "TXT_JOB_RESULT=${TXT_JOB_RESULT}"
+	echo "ENV_FILE_PATH=${ENV_FILE_PATH}"
+	echo "BUILD_ID=${BUILD_ID}"
+	echo "ORCH_SERVER_TYPE=${ORCH_SERVER_TYPE}"
+	
+}
+
+function parse_supplied_params()
+{
+	# Parse the optional parameters
+	#  while getopts ":c" ARG
+	while getopts ":c" opt; do
+		case $opt in
+		c)
+			echo "-c for clean was triggered!" >&2
+			CLEAN="TRUE"
+			;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+		esac
+	done
+	
+	shift $((OPTIND-1))
+	NUM_FIXED_ARGS=$#
+	if [ "$NUM_FIXED_ARGS" -ne "0" ]
+	then
+		if [ "$NUM_FIXED_ARGS" -gt "1" ]
+		then
+			echo "ERROR: Invalid input '${@}' to many parameters"
+			exit 1
+		fi
+		FULL_RESULTS_FILE="/home/ossrcdm/jenkins/workspace/TEST_PIPELINE_FULL_RESULTS_${1}.csv"
+		FULL_HTML_RESULTS_FILE="/home/ossrcdm/jenkins/workspace/TEST_PIPELINE_FULL_RESULTS_${1}.html"
+	fi
+
+	return 0
+ 
+}
+
+function cleanUp(){
+	res=0
+	if [ "${CLEAN}" ]; then
+		echo "=============================="
+		echo " "
+		echo "    #0  Updating Clearining Up"
+		echo " "
+		echo " 		  CLEANUP equals ${CLEAN}"
+		echo "=============================="
+		echo "Removing ${FULL_RESULTS_FILE} "
+		echo "Removing ${BRANC_RESULTS_FILE}"
+		echo "Removing ${FULL_HTML_RESULTS_FILE}"
+		echo "Removing ${BRANC_HTML_RESULTS_FILE}"	
+		rm  -f "${FULL_RESULTS_FILE}" 
+		res=$?
+		if [ ${res} != 0 ]; then
+			echo "Failed to remove files"
+			exit 1
+		fi
+		rm  -f "${BRANC_RESULTS_FILE}"
+		res=$? 
+		if [ ${res} != 0 ]; then
+			echo "Failed to remove files"
+			exit 1
+		fi
+		rm -f "${FULL_HTML_RESULTS_FILE}"
+		res=$?
+		if [ ${res} != 0 ]; then
+			echo "Failed to remove files"
+			exit 1
+		fi
+		rm  -f "${BRANC_HTML_RESULTS_FILE}"
+		res=$?
+		if [ ${res} != 0 ]; then
+			echo "Failed to remove files"
+			exit 1
+		fi
+		echo " Clean-up completed 			"
+		echo "=============================="
+	fi
+	return 0
+}
+
+function updateCSV()
+{
+	res=0
+	
+	echo "=============================="
+	echo "Original Copied from Parent Job"
+	echo " "
+	echo "BRANCH ${BRANC_RESULTS_FILE}"
+	if [ -f "${BRANC_RESULTS_FILE}" ]; then
+		cat "${BRANC_RESULTS_FILE}"
+		cat "${BRANC_RESULTS_FILE}" > "${BRANC_RESULTS_FILE_ORGINAL}" 
+	else
+		echo " No File exists, Creating"
+		touch "${BRANC_RESULTS_FILE_ORGINAL}" 
+	fi
+	echo " "
+	echo " "
+	echo "FULL ${FULL_RESULTS_FILE}"
+	if [ -f "${FULL_RESULTS_FILE}" ]; then
+		cat "${FULL_RESULTS_FILE}"
+		cat "${FULL_RESULTS_FILE}" > "${FULL_RESULTS_FILE_ORGINAL}"
+	else
+		echo " No File exists, Creating"
+		touch  "${FULL_RESULTS_FILE_ORGINAL}"
+	fi
+	echo " "
+	echo "=============================="
+	
+	
+	
+	
+	echo "=============================="
+	echo " "
+	echo "    #1  Updating CSV"
+	echo " "
+	echo "=============================="
+
+	echo "=============================="
+	echo " "
+	echo "    Checking if Header Rows are needed"
+	# Put file header in place for CSV
+	if [ ! -f ${FULL_RESULTS_FILE} ]; then
+		cat ${TXT_JOB_RESULT} | grep "SUITE" | sed "${SED_REMOVE_SLASH}"  | sed "s/.*/&,				JOB NAME, 			 			 			ORCH_SERVER_TYPE/" > ${FULL_RESULTS_FILE}
+		res=$? 
+		echo "    Updated header: ${FULL_RESULTS_FILE}"
+	fi
+	
+	if [ $res != 0 ]; then
+		echo "			Failed to update ${FULL_RESULTS_FILE} header"
+		return 1
+	fi
+	
+	
+	# Put file header in place for CSV
+	if [ ! -f ${BRANC_RESULTS_FILE} ]; then
+		cat ${TXT_JOB_RESULT} | grep "SUITE" | sed "${SED_REMOVE_SLASH}"  | sed "s/.*/&,				JOB NAME, 			 			 			ORCH_SERVER_TYPE/" > ${BRANC_RESULTS_FILE}
+		res=$?
+		echo "    Updated header: ${BRANC_RESULTS_FILE}"
+	fi
+		
+	if [ $res != 0 ]; then
+		echo "			Failed to update ${BRANC_RESULTS_FILE} header"
+		return 1
+	fi
+	
+	echo " "
+	echo "=============================="
+
+	
+	# Remove any existing results for this JOB
+	echo "$(cat "${FULL_RESULTS_FILE}" | grep -v "${JOB_NAME}")" > ${FULL_RESULTS_FILE}
+	echo "$(cat "${BRANC_RESULTS_FILE}" | grep -v "${JOB_NAME}")" > ${BRANC_RESULTS_FILE}
+	
+	echo "=============================="
+	echo "Removing any existing test out put results for ${JOB_NAME}"
+	echo " "
+	echo "BRANCH ${BRANC_RESULTS_FILE}"
+	diff --new-line-format="" --unchanged-line-format="" "${BRANC_RESULTS_FILE_ORGINAL}" "${BRANC_RESULTS_FILE}" | awk {'print $5 $6 $7 $8 $9 $10'}	
+	echo " "
+	echo " "
+	echo "FULL ${FULL_RESULTS_FILE}"
+	diff --new-line-format="" --unchanged-line-format="" "${FULL_RESULTS_FILE_ORGINAL}" "${FULL_RESULTS_FILE}" | awk {'print $5 $6 $7 $8 $9 $10'}
+	echo " "
+	echo "=============================="
+	
+	# Output the Results
+	
+	echo "=============================="
+	echo "Adding the follow out put results for ${JOB_NAME}"
+	echo " "
+	cat ${TXT_JOB_RESULT} | grep "FA" | sed 's/ |/,/g'  | sed "s/.*/&, 			${JOB_NAME},	${ORCH_SERVER_TYPE}/" | awk {'print $5 $6 $7 $8 $9 $10'}
+	
+	echo "Updating Full test report and Branch test report"
+	echo " "
+	cat ${TXT_JOB_RESULT} | grep "FA" | sed 's/ |/,/g'  | sed "s/.*/&, 			${JOB_NAME},	${ORCH_SERVER_TYPE}/" >> ${FULL_RESULTS_FILE}
+	res=$?
+	if [ $res != 0 ]; then
+		echo "Failed to update ${FULL_RESULTS_FILE} test cases"
+		return 1
+	fi
+	cat ${TXT_JOB_RESULT} | grep "FA" | sed 's/ |/,/g'  | sed "s/.*/&, 			${JOB_NAME},	${ORCH_SERVER_TYPE}/" >> ${BRANC_RESULTS_FILE}
+	res=$?
+	if [ $res != 0 ]; then
+		echo "Failed to update ${BRANC_RESULTS_FILE} test cases"
+		return 1
+	fi
+	
+	echo "=============================="
+	echo "Report Locations: for ${JOB_NAME}"
+	echo " "
+	echo "TEST FULL PIPELINE CSV RESULT: ${FULL_RESULTS_FILE}"
+	echo "TEST BRANCH SO FAR ONLY PIPELINE RESULT: ${BRANC_RESULTS_FILE}"
+	echo " "
+	echo "=============================="
+	echo "Following Test Results added"
+	echo " "
+	echo "BRANCH ${BRANC_RESULTS_FILE}"
+	diff --new-line-format="" --unchanged-line-format="" "${BRANC_RESULTS_FILE}" "${BRANC_RESULTS_FILE_ORGINAL}" | awk {'print $5 $6 $7 $8 $9 $10'}
+	echo " "
+	echo " "
+	echo "FULL ${FULL_RESULTS_FILE}"
+	diff --new-line-format="" --unchanged-line-format="" "${FULL_RESULTS_FILE}" "${FULL_RESULTS_FILE_ORGINAL}" | awk {'print $5 $6 $7 $8 $9 $10'}
+	echo " "
+	echo "=============================="
+	
+	rm ${FULL_RESULTS_FILE_ORGINAL}
+	rm ${BRANC_RESULTS_FILE_ORGINAL}
+	
+}
+
+function updateHTML()
+{
+	res=0
+	echo "=============================="
+	echo " "
+	echo "    #2  Updating HTML"
+	echo " "
+	echo "=============================="
+	
+	cat ${HTML_JOB_RESULT} >> ${FULL_HTML_RESULTS_FILE}
+	cat ${HTML_JOB_RESULT} >> ${BRANC_HTML_RESULTS_FILE}
+	
+	echo "TEST FULL PIPELINE HTML RESULT: ${FULL_HTML_RESULTS_FILE}"
+	echo "TEST BRANCH SO FAR HTML PIPELINE RESULT: ${BRANC_HTML_RESULTS_FILE}"
+}
+
+# ***********************************************************************
+#
+#                    Main body of program
+#
+# ***********************************************************************
+
+#**************************
+# Parse supplied parameters
+#**************************
+
+parse_supplied_params "${@}" || exit 1
+
+#**************************
+# Check if all the needed files exist
+#**************************
+check_supplied_params || exit 1
+source "${ENV_FILE_PATH}" 
+
+#**************************
+# Clean up files if the CLEAN option is set
+#**************************
+cleanUp || exit 1
+
+#**************************
+# Aggregate to CSV File
+#**************************
+
+updateCSV || exit 1
+
+#**************************
+# Aggregate to HTML
+#**************************
+
+updateHTML || exit 1
+
+exit 0

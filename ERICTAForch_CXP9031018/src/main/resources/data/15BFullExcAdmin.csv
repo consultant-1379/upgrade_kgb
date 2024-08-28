@@ -1,0 +1,2 @@
+wfile,args,exitCode
+/ericsson/orchestrator/etc/15B_full_ossrc_workflow.xml,-p execute -y --nospinner -o 2 --servertype ADMIN,0

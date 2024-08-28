@@ -1,0 +1,317 @@
+#!/bin/bash
+#
+# Configures a virtual machine for automated network kickstart 
+#
+# Assumptions:  -pre-inirator file has been loaded on MWS  
+# 		-target VM is powered on  
+#		-can SSH login to target VM using root/shroot
+#		-Boot order in BIOS is set to Network, HDD etc
+# 		-the target server is included in the pre-ini file
+#
+#
+#
+
+
+usage() {
+cat << EOF
+
+Usage:  ${G_SCRIPTNAME} [-h] -p <pre-ini file> -f <target profile>
+
+Performs automated network kickstart of target server
+
+-p	pre-inirator file
+-f	target server MWS profile file
+
+Assumptions:   -pre-inirator file has been loaded on MWS
+               -the target server is included in the pre-ini file
+               -target VM is powered on
+               -can SSH login to target VM using root/shroot
+               -Boot order in BIOS is set to Network, HDD etc
+
+
+EOF
+
+return 0
+
+}
+
+cleanupOnExit() {       # Don't call exit here to avoid recursion!
+        local l_exitcode=$?
+        if [ "$l_exitcode" = 1 ]; then
+                echo "** $G_SCRIPTNAME Failed **"
+        fi
+        stty echo 2>/dev/null
+		#add_mws_client_profile 
+}
+
+
+#
+# Function to read client profile
+#
+read_client_profile() {
+	[ -s "$G_TARGET_SERVER_PROFILE_FILE" ] || {
+		echo "Error - target server profile file missing or empty"
+		usage
+		return 1
+	}
+	G_CLIENT_IP_ADDR=$( grep -w CLIENT_IP_ADDR $G_TARGET_SERVER_PROFILE_FILE | awk -F@ '{ print $2 }' )
+	G_CLIENT_HOSTNAME=$( grep -w CLIENT_HOSTNAME $G_TARGET_SERVER_PROFILE_FILE | awk -F@ '{ print $2 }' )
+	G_CLIENT_CONFIGTYPE=$( grep -w CLIENT_INSTALL_PARAMS $G_TARGET_SERVER_PROFILE_FILE | awk -F@ '{ print $NF }' | awk '{ print $NF }' | awk -F= '{print $2}' )
+	[ -z "$G_CLIENT_HOSTNAME" ] || [ -z "$G_CLIENT_IP_ADDR" ] || [ -z "$G_CLIENT_CONFIGTYPE" ] && {
+		echo "Unable to determine target client host name/ip address/config type"
+		return 1
+	}
+	echo "Target client host: $G_CLIENT_HOSTNAME, ip: $G_CLIENT_IP_ADDR"
+	return 0
+}
+
+#
+# remove old install log files
+#
+remove_old_install_logfiles() {
+	[ "$G_CLIENT_CONFIGTYPE" = smrs_slave ] && return 0
+	$G_SSH_SETUPSCRIPT ssh "root@$G_CLIENT_IP_ADDR /bin/rm -f /opt/ericsson/comif_core/log/*" $CI_TEST_SERVER_PASSWD || {
+		echo "Error failed to remove old installation log files"
+		return 1
+	}
+	return 0
+}
+
+#
+# Function to reboot target server
+#
+reboot_client() {
+	local max_tries=3
+	local count=1
+	local sleep_time=10
+	# create reboot script
+	#> /tmp/reboot.bsh
+	#echo "#!/bin/bash" >> /tmp/reboot.bsh
+	#echo "dd if=/dev/zero of=/dev/sda count=1 bs=512" >> /tmp/reboot.bsh
+	#echo "sync" >> /tmp/reboot.bsh
+	#echo "sync" >> /tmp/reboot.bsh
+	#echo "sleep 5" >> /tmp/reboot.bsh
+	#echo "reboot" >> /tmp/reboot.bsh
+	#chmod +x /tmp/reboot.bsh
+	#$G_SSH_SETUPSCRIPT scp "/tmp/reboot.bsh root@$G_CLIENT_IP_ADDR:/tmp" $CI_TEST_SERVER_PASSWD 
+	$G_SSH_SETUPSCRIPT ssh "root@$G_CLIENT_IP_ADDR reboot" $CI_TEST_SERVER_PASSWD 
+	return 0
+			 
+}
+
+#
+# Function to wait until target server goes down
+#
+wait_target_server_down() {
+	local max_tries=10
+	local count=1
+	local sleep_time=10
+	local failed_login_attempts=0
+	echo "Waiting for $G_CLIENT_IP_ADDR to go down..."
+	while [ $count -le $max_tries ]; do
+		timeout 10s $G_SSH_SETUPSCRIPT ssh "root@$G_CLIENT_IP_ADDR ls" $CI_TEST_SERVER_PASSWD > /dev/null 2>&1
+		retcode=$?
+		if [ $retcode -ne 0 ]; then
+			let failed_login_attempts+=1
+			if [ $failed_login_attempts -eq 3 ]; then
+				echo "$G_CLIENT_IP_ADDR appears to be down"
+				return 0
+			fi
+		fi
+		if [ $retcode -ne 124 ]; then
+			sleep $sleep_time
+		fi
+		let count+=1
+	done
+	
+
+}
+
+#
+# Function to remove client profile from MWS
+#
+remove_mws_client_profile() {
+	[ -n "$G_CLIENT_IP_ADDR" ] || return 1
+	if $G_SSH_SETUPSCRIPT ssh "root@$G_MWS_IP /ericsson/jumpstart/bin/manage_linux_dhcp_clients.bsh -a remove -c $G_CLIENT_HOSTNAME -N" $CI_TEST_SERVER_PASSWD > /dev/null 2>&1; then 
+		echo "Removed client profile for $G_CLIENT_HOSTNAME on MWS $G_MWS_IP"
+	else
+		echo "Failed to remove client profile for $G_CLIENT_HOSTNAME"
+		return 1
+	fi
+	return 0
+	
+
+
+}
+
+#
+# function to poll target server until cominf install finishes
+#
+wait_target_server_kickstart_finished() {
+	local max_tries=360
+	local count=1
+	local sleep_time=10
+	local ssh_pid
+	local ssh_count=0
+	local ssh_max_dur=60
+	local cominf_install=cominf_install.bsh
+	local cominf_install_pid
+
+	[ -n "$G_CLIENT_IP_ADDR" ] || return 1
+
+	while [ $count -le $max_tries ]; do
+		echo "Checking kickstart on $G_CLIENT_HOSTNAME is finished, attempt ($count of $max_tries) .."
+		if [ "$G_CLIENT_CONFIGTYPE" = smrs_slave ]; then
+			# if we can ssh and S99local process is NOT running then kickstart is finished
+			if timeout 10s $G_SSH_SETUPSCRIPT ssh "root@$G_CLIENT_IP_ADDR ls" $CI_TEST_SERVER_PASSWD > /dev/null; then
+				if timeout 10s $G_SSH_SETUPSCRIPT ssh "root@$G_CLIENT_IP_ADDR pgrep -f /etc/rc3.d/S99local" $CI_TEST_SERVER_PASSWD > /dev/null 2>&1; then
+					retcode=1
+				else
+					retcode=0
+				fi
+			else
+				retcode=1
+			fi
+		else
+			timeout 10s $G_SSH_SETUPSCRIPT ssh "root@$G_CLIENT_IP_ADDR grep -q '$cominf_install completed' /opt/ericsson/cominf_core/log/${cominf_install}_*.log" $CI_TEST_SERVER_PASSWD > /dev/null 2>&1 
+			retcode=$?
+		fi
+		if [ $retcode -eq 0 ]; then
+			echo "kickstart on $G_CLIENT_HOSTNAME appears to be finished"
+			return 0
+		fi
+		if [ $retcode -ne 124 ]; then
+			sleep 10
+		fi
+		let count+=1
+		
+	done
+	echo "Error - unable to confirm kickstart completed on $G_CLIENT_HOSTNAME" 
+	return 1
+}
+
+#
+# remounts mws shares on target server
+#
+remount_mws_shares() {
+	[ -n "$G_CLIENT_IP_ADDR" ] || return 1
+	echo "for mnt in \$( mount | grep -w $G_MWS_IP | awk '{print \$1}' ); do umount -f \$mnt; done" > /tmp/umount.bsh
+	$G_SSH_SETUPSCRIPT scp "/tmp/umount.bsh root@$G_CLIENT_IP_ADDR:/tmp" $CI_TEST_SERVER_PASSWD || {
+		echo "Warning - failed to copy umount script to $G_CLIENT_HOSTNAME"
+		return 1
+	}
+	$G_SSH_SETUPSCRIPT ssh "root@$G_CLIENT_IP_ADDR bash /tmp/umount.bsh" $CI_TEST_SERVER_PASSWD || {
+		echo "Warning - failed to umount some/all mws file systems" 
+		return 1
+	}
+	# Mount MWS shares to avoid YUM issues
+	echo "Running upgrade_mount.bsh on $G_CLIENT_HOSTNAME"
+	if ! $G_SSH_SETUPSCRIPT ssh "root@$G_CLIENT_IP_ADDR /ericsson/config/upgrade/upgrade_mount.bsh" $CI_TEST_SERVER_PASSWD > /dev/null 2>&1; then
+		echo "upgrade_mount.bsh failed on $G_CLIENT_HOSTNAME"
+		return 1
+	fi
+	return 0
+}
+
+#
+# function to add client profile on MWS
+#
+add_mws_client_profile() {
+	[ -n "$G_CLIENT_IP_ADDR" ] || return 1
+	# copy profile file to mws
+	local prof_file=$( basename $G_TARGET_SERVER_PROFILE_FILE )
+	$G_SSH_SETUPSCRIPT scp "$G_TARGET_SERVER_PROFILE_FILE root@$G_MWS_IP:/var/tmp" > /dev/null 2>&1 || {
+		echo "Error - failed to copy $G_TARGET_SERVER_PROFILE_FILE to MWS $G_MWS_IP"
+		return 1
+	}
+	if $G_SSH_SETUPSCRIPT ssh "root@$G_MWS_IP /ericsson/jumpstart/bin/manage_linux_dhcp_clients.bsh -a add -c $G_CLIENT_HOSTNAME -f /var/tmp/$prof_file -N" ; then 
+		echo "Added client profile for $G_CLIENT_HOSTNAME on MWS $G_MWS_IP"
+	else
+		echo "Failed to add client profile for $G_CLIENT_HOSTNAME"
+		return 1
+	fi
+	echo "Copying pre-ini file to MWS - workaround for pre-ini bug"
+	if ! $G_SSH_SETUPSCRIPT scp "$G_PREINIFILE root@$G_MWS_IP:/JUMP/LIN_MEDIA/${MWS_RHEL_MEDIA_NUMBER}/kickstart/$G_CLIENT_HOSTNAME/pre-inirator_file" $CI_TEST_SERVER_PASSWD > /dev/null 2>&1; then
+		echo "Failed to copy $G_PREINIFILE to MWS"
+		return 1
+	fi
+	return 0
+
+}
+
+#
+# Post install tasks
+#
+run_post_install_tasks() {
+	[ -n "$G_CLIENT_IP_ADDR" ] || return 1
+	echo "Running post install tasks"
+	echo "Copying pre-ini file to $G_CLIENT_HOSTNAME"
+	if ! $G_SSH_SETUPSCRIPT scp "$G_PREINIFILE root@$G_CLIENT_IP_ADDR:/opt/ericsson/config" $CI_TEST_SERVER_PASSWD > /dev/null 2>&1; then
+		echo "Failed to copy $G_CLIENT_IP_ADDR to $G_CLIENT_HOSTNAME"
+		return 1
+	fi
+	
+
+}
+
+
+# MAIN
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_SCRIPTNAME=$(/bin/basename $0)
+G_SSH_SETUPSCRIPT=$G_SCRIPTDIR/ssh_setup.sh
+#G_MWS_IP=10.45.201.54
+G_MWS_IP=10.42.33.76
+LDAP_DM_PASSWD=shroot12
+CI_TEST_SERVER_PASSWD=shroot
+MWS_RHEL_MEDIA_NUMBER=3
+
+trap 'cleanupOnExit' EXIT
+
+while getopts ":hp:f:" opt
+        do
+        case ${opt} in
+                h)      # Print help and exit OK
+                        usage
+                        exit 0
+                ;;
+                p)      # pre-ini file
+                        G_PREINIFILE="$OPTARG"
+                ;;
+                f)      # target server IP
+                        G_TARGET_SERVER_PROFILE_FILE="$OPTARG"
+                ;;
+                *)      # Print usage and exit error
+                        usage
+                        exit 1
+                ;;
+        esac
+done
+
+[ -s "$G_PREINIFILE" ] || {
+	echo "Error - pre-ini file \"$G_PREINIFILE\" missing or empty"
+	usage
+	exit 1
+}
+
+read_client_profile || exit 1
+
+add_mws_client_profile || exit 1
+
+remove_old_install_logfiles || exit 1
+
+reboot_client || exit 1
+
+wait_target_server_down || exit 1
+
+sleep 180 
+
+remove_mws_client_profile || exit 1
+
+wait_target_server_kickstart_finished || exit 1
+
+#remount_mws_shares || exit 1
+
+#run_post_install_tasks || exit
+
+
+exit 0

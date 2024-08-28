@@ -1,0 +1,99 @@
+#!./expect -- 
+
+set timeout 120 
+#exp_internal 1
+log_user 0
+
+set ADMIN2 "NO"
+set ADMIN1 [lindex $argv 0]
+set SUT [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set result "PASSED"
+
+#main
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${ADMIN1}.athtem.eei.ericsson.se
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+expect "#"
+expect_after timeout exit
+
+if {$ADMIN2 != "NO"} {
+	send "ssh ${ADMIN2}-priv\r"
+	expect "${ADMIN2}\{root\} #"
+	set SUT ${ADMIN2}
+}
+
+set count 0
+
+                send "hastatus -sum | grep \"Sybase1\"| grep ${SUT}\r"
+while 1 {
+                expect {
+                        "ONLINE" {
+                        expect "#"
+                        sleep 5
+                        break}
+
+                timeout {
+                        puts "timeout"
+                        set count [expr $count+1]}
+			exit 1
+                }
+}
+
+send "su - sybase\r"
+expect "sybase@"
+send "/ericsson/syb/util/dba_tools\r"
+expect -re "\[0-9]\{1,2\}\[.]\[ ]\{1,2\}Healthcheck"
+set data1 [lindex $expect_out(0,string) 0]
+set data1 [string trimright $data1 .] 
+send "$data1\r"
+expect "$data1"
+expect "\\*"
+set ex $expect_out(buffer)
+
+
+while 1 {
+        expect {
+                "Backup Validation.....................................................Not OK!" {
+			puts "$expect_out(buffer)"
+			continue }
+                ".Not OK!" {
+			puts "$expect_out(buffer)"
+			set result "FAILED"
+
+                        }
+
+                "Press <Return> to continue:" {
+			send "\r"
+                        break}
+                }
+        }
+set e1 $expect_out(buffer)
+expect -re "\[0-9]\{1,2\}\[.]\[ ]\{1,2\}Exit"
+set data1 [lindex $expect_out(0,string) 0]
+set data1 [string trimright $data1 .] 
+send "$data1\r"
+expect "sybase@"
+puts "$e1"
+if {$result == "FAILED"} {
+	puts "CI Warning: Sybase problem"
+	exit 1
+}
+exit 0

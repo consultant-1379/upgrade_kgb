@@ -1,0 +1,26 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="PcjSuite">
+    <test name="PcjSuite">
+        <classes>
+            <class name="com.ericsson.oss.orchestrator.test.cases.VcsScenario" /> 
+            <class name="com.ericsson.oss.orchestrator.test.cases.CreateSybaseBackupScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.OrcPkgInstallScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.SetupOrchaUserScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.CreateDepoScenario" /> 
+            <class name="com.ericsson.oss.orchestrator.test.cases.SentinelLicenseSetupScenario" /> 
+            <class name="com.ericsson.oss.orchestrator.test.cases.IniratorScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.MCExclusionListScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.OrcEngineAmendSudoersTest" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.OrcEngineInstallScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.SshMwsUasScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.AdminPreChecksScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.LdapProxyAgentPwdScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.LiveUpgTarFileDownloadScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.ConfigureFreezeMediaDownloadScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.MigratePeerMCScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.ConfigureEBAMCsScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.OrchILOUserSetupScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.DHCPScenario" />
+        </classes>
+    </test>
+</suite>

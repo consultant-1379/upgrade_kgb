@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_0.dtd">
+<Model version="1" importVersion="6.0">
+<Delete>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,MeContext=E2E_ERBS01,ManagedElement=1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=FtpServer,FtpService=lran_swstore"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=FtpServer,FtpService=lran_lickeystore"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=FtpServer,FtpService=lran_backupstore"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=FtpServer,FtpService=lran_auto"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=FtpServer"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSE2E_ERBS01"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=MSE2E_ERBS02"/>
+</Delete>
+</Model>

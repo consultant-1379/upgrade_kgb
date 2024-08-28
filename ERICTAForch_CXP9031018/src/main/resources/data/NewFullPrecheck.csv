@@ -1,0 +1,2 @@
+wfile,args,exitCode
+/ericsson/orchestrator/etc/new_full_ossrc_workflow.xml,-p precheck -y --nospinner -o 2,0

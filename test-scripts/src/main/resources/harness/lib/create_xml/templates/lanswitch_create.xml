@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_3.dtd">
+<Model version="1" importVersion="6.3">
+   <Create>
+         <Site userLabel="BSC_LANsite">
+         <altitude string="0"/>
+         <location string="BSC_LANsite"/>
+         <longitude string="0"/>
+         <latitude string="0"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <ManagedElement sourceType="EXTREME">
+         <ManagedElementId string="%nename%"/>
+         <primaryType type="LANSwitch"/>
+         <managedElementType types=""/>
+         <associatedSite string="Site=BSC_LANsite"/>
+         <nodeVersion string="BSC_NWI-E_450A"/>
+         <platformVersion string=""/>
+         <swVersion string=""/>
+         <vendorName string=""/>
+         <userDefinedState string=""/>
+         <managedServiceAvailability int="1"/>
+         <isManaged boolean="true"/>
+         <connectionStatus string="ON"/>
+         <Connectivity>
+            <DEFAULT>
+               <emUrl url="telnet://0.0.0.0"/>
+               <ipAddress ip_v4="0.0.0.0"/>
+               <hostname string=""/>
+               <nodeSecurityState state="ON"/>
+               <boardId string=""/>
+               <Protocol number="0">
+                  <protocolType string="SNMP"/>
+                  <port int="0"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Protocol number="1">
+                  <protocolType string="SSH"/>
+                  <port int="22"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Browser>
+                  <browser string=""/>
+                  <browserURL string=""/>
+                  <bookname string=""/>
+               </Browser>
+            </DEFAULT>
+         </Connectivity>
+         <Tss>
+            <Entry>
+               <System string="%nename%"/>
+               <Type string="SECURE"/>
+               <User string="1"/>
+               <Password string="1"/>
+            </Entry>
+            <Entry>
+               <System string="%nename%"/>
+               <Type string="NORMAL"/>
+               <User string="1"/>
+               <Password string="1"/>
+            </Entry>
+         </Tss>
+         <Relationship>
+            <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=backup-%slave%" AssociationType="ManagedElement_to_ftpBackupStore"/>
+            <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+         </Relationship>
+      </ManagedElement>
+   </Create>
+</Model>

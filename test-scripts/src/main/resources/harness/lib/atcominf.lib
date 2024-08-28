@@ -1,0 +1,733 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+# ATCOMINF function library
+
+# Revision History
+# 04/05/2012    eedmaxw		Initial script
+# 11/07/2012    eedmaxw		Increased USE CASE field width to 50
+
+# OS commands
+if [[ "$(uname)" = "SunOS" ]]; then
+	AWK=/usr/xpg4/bin/awk
+fi
+if [[ "$(uname)" = "Linux" ]]; then
+	AWK=/bin/awk
+fi
+
+FIND=/usr/bin/find
+WC=/usr/bin/wc
+CHMOD=/bin/chmod
+RM=/bin/rm
+TEE=/usr/bin/tee
+MKDIR=/bin/mkdir
+DATE=/bin/date
+MV=/bin/mv
+RM=/bin/rm
+LS=/bin/ls
+SORT=/bin/sort
+HEAD=/usr/bin/head
+GREP=/bin/grep
+CAT=/bin/cat
+XARGS=/usr/bin/xargs
+BASENAME=/bin/basename
+DIRNAME=/usr/bin/dirname
+BC=/usr/bin/bc
+TAR=/bin/tar
+GZIP=/bin/gzip
+SLEEP=/bin/sleep
+KILL=/bin/kill
+PERL=/usr/bin/perl
+TOUCH=/bin/touch
+EGREP=/bin/egrep
+SED=/bin/sed
+
+# Globals
+CODE_PASS="PASS"
+CODE_FAIL="FAIL"
+CODE_NOT_RUN="NOT_RUN"
+CODE_UNKNOWN="UNKNOWN"
+CODE_FT="FT"
+CODE_UNIT="UNIT"
+CODE_HIGH="high"
+CODE_LOW="low"
+CODE_POS="positive"
+CODE_NEG="negative"
+CODE_EXIT_FAILED_CALLBACKS=100
+
+# Arrays for functional areas, use cases, test cases
+declare -a AT_TSs
+declare -a AT_FAs
+declare -a AT_UCs
+declare -a AT_TCs
+
+init_ts_spec() {
+
+	SPEC_TS_NAME=
+	SPEC_TS_ID=
+	SPEC_TS_SLOGAN=
+	SPEC_TS_TIMEOUT=
+	SPEC_TS_AUTHOR=
+	SPEC_TS_INDEPENDENT=
+	declare -a SPEC_TS_TC_IDS=()
+
+	return 0
+
+}
+
+init_tc_spec() {
+
+	SPEC_FA_NAME=
+	SPEC_UC_NAME=
+	SPEC_TC_ID=
+	SPEC_TC_SLOGAN=
+	SPEC_TC_TYPE=
+	SPEC_TC_POLARITY=
+	SPEC_TC_PRIORITY=
+	SPEC_TC_AUTOMATED=
+	SPEC_TC_TIMEOUT=
+	SPEC_TC_TEST_PASSCODE=
+	SPEC_TC_AUTHOR=
+	SPEC_TC_AUTOMATOR=
+	SPEC_TC_DISABLED=
+	SPEC_TC_DEPENDENT_ONLY=
+	
+	return 0
+	
+}
+
+init_tc_result() {
+
+	TC_RESULT=
+	TC_REMARK=
+	SPEC_TC_TYPE=
+	SPEC_TC_PRIORITY=
+	SPEC_TC_POLARITY=
+	SPEC_TC_AUTOMATOR=
+	SPEC_TC_SLOGAN=
+	
+	return 0
+
+}
+
+get_TS() {
+
+	local ts_dir=$1
+	local ts
+	declare -i i
+	local ts_spec
+
+	# Populate an array of TS
+	if [[ ! -d ${ts_dir} ]]; then
+		printf "ERROR: Test suite directoty [${ts_dir}] does not exist.\n"
+		return 1
+	fi
+
+	cd ${ts_dir} || exit 1
+	for ts in *; do
+		if [[ -d ${ts} ]]; then
+			ts_spec=${ts}/${ts}_spec.bsh
+			[[ ! -f ${ts_spec} ]] && continue
+			init_ts_spec
+			if ! . ${ts_spec}; then
+				printf "ERROR: Failed to source test suite spec [${ts_spec}]\n"
+				continue
+			fi
+			AT_TSs[$i]=${SPEC_TS_NAME}
+			i=$[i+1]
+		fi
+	done
+
+	cd - >/dev/null
+
+	return 0
+
+}
+
+getFAs() {
+
+	local fa_dir=$1
+	local f
+	declare -i i
+
+	# Populate an array of FAs
+	cd ${fa_dir} || exit 1
+	for f in *; do
+		[[ -d $f ]] && AT_FAs[$i]=$f
+		i=$[i+1]
+	done
+
+	cd - >/dev/null
+
+	return 0
+
+}
+
+write_header_html() {
+
+	local html_file=$1
+
+
+${CAT} >${html_file} << EOF
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US">
+<head><title>COMInf Test Report JOB [${AT_JOB}]</title>
+	<script src="sorttable.js"></script>
+</head>
+EOF
+
+	return 0
+
+}
+
+write_stats_html() {
+
+local datetime=$(date "+%Y-%m-%d %H:%M:%S")
+local fa
+
+write_header_html ${AT_STATS_HTML}
+
+${CAT} > ${AT_STATS_HTML} << EOF
+<body>
+	<p><b>CI Test Job [${AT_JOB}] completed on target [$(hostname)] at ${datetime}</b></p>
+	<p>Test Harness command: [${AT_COMMAND}]</p>
+
+	<p><b>FA Stats</b></p>
+	<p><table width=100% border="1" cellpadding="3">
+	<tr bgcolor="#D8D8D8"><td><b>FUNC AREA</b></td><td><b># UC</b></td><td><b># TC</b></td>
+	<td><b># FT</b></td><td><b># UNIT</b></td><td><b># HIGH</b></td><td><b># LOW</b></td><td><b># POS</b></td>
+	<td><b># NEG</b></td><td><b># MAN</b></td><td><b># AUTO</b></td><td><b>% AUTO</b></td></tr>
+EOF
+
+	${AWK} 'BEGIN {FS="|"}
+		function trim(str) { 
+			sub("^[ ]*", "", str); 
+			sub("[ ]*$", "", str); 
+			return str;
+		}
+		/^FUNC AREA/ { next }
+		/^TOTALS/ { next }
+		{
+			if ( $0 == "" ) { next }
+			printf "<tr><td>%s</td><td>%s</td><td>%s</td>\n", trim($1), trim($2), trim($3)
+			printf "<td>%s</td><td>%s</td><td>%s</td>\n", trim($4), trim($5), trim($6)
+			printf "<td>%s</td><td>%s</td><td>%s</td>\n", trim($7), trim($8), trim($9)
+			printf "<td>%s</td><td>%s</td><td>%s</td></tr>\n", trim($10), trim($11), trim($12)
+		}
+	' ${AT_FA_STATS} >> ${AT_STATS_HTML}
+	
+	${AWK} 'BEGIN {FS="|"}
+		function trim(str) { 
+			sub("^[ ]*", "", str); 
+			sub("[ ]*$", "", str); 
+			return str;
+		}
+		/^TOTALS/ {
+			printf "<tr bgcolor=\"#D8D8D8\"><td>%s</td><td>%s</td><td>%s</td>\n", trim($1), trim($2), trim($3)
+			printf "<td>%s</td><td>%s</td><td>%s</td>\n", trim($4), trim($5), trim($6)
+			printf "<td>%s</td><td>%s</td><td>%s</td>\n", trim($7), trim($8), trim($9)
+			printf "<td>%s</td><td>%s</td><td>%s</td></tr>\n", trim($10), trim($11), trim($12)
+		}
+	' ${AT_FA_STATS} >> ${AT_STATS_HTML}
+	
+	printf "</table></p></body>\n" >> ${AT_STATS_HTML} 
+	
+${CAT} >> ${AT_STATS_HTML} << EOF
+	
+	<p><b>UC Stats</b></p>
+	<p><table width=100% border="1" cellpadding="3">
+	<tr bgcolor="#D8D8D8"><td><b>FUNC AREA</b></td><td><b>USE CASE</b></td><td><b># TC</b></td>
+	<td><b># FT</b></td><td><b># UNIT</b></td><td><b># HIGH</b></td><td><b># LOW</b></td><td><b># POS</b></td>
+	<td><b># NEG</b></td><td><b># MAN</b></td><td><b># AUTO</b></td><td><b>% AUTO</b></td></tr>
+EOF
+	
+	${AWK} 'BEGIN {FS="|"}
+		function trim(str) { 
+			sub("^[ ]*", "", str); 
+			sub("[ ]*$", "", str); 
+			return str;
+		}
+		/^FUNC AREA/ { next }
+		{
+			if ( $0 == "" ) { next }
+			printf "<tr><td>%s</td><td>%s</td><td>%s</td>\n", trim($1), trim($2), trim($3)
+			printf "<td>%s</td><td>%s</td><td>%s</td>\n", trim($4), trim($5), trim($6)
+			printf "<td>%s</td><td>%s</td><td>%s</td>\n", trim($7), trim($8), trim($9)
+			printf "<td>%s</td><td>%s</td><td>%s</td></tr>\n", trim($10), trim($11), trim($12)
+		}
+	' ${AT_UC_STATS} >> ${AT_STATS_HTML}
+	
+	printf "</table></p></body>\n" >> ${AT_STATS_HTML} 
+	
+	return 0
+	
+}
+	
+write_report_html() {
+
+	local datetime=$(date "+%Y-%m-%d %H:%M:%S")
+	local fa
+
+	write_header_html ${AT_REPORT_HTML}
+
+	if [[ ! -f ${AT_SUMMARY} ]]; then 
+		printf "ERROR: Missing summary results file [${AT_SUMMARY}]\n"
+		exit 1
+	fi
+
+	. ${AT_SUMMARY} 
+
+	printf "<p><b>CI Test Job [${AT_JOB}] completed on target [$(hostname)] at ${datetime} by the orchestrator</b></p>\n" >> ${AT_REPORT_HTML}
+
+	if [[ ${option_S} -eq 1 ]]; then
+		printf "<body><p>Test Harness command: [${AT_COMMAND}]     <a href=stats.html>Test stats</a></p>\n" >> ${AT_REPORT_HTML}
+	else
+		printf "<body><p>Test Harness command: [${AT_COMMAND}]</p>\n" >> ${AT_REPORT_HTML}
+	fi
+
+${CAT} >> ${AT_REPORT_HTML} << EOF
+<p><b>Upgrade Information</b></p>
+<p><table width=30% border="1" cellpadding="3">
+<tr><td bgcolor="#cef2ce"><b>OSS Server Type</b></td><td>$(hostname)</td></tr>
+<tr><td bgcolor="#fef1d2"><b>From State</b></td><td>${CI_FROM_STATE}</td></tr>
+<tr><td bgcolor="#fef1d2"><b>To State</b></td><td>${CI_FQ_SHIPMENT}</td></tr>
+</table></p>
+
+<p><b>Summary</b></p>
+<p><table width=100% border="1" cellpadding="3">
+<tr bgcolor="#D8D8D8"><td><b>Total Test Cases Selected</b></td><td><b>PASS</b></td><td><b>FAIL</b></td><td><b>NOT RUN</b></td></tr>
+<tr bgcolor="#EEEEEE"><td>${NUM_TC_TOTAL}</td><td bgcolor="#80FF00">${NUM_TC_PASS}</td><td bgcolor="#FE2E2E">${NUM_TC_FAIL}</td><td bgcolor="#58FAF4">${NUM_TC_NOT_RUN}</td></tr>
+</table></p>
+
+<p><b>Results</b></p>
+<p><table class="sortable" width=100% border="1" cellpadding="3">
+<tr bgcolor="#D8D8D8"><td><b>SUITE</b></td><td><b>FUNC AREA</b></td><td><b>USE CASE</b></td><td><b>TEST CASE</b></td>
+<td><b>RESULT</b></td><td><b>REMARK</b></td><td><b>CONSOLE</b></td><td><b>SECONDS</b></td><td><b>CONTACT</b></td>
+<td><b>TYPE</b></td><td><b>PRIORITY</b></td><td><b>POLARITY</b></td><td><b>SLOGAN</b></td></tr>
+EOF
+
+	if [[ ! -f ${AT_REPORT_TXT} ]]; then 
+		printf "ERROR: Missing results file [${AT_REPORT_TXT}]\n"
+		exit 1
+	fi
+
+	cd ${AT_RESULTS_DIR} || exit 1
+
+	for ts in *; do
+
+		if [[ -d ${ts} ]]; then
+
+			${AWK} 'BEGIN {FS="|"}
+				function trim(str) { 
+					sub("^[ ]*", "", str); 
+					sub("[ ]*$", "", str); 
+					return str;
+				}
+				($0 ~ "'"^${ts}"'") {
+		
+					result=trim($5)
+					if ( result == "PASS" ) {
+						bg="#80FF00"
+					}
+					if ( result == "FAIL" ) {
+						bg="#FE2E2E"
+					}
+					if ( result == "NOT_RUN" ) {
+						bg="#58FAF4"
+					}
+		
+					printf "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td>\n", $1, $2, $3, $4
+					printf "<td bgcolor=%s>%s</td><td>%s</td><td><a href=%s/%s/%s/%s/%s_console.txt>%s.console</a></td>\n", bg, $5, $6, trim($1), trim($2), trim($3), trim($4), trim($4), trim($4)
+					printf "<td>%s</td><td>%s</td><td>%s</td>\n", $7, $8, $9 
+					printf "<td>%s</td><td>%s</td><td>%s</td></tr>\n", $10, $11, $12
+			}' ${AT_REPORT_TXT} >> ${AT_REPORT_HTML}
+		fi
+		
+	done
+
+	printf "</table></p></body>\n" >> ${AT_REPORT_HTML} 
+	
+	cd - >/dev/null 2>&1
+	
+	return 0
+
+}
+
+write_report_txt() {
+
+	local ts
+	local fa
+	local uc
+	local tc
+	local tc_id
+	local tc_spec
+	declare -i f=0
+	declare -i u=0
+	declare -i t=0
+
+	# Summary counters
+	declare -i num_TC_TOTAL=0
+	declare -i num_TC_PASS=0
+	declare -i num_TC_FAIL=0
+	declare -i num_TC_NOT_RUN=0
+	declare -i num_TC_NO_RESULT=0
+
+	${RM} -f ${AT_REPORT_TXT}
+	printf "%-30s | %-9s | %-50s | %-9s | %-7s | %-30s | %-7s | %-7s | %-4s | %-8s | %-8s | %s\n\n" \
+		"SUITE" "FUNC AREA" "USE CASE" "TEST CASE" "RESULT" "REMARK" "SECONDS" \
+		"CONTACT" "TYPE" "PRIORITY" "POLARITY" "SLOGAN" > ${AT_REPORT_TXT}
+	
+	cd ${AT_RESULTS_DIR} || exit 1
+	
+	for ts in *; do
+        	if [[ -d ${ts} ]]; then
+			cd ${ts}
+			for fa in *; do
+        			if [[ -d ${fa} ]]; then
+					cd ${fa}
+					for uc in *; do
+        					if [[ -d ${uc} ]]; then
+							cd ${uc}
+							for tc in *; do
+        							if [[ -d ${tc} ]]; then
+									cd ${tc}
+									tc_id=${tc%%.*}
+									num_TC_TOTAL=$[${num_TC_TOTAL}+1]
+									if [[ -f ${tc_id}_result.bsh ]]; then
+										init_tc_result
+										. ${tc_id}_result.bsh
+										[[ -z ${TC_REMARK} ]] && TC_REMARK='-'
+	
+										printf "%-30s | %-9s | %-50s | %-9s | %-7s | %-30s | %-7s | %-7s | %-4s | %-8s | %-8s | %s\n" \
+											"${ts}" "${fa}" "${uc}" "${tc_id}" \
+											"${TC_RESULT}" "${TC_REMARK}" "${TC_DURATION}" \
+											"${SPEC_TC_AUTOMATOR}" "${SPEC_TC_TYPE}" "${SPEC_TC_PRIORITY}" "${SPEC_TC_POLARITY}" "${SPEC_TC_SLOGAN}" >> ${AT_REPORT_TXT}
+	
+										# Summary results
+										case ${TC_RESULT} in
+										${CODE_PASS})
+											num_TC_PASS=$[${num_TC_PASS}+1]
+											;;
+										${CODE_FAIL})
+											num_TC_FAIL=$[${num_TC_FAIL}+1]
+											;;
+										${CODE_NOT_RUN})
+											num_TC_NOT_RUN=$[${num_TC_NOT_RUN}+1]
+											;;
+										esac
+											
+									else
+										# Missing results file
+										tc_spec=${FA_ROOT}/${fa}/${uc}/${tc_id}/${tc_id}_spec.bsh
+										init_tc_spec
+										. ${tc_spec}
+			
+										printf "%-30s | %-9s | %-50s | %-9s | %-7s | %-30s | %-7s | %-7s | %-4s | %-8s | %-8s | %s\n" \
+											"${ts}" "${fa}" "${uc}" "${tc_id}" \
+											"?" "Missing result file" "?" \
+											"${SPEC_TC_AUTOMATOR}" "${SPEC_TC_TYPE}" "${SPEC_TC_PRIORITY}" "${SPEC_TC_POLARITY}" "${SPEC_TC_SLOGAN}" >> ${AT_REPORT_TXT}
+			
+										num_TC_NO_RESULT=$[${num_TC_NO_RESULT}+1]
+									fi
+									cd ..
+								fi	
+							done
+							cd ..
+						fi
+					done
+					cd ..
+				fi
+			done
+			cd ..
+		fi
+	done
+			
+	# Write results summay file
+	${RM} -f ${AT_SUMMARY}
+	
+${CAT} > ${AT_SUMMARY} << EOF
+#!/bin/bash
+NUM_TC_TOTAL=${num_TC_TOTAL}
+NUM_TC_PASS=${num_TC_PASS}
+NUM_TC_FAIL=${num_TC_FAIL}
+NUM_TC_NOT_RUN=${num_TC_NOT_RUN}
+NUM_TC_NO_RESULT=${num_TC_NO_RESULT}
+EOF
+	
+	cd ${AT_BIN}
+
+	return 0
+
+}
+
+write_stats_txt() {
+
+	local fa
+	local uc
+	local tc
+	local tc_spec
+
+	# FA stats
+	local fa_percent_auto=0
+	declare -i num_FA_UC=0
+	declare -i num_FA_TC=0
+	declare -i num_FA_FT=0
+	declare -i num_FA_UNIT=0
+	declare -i num_FA_HIGH=0
+	declare -i num_FA_LOW=0
+	declare -i num_FA_POS=0
+	declare -i num_FA_NEG=0
+	declare -i num_FA_MAN=0
+	declare -i num_FA_AUTO=0
+	
+	# UC stats
+	local uc_percent_auto=0
+	declare -i num_UC_TC=0
+	declare -i num_UC_FT=0
+	declare -i num_UC_UNIT=0
+	declare -i num_UC_HIGH=0
+	declare -i num_UC_LOW=0
+	declare -i num_UC_POS=0
+	declare -i num_UC_NEG=0
+	declare -i num_UC_MAN=0
+	declare -i num_UC_AUTO=0
+	
+	# Total stats
+	local total_percent_auto=0
+	declare -i sum_FA_UC=0
+	declare -i sum_FA_TC=0
+	declare -i sum_FA_FT=0
+	declare -i sum_FA_UNIT=0
+	declare -i sum_FA_LOW=0
+	declare -i sum_FA_HIGH=0
+	declare -i sum_FA_POS=0
+	declare -i sum_FA_NEG=0
+	declare -i sum_FA_MAN=0
+	declare -i sum_FA_AUTO=0
+	
+	${RM} -f ${AT_FA_STATS}
+	${RM} -f ${AT_UC_STATS}
+	
+	# FA stats
+	printf "%-9s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s\n\n" \
+		"FUNC AREA" "# UC" "# TC" \
+		"# FT" "# UNIT" "# HIGH" "# LOW" \
+		"# POS" "# NEG" "# MAN" "# AUTO" \
+		"% AUTO"> ${AT_FA_STATS}
+	
+	# UC stats
+	printf "%-9s | %-50s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s | %-6s\n\n" \
+		"FUNC AREA" "USE CASE" "# TC" \
+		"# FT" "# UNIT" "# HIGH" "# LOW" \
+		"# POS" "# NEG" "# MAN" "# AUTO" \
+		"% AUTO"> ${AT_UC_STATS}
+	
+	cd ${FA_ROOT} || exit 1
+	for fa in *; do
+        	if [[ -d ${fa} ]]; then
+			num_FA_UC=0; num_FA_TC=0
+			num_FA_FT=0; num_FA_UNIT=0
+			num_FA_HIGH=0; num_FA_LOW=0
+			num_FA_POS=0; num_FA_NEG=0
+			num_FA_MAN=0; num_FA_AUTO=0
+			cd ${fa}
+			for uc in *; do
+        			if [[ -d ${uc} ]]; then
+					# FA stats
+        				num_FA_UC=$[${num_FA_UC}+1]
+					# UC stats
+					num_UC_TC=0;
+					num_UC_FT=0; num_UC_UNIT=0
+					num_UC_HIGH=0; num_UC_LOW=0
+					num_UC_POS=0; num_UC_NEG=0
+					num_UC_MAN=0; num_UC_AUTO=0
+					cd ${uc}
+					for tc in *; do
+        					if [[ -d ${tc} ]]; then
+							cd ${tc}
+							tc_spec=${FA_ROOT}/${fa}/${uc}/${tc}/${tc}_spec.bsh
+							if [[ -f ${tc_spec} ]]; then
+								SPEC_TC_TYPE=; SPEC_TC_PRIORITY=; SPEC_TC_POLARITY=; SPEC_TC_AUTOMATED=
+								# FA stats
+        							num_FA_TC=$[${num_FA_TC}+1]
+								# UC stats
+        							num_UC_TC=$[${num_UC_TC}+1]
+								init_tc_spec
+								. ${tc_spec}
+								case ${SPEC_TC_TYPE} in
+								${CODE_FT})
+									# FA stats
+									num_FA_FT=$[${num_FA_FT}+1]
+									# UC stats
+									num_UC_FT=$[${num_UC_FT}+1]
+									;;
+								${CODE_UNIT})
+									# FA stats
+									num_FA_UNIT=$[${num_FA_UNIT}+1]
+									# UC stats
+									num_UC_UNIT=$[${num_UC_UNIT}+1]
+									;;
+								esac
+								case ${SPEC_TC_PRIORITY} in
+								${CODE_HIGH})
+									# FA stats
+									num_FA_HIGH=$[${num_FA_HIGH}+1]
+									# UC stats
+									num_UC_HIGH=$[${num_UC_HIGH}+1]
+									;;
+								${CODE_LOW})
+									# FA stats
+									num_FA_LOW=$[${num_FA_LOW}+1]
+									# UC stats
+									num_UC_LOW=$[${num_UC_LOW}+1]
+									;;
+								esac
+								case ${SPEC_TC_POLARITY} in
+								${CODE_POS})
+									# FA stats
+									num_FA_POS=$[${num_FA_POS}+1]
+									# UC stats
+									num_UC_POS=$[${num_UC_POS}+1]
+									;;
+								${CODE_NEG})
+									# FA stats
+									num_FA_NEG=$[${num_FA_NEG}+1]
+									# UC stats
+									num_UC_NEG=$[${num_UC_NEG}+1]
+									;;
+								esac
+								case ${SPEC_TC_AUTOMATED} in
+								1)
+									# FA stats
+									num_FA_AUTO=$[${num_FA_AUTO}+1]
+									# UC stats
+									num_UC_AUTO=$[${num_UC_AUTO}+1]
+									;;
+								0)
+									# FA stats
+									num_FA_MAN=$[${num_FA_MAN}+1]
+									# UC stats
+									num_UC_MAN=$[${num_UC_MAN}+1]
+									;;
+								esac
+							fi
+	
+							cd ..
+						fi	
+	
+					done # End of UC
+	
+					# UC stats
+					if [[ ${num_UC_TC} -eq 0 ]]; then
+						uc_percent_auto="-"
+					else
+						uc_percent_auto=$(echo "scale=2; (${num_UC_AUTO}*100)/${num_UC_TC}" | ${BC})
+						uc_percent_auto=${uc_percent_auto%%.*}
+					fi
+	
+					printf "%-9s | %-50s | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6s\n" \
+					"${fa}" "${uc}" "${num_UC_TC}" \
+					"${num_UC_FT}" "${num_UC_UNIT}" \
+					"${num_UC_HIGH}" "${num_UC_LOW}" \
+					"${num_UC_POS}" "${num_UC_NEG}" \
+					"${num_UC_MAN}" "${num_UC_AUTO}" \
+					"${uc_percent_auto}" >> ${AT_UC_STATS}
+	
+					cd ..
+				fi
+	
+			done # End of FA
+	
+			cd ..
+	
+			# FA stats
+			if [[ ${num_FA_TC} -eq 0 ]]; then
+				fa_percent_auto="-"
+			else 
+				fa_percent_auto=$(echo "scale=2; (${num_FA_AUTO} * 100) / ${num_FA_TC}" | ${BC})
+				fa_percent_auto=${fa_percent_auto%%.*}
+			fi
+	
+			printf "%-9s | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6s\n" \
+			"${fa}" "${num_FA_UC}" "${num_FA_TC}" \
+			"${num_FA_FT}" "${num_FA_UNIT}" \
+			"${num_FA_HIGH}" "${num_FA_LOW}" \
+			"${num_FA_POS}" "${num_FA_NEG}" \
+			"${num_FA_MAN}" "${num_FA_AUTO}" \
+			"${fa_percent_auto}" >> ${AT_FA_STATS}
+	
+			sum_FA_UC=$[${sum_FA_UC}+${num_FA_UC}]; sum_FA_TC=$[${sum_FA_TC}+${num_FA_TC}]
+			sum_FA_FT=$[${sum_FA_FT}+${num_FA_FT}]; sum_FA_UNIT=$[${sum_FA_UNIT}+${num_FA_UNIT}]
+			sum_FA_HIGH=$[${sum_FA_HIGH}+${num_FA_HIGH}]; sum_FA_LOW=$[${sum_FA_LOW}+${num_FA_LOW}]
+			sum_FA_POS=$[${sum_FA_POS}+${num_FA_POS}]; sum_FA_NEG=$[${sum_FA_NEG}+${num_FA_NEG}]
+			sum_FA_MAN=$[${sum_FA_MAN}+${num_FA_MAN}]; sum_FA_AUTO=$[${sum_FA_AUTO}+${num_FA_AUTO}]
+		fi
+	done
+	
+	# FA stats
+	total_percent_auto=$(echo "scale=2; (${sum_FA_AUTO} * 100) / ${sum_FA_TC}" | ${BC})
+	total_percent_auto=${total_percent_auto%%.*}
+	printf "\n%-9s | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6d | %-6s\n" \
+	"TOTALS" "${sum_FA_UC}" "${sum_FA_TC}" \
+	"${sum_FA_FT}" "${sum_FA_UNIT}" \
+	"${sum_FA_HIGH}" "${sum_FA_LOW}" \
+	"${sum_FA_POS}" "${sum_FA_NEG}" \
+	"${sum_FA_MAN}" "${sum_FA_AUTO}" "${total_percent_auto}" >> ${AT_FA_STATS}
+	
+	cd ${AT_BIN}
+	
+	return 0
+	
+}
+
+write_report_archive() {
+
+	declare -i ret
+
+	${RM} -f ${AT_REPORT_ARCHIVE}
+
+	cd ${AT_RESULTS_DIR}/..
+	cp ${AT_LIB}/sorttable.js ${AT_RESULTS_DIR}
+	ret=$?
+	if [[ ${ret} -ne 0 ]]; then
+		printf "WARNING: [cp ${AT_LIB}/sorttable.js ${AT_RESULTS_DIR} failed; error [${ret}] ; index.html will not have sortable columns\n"
+	fi
+	# Archive
+	${TAR} cvf ${AT_REPORT_ARCHIVE} ${AT_JOB} >/dev/null
+	ret=$?
+	if [[ ${ret} -ne 0 ]]; then
+		printf "ERROR: [${TAR} cvf ${AT_REPORT_ARCHIVE} ${AT_JOB}] failed; error [${ret}]\n"
+		exit 1
+	fi
+	
+	# Compress
+	${GZIP} ${AT_REPORT_ARCHIVE}
+	ret=$?
+	if [[ ${ret} -ne 0 ]]; then
+		printf "ERROR: [${TAR} cvf ${AT_REPORT_ARCHIVE} ${AT_JOB}] failed; error [${ret}]\n"
+		exit 1
+	fi
+	
+	printf "Results folder: ${AT_RESULTS_DIR}\n"
+	printf "Results summary: ${AT_SUMMARY}\n\n"
+	${CAT} ${AT_SUMMARY} | ${GREP} -v 'bash' 2>/dev/null
+	printf "\nTest report (txt): ${AT_REPORT_TXT}\n"
+	printf "Test report (html): ${AT_REPORT_HTML}\n\n"
+	printf "Report archive: ${AT_REPORT_ARCHIVE}\n\n"
+	
+	return 0
+
+}

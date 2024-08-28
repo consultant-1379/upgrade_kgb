@@ -1,0 +1,7 @@
+SPEC_CP_NAME="X86_Install_cluster_test_setup"
+SPEC_CP_ID=12
+SPEC_CP_DESC="Campaign for installing cluster, doing post steps to install and configure SFS test environment, and DDC configuration"
+SPEC_CP_AUTHOR=1
+SPEC_CP_CONTINUEONFAILURE=1
+SPEC_CP_TIMEOUT=3000000
+SPEC_CP_OBJ_IDS=(TS66 TS64 TC1366 TC1447)

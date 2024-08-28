@@ -1,0 +1,2 @@
+wfile,args,exitCode
+/ericsson/orchestrator/etc/mwsreboot_full_ossrc_workflow.xml,-p execute -y --nospinner -o 2 --exclude mws,0

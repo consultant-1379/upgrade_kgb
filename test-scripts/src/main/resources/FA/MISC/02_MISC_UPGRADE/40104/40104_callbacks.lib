@@ -1,0 +1,178 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+    # Only run this on an MWS node
+    pkginfo -q ERICjump
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        echo "This can only be run from an MWS server"
+        return 1
+    fi
+
+    # Check that everything is in place
+    #
+    local PLATFORM="/var/tmp/platform_taf"
+    local RESET_SCRIPT="/var/tmp/platform_taf/useful/reset_services.bsh"
+    if [ ! -d ${PLATFORM} ]; then
+        echo "TEST_FAIL: ${PLATFORM} does not exist. Make sure the E2E setup has been run"
+        return 1
+    fi
+
+    if [ ! -e ${RESET_SCRIPT} ]; then
+        echo "TEST_FAIL: Script ${RESET_SCRIPT} does not exist."
+    fi
+
+    # Only run on OMSAS os OM_SERVICES
+    if [ "${ORCH_SERVER_TYPE}" != "OMSAS" ] && [ "${ORCH_SERVER_TYPE}" != "OM_SERVICES" ]; then
+        echo "Only run this script on server types OMSAS or OM_SERVICES"
+        return 1
+    fi
+
+    # Copy the reset script to the Infra server
+    scp -q ${RESET_SCRIPT} ${ORCH_SERVER}:/tmp
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        echo "FAIL: Failed to copy ${RESET_SCRIPT} to server ${ORCH_SERVER}"
+        return 1
+    fi
+
+    # Run the script on the remote server
+    ssh ${ORCH_SERVER} "/tmp/reset_services.bsh"
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        echo "FAIL: The ${RESET_SERVICES} script returned a failure code: ${retVal}"
+        return 1
+    fi
+    
+    return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+    return 0
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+
+    local RESET_SCRIPT="/tmp/reset_services.bsh"
+    ssh ${ORCH_SERVER} "rm ${RESET_SCRIPT}"
+    retVal=$?
+    if [ ${retVal} -ne 0 ]; then
+        echo "FAIL: Failed to remove ${RESET_SCRIPT} from ${ORCH_SERVER}"
+    fi
+    return 0
+}

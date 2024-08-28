@@ -1,0 +1,69 @@
+#!./expect --
+
+
+set timeout 620
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+expect "#"
+send -- "/ericsson/core/cluster/bin/add_cluster_node\r"
+                        expect "cluster.ini file"
+send -- "y\r"
+                        expect "system to add or modify"
+send -- "$ADMIN2\r"
+                        expect "]:"
+send -- "\r"
+                        expect "]:"
+send -- "\r"
+                        expect "PASSWD"
+send -- "shroot\r"
+                        expect "PASSWD"
+send -- "shroot\r"
+
+set timeout 1200
+while 1 {
+        expect {
+                "]:" {
+                        send "\r"}
+                
+                "Are these values correct (y/n)?" {
+                        send "y\r"
+                        break}
+                
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+set timeout 3600
+expect "to complete installation"
+sleep 10

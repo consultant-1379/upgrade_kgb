@@ -1,0 +1,582 @@
+#!/bin/bash
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+# NFD function library
+# NOTE: Please keep function names consistent and meaningful. i.e use 'get','set','is' 
+#       Please use a variable called RESULT to store the result of a Function, or preferably 
+#       echo the string so that the funtion name can be used as the return string as indicated in the example below.
+# E.G.  [[ $(getHostname) == "atrcxb2214" ]]
+
+# Revision History
+# 10/08/2012    eeidle         Initial script
+#   Provides a set of library functions related to SCK,USCK, STG and SOLARIS Teams
+
+###################
+# GLOBAL VARIABLES
+###################
+
+HASTATUS=${HASTATUS:-/opt/VRTS/bin/hastatus}
+HAGRP=${HAGRP:-/opt/VRTS/bin/hagrp}
+HASYS=${HASYS:-/opt/VRTS/bin/hasys}
+HACLUS=${HACLUS:-/opt/VRTS/bin/haclus}
+GREP=${GREP:-/bin/grep}
+AWK=${AWK:-/bin/awk}
+ECHO=${ECHO:-/bin/echo}
+G_SSH_SETUPSCRIPT=$G_SCRIPTDIR/ssh_setup.sh
+G_SMTOOL=/opt/ericsson/nms_cif_sm/bin/smtool
+###################
+# FUNCTIONS
+###################
+# Function: isCmdExecutable
+# Purpose: Validate that a command that is specified exists on the server and is executable
+# Usage: : isCmdExecutable <full path to command>
+#
+# Arguments:
+# $1 Full path to command
+#
+# Return Values:
+# 0     Success, command found and is executable by 
+# 1     Failure, command not found.
+#
+## Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# none
+#
+
+function isCmdExecutable() { # <full path to command>
+        local cmd=$1
+
+        if [[ -x "${cmd}" ]]; then
+                echo "${cmd} is executable"
+                return 0
+        else
+                echo "ERROR:${cmd} not executable, exiting function ${FUNCNAME} ${@}"
+                return 1
+        fi
+}
+##############################
+# Function: areAllManagedComponents()
+# Purpose: Validate that All managed components except those listed are <-online> or <-offline>
+# Usage: : areAllManagedComponents <-online|-offline> [-except <MC1>,<MC2>|-exceptthosein <file>]
+#
+# Return Values: 
+#      0	Success
+#      1	Failure
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# none
+function areAllManagedComponents() { # <-online|-offline> [-except <MC1>,<MC2>|-exceptthosein <file>]
+	# -exceptthosein <file> is not implemented yet
+	#set -xv
+	if (( ${#} > 3 )) ; then
+		${ECHO} "Usage: Too many arguments: AreManagedComponents <-online|-offline> [-except <MC1>,<MC2>|-exceptthosein <file>]"
+		return 1
+	fi
+	local ACTION=$1  # -online|-offline
+	local EXCEPT=$2  # -except|-exceptthosein
+	local MC_EXCLUDE_LIST="$3"
+	local MC_COUNT=""
+	local MCS_NOT_MEETING_CRITERIA
+	#replace , with | for egrep arguments. 
+	#Using text EXCLUDE_LIST as a cheat so that egrep will never have empty argument.
+	MC_EXCLUDE_LIST=$($ECHO "${MC_EXCLUDE_LIST}|EXCLUDE_LIST" | sed s'/,/\|/g')
+	
+	if [ "$ACTION" = "-online" ]; then
+		ACTION="started"
+	fi
+	if [ "$ACTION" = "-offline" ]; then
+		ACTION="offline"
+
+	fi
+	echo "Checking if all the Managed Components are $ACTION" #| tee -a ${LOGFILE}
+	echo "-------------------------------------------------" #| tee -a ${LOGFILE}
+	MC_COUNT=$(${G_SMTOOL} list | egrep -v $ACTION | egrep -v "${MC_EXCLUDE_LIST}" | wc -l)
+
+	if [ $MC_COUNT == 0 ] ;then
+			echo "All Required Managed Components (MCs) are $ACTION" #| tee -a ${LOGFILE}
+			return 0
+	else
+			MCS_NOT_MEETING_CRITERIA=$($G_SMTOOL list | grep -v $ACTION | egrep -v "${MC_EXCLUDE_LIST}")
+			echo "The below MC's are NOT $ACTION" #| tee -a ${LOGFILE}
+			echo "$MCS_NOT_MEETING_CRITERIA" #| tee -a ${LOGFILE}
+			return 1
+	fi
+	
+}
+##############################
+# Function: getAdmin1Hostname
+# Purpose: Get the hostname of the current Admin1
+# Usage: getAdmin1Hostname
+#
+# Return Values: 
+#      0	Success
+#      1	Failure
+# RESULT	The hostname of Admin1
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# RESULT
+##############################
+function getAdmin1Hostname() {
+	# Admin1 is the node which has the Oss state ONLINE
+
+	# Before that we will ensure that there is no issue with hastatus
+	if [[ $(${HASTATUS} -sum >/dev/null 2>&1) -ne 0 ]] ; then
+		${ECHO} "ERROR: getAdmin1Hostname"
+		return 1
+	fi
+
+	RESULT=$(${HAGRP} -display Oss -attribute State | ${GREP} ONLINE | ${AWK} '{print $3}')
+	${ECHO} "${RESULT}"
+
+	return 0
+}
+
+##############################
+# Function: getAdmin2Hostname
+# Purpose: Get the hostname of the current Admin2
+# Usage: getAdmin2Hostname
+#
+# Return Values: 
+#      0	Success
+#      1	Failure
+# RESULT	The hostname of Admin2
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# RESULT
+##############################
+function getAdmin2Hostname() {
+	# Admin2 is the node which has the Oss state OFFLINE
+
+	# Before that we will ensure that there is no issue with hastatus
+	if [[ $(${HASTATUS} -sum >/dev/null 2>&1) -ne 0 ]] ; then
+		${ECHO} "ERROR: getAdmin2Hostname"
+		return 1
+	fi
+
+	RESULT=$(${HAGRP} -display Oss -attribute State | ${GREP} OFFLINE | ${AWK} '{print $3}')
+	${ECHO} "${RESULT}"
+
+	return 0
+}
+
+##############################
+# Function: isServerAdmin1
+# Purpose: Check if the specified server is Admin1
+# Usage: isServerAdmin1 <servername>
+#
+# Return Values: 
+# 0	<servername> is not Admin1	
+# 1	<servername> is Admin1
+# 2	Error in fetching hostname
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# RESULT
+##############################
+function isServerAdmin1() {
+
+	if (( ${#} < 1 )) ; then
+		${ECHO} "Usage: isServerAdmin1 <servername>"
+		return 2
+	fi
+
+	# Get the hostname of the Admin1
+	getAdmin1Hostname
+
+	if [[ $? -eq 1 || "${RESULT}" == "" ]] ; then
+		${ECHO} "ERROR: isServerAdmin1"
+		return 2
+	fi
+
+	if [[ "${RESULT}" == "$1" ]] ; then
+		${ECHO} "1"
+		return 1
+	fi
+
+	${ECHO} "0"
+	return 0
+}
+
+##############################
+# Function: isServerAdmin2
+# Purpose: Check if the specified server is Admin2
+# Usage: isServerAdmin2 <servername>
+#
+# Return Values: 
+# 0	<servername> is not Admin2
+# 1	<servername> is Admin2
+# 2	Error in fetching hostname
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# RESULT
+##############################
+function isServerAdmin2() {
+
+	if (( ${#} < 1 )) ; then
+		${ECHO} "Usage: isServerAdmin2 <servername>"
+		return 2
+	fi
+
+	# Get the hostname of the Admin1
+	getAdmin2Hostname
+
+	if [[ $? -eq 1 || "${RESULT}" == "" ]] ; then
+		${ECHO} "ERROR: isServerAdmin2"
+		return 2
+	fi
+
+	if [[ "${RESULT}" == "$1" ]] ; then
+		${ECHO} "1"
+		return 1
+	fi
+
+	${ECHO} "0"
+	return 0
+}
+
+##############################
+# Function: isHaGroupOnline
+# Purpose: Check if the server is Online for specified groupname and hostname
+# Usage: isHaGroupOnline <groupname> <hostname>
+#
+# Return Values:
+# 0     <groupname> is offline
+# 1     <groupname> is online
+# 2     Error in fetching group details
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# RESULT
+##############################
+function isHaGroupOnline() {
+
+	if (( ${#} < 2 )) ; then
+		${ECHO} "Usage: isHaGroupOnline <groupname> <hostname>"
+		return 2
+	fi
+
+	RESULT=$(${HAGRP} -state "${1}" -sys "${2}")
+	if [[ "${RESULT}" == "ONLINE" ]] ; then
+		${ECHO} "1"
+		return 1
+	elif [[ "${RESULT}" == "OFFLINE" ]] ; then
+		${ECHO} "0"
+		return 0
+	else
+		${ECHO} "ERROR: isHaGroupOnline ${1} ${2}"
+		return 2
+	fi
+}
+
+##############################
+# Function: isHaStateRunningForServer
+# Purpose: Check if the server is running for specified hostname
+# Usage: isHaStateRunningForServer <hostname>
+#
+# Return Values:
+# 0     <hostname> has EXITED
+# 1     <hostname> is RUNNING
+# 2     Error in fetching state details
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# RESULT
+##############################
+function isHaStateRunningForServer() {
+	if (( ${#} < 1 )) ; then
+		${ECHO} "Usage: isHaStateRunningForServer <hostname>"
+		return 2
+	fi
+
+	RESULT=$(${HASYS} -state "${1}")
+
+	if [[ "${RESULT}" == "RUNNING" ]] ; then
+		${ECHO} "1"
+		return 1
+	elif [[ "${RESULT}" == "EXITED" ]] ; then
+		${ECHO} "0"
+		return 0
+	else
+		${ECHO} "ERROR: isHaStateRunningForServer ${1}"
+		return 2
+	fi
+}
+
+##############################
+# Function: isHaStateRunningForCluster
+# Purpose: Check if the server is running for specified cluster
+# Usage: isHaStateRunningForCluster <clustername>
+#
+# Return Values:
+# 0     <clustername> has EXITED
+# 1     <clustername> is RUNNING
+# 2     Error in fetching state details
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# RESULT
+##############################
+function isHaStateRunningForCluster() {
+	if (( ${#} < 1 )) ; then
+		${ECHO} "Usage: isHaStateRunningForCluster <clustername>"
+		return 2
+	fi
+
+	RESULT=$(${HACLUS} -state "${1}")
+
+	if [[ "${RESULT}" == "RUNNING" ]] ; then
+		${ECHO} "1"
+		return 1
+	elif [[ "${RESULT}" == "EXITED" ]] ; then
+		${ECHO} "0"
+		return 0
+	else
+		${ECHO} "ERROR: isHaStateRunningForCluster ${1}"
+		return 2
+	fi
+}
+ 
+##############################
+# Function: isHaStatusNormal
+# Purpose: Check if the services are running normally for admin1 and admin2
+# Usage: isHaStatusNormal
+#
+# Return Values:
+# 0     HA status is not normal
+# 1     HA status is normal
+# 2     Error in fetching service details
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# RESULT
+##############################
+#Check for hastatus in steadstate, all services on admin 1, all services on admin2 and vice versa,
+function isHaStatusNormal() { # default Admin1/Admin2 cluster  oss/ossfs online on Admin1. Sybase online on Admin2, and correct state for other groups too
+	# Check various conditions, if there is an issue at any point, mark the status as not normal.
+
+        local admin_1=$(getAdmin1Hostname)
+	[[ ${?} -eq 1 ]] && return 2
+	local admin_2=$(getAdmin2Hostname)
+	[[ ${?} -eq 1 ]] && return 2
+
+	RESULT=1
+
+	# 1. Ossfs service is ONLINE on Admin 1
+	if [[ $(${HAGRP} -display Ossfs -attribute State | ${GREP} ONLINE | ${AWK} '{print $3}') != "${admin_1}" ]]
+	then
+		RESULT=0
+	fi
+	
+	# 2. Sybase1 service is ONLINE on Admin 2
+	if [[ $(${HAGRP} -display Sybase1 -attribute State | ${GREP} ONLINE | ${AWK} '{print $3}') != "${admin_2}" ]]
+	then
+		RESULT=0
+	fi
+
+	# <More error conditions to be checked as required.>
+
+	return ${RESULT}
+}
+ 
+function isHaClusterSplit() {
+        return 1
+}
+
+##############################
+# Function: isSolarisServiceOnline
+# Purpose: Check if the service is online 
+# Usage: isSolarisServiceOnline <service>
+#
+# Return Values:
+# 0     <service> is online
+# 1     <service> is not in online state
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# none
+##############################
+function isSolarisServiceOnline (){  #
+	isSolarisServiceOnline=$(svcs -H ${1} )
+	if [[ ${#} != 1 ]];
+		then
+			echo "Usage: ${FUNCNAME} <service>"
+			return 1
+	elif [[ "$isSolarisServiceOnline" =~ "online" ]]
+		then
+		return 0
+	else
+		return 1
+	fi
+}
+
+########### MAIN ##########
+
+# Testing above functions
+
+
+getAdmin1Hostname
+echo $?
+echo "getAdmin1Hostname = $RESULT"
+
+getAdmin1Hostname inp1 inp2 inp3
+echo $?
+echo "getAdmin1Hostname = $RESULT"
+
+admin1=$(getAdmin1Hostname)
+echo $?
+echo "admin1 = $admin1"
+
+
+
+getAdmin2Hostname
+echo $?
+echo "getAdmin2Hostname = $RESULT"
+
+getAdmin2Hostname inp1 inp2 inp3
+echo $?
+echo "getAdmin2Hostname = $RESULT"
+
+admin2=$(getAdmin2Hostname)
+echo $?
+echo "admin2 = $admin2"
+
+
+isServerAdmin1
+echo $?
+echo "isServerAdmin1 = $RESULT"
+
+isServerAdmin1 atrcxb2216
+echo $?
+echo "isServerAdmin1 = $RESULT"
+
+isServerAdmin1 atrcxb2217
+echo $?
+echo "isServerAdmin1 = $RESULT"
+
+isServerAdmin1 atrcxb2216 atrcxb2217
+echo $?
+echo "isServerAdmin1 = $RESULT"
+
+
+isServerAdmin2
+echo $?
+echo "isServerAdmin2 = $RESULT"
+
+isServerAdmin2 atrcxb2216
+echo $?
+echo "isServerAdmin2 = $RESULT"
+
+isServerAdmin2 atrcxb2217
+echo $?
+echo "isServerAdmin2 = $RESULT"
+
+isServerAdmin2 atrcxb2216 atrcxb2217
+echo $?
+echo "isServerAdmin2 = $RESULT"
+
+
+isHaGroupOnline
+echo $?
+echo "isHaGroupOnline = $RESULT"
+
+isHaGroupOnline Ossfs
+echo $?
+echo "isHaGroupOnline = $RESULT"
+
+isHaGroupOnline Ossfs atrcxb2216
+echo $?
+echo "isHaGroupOnline = $RESULT"
+
+isHaGroupOnline Ossfs2 atrcxb2216
+echo $?
+echo "isHaGroupOnline = $RESULT"
+
+isHaGroupOnline Ossfs atrcxb2217
+echo $?
+echo "isHaGroupOnline = $RESULT"
+
+isHaGroupOnline Ossfs2 atrcxb2217
+echo $?
+echo "isHaGroupOnline = $RESULT"
+
+
+isHaStateRunningForServer
+echo $?
+echo "isHaStateRunningForServer = $RESULT"
+
+isHaStateRunningForServer atrcxb2216
+echo $?
+echo "isHaStateRunningForServer = $RESULT"
+
+isHaStateRunningForServer atrcxb2217
+echo $?
+echo "isHaStateRunningForServer = $RESULT"
+
+isHaStateRunningForServer atrcxb2217 atrcxb2216
+echo $?
+echo "isHaStateRunningForServer = $RESULT"
+
+
+isHaStateRunningForCluster
+echo $?
+echo "isHaStateRunningForCluster = $RESULT"
+
+isHaStateRunningForCluster atrcxb2216-2217
+echo $?
+echo "isHaStateRunningForCluster = $RESULT"
+
+isHaStateRunningForCluster atrcxb2216-221
+echo $?
+echo "isHaStateRunningForCluster = $RESULT"
+
+
+isHaStatusNormal
+echo $?
+echo "isHaStatusNormal = $RESULT"
+
+isHaStatusNormal atrcxb2217
+echo $?
+echo "isHaStatusNormal = $RESULT"
+
+
+

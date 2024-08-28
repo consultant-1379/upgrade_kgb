@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TEST SUITE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Thursday 13th of November 2014 15:54:41
+#
+SPEC_TS_NAME=OSS_UPGRADE
+SPEC_TS_ID=172
+SPEC_TS_SLOGAN="ORCHA Upgrade of Admin Server "
+SPEC_TS_TIMEOUT=2400
+SPEC_TS_AUTHOR="eolikil"
+SPEC_TS_INDEPENDENT=0
+SPEC_TS_TC_IDS=(22200 22300 22400 4006 23100 24100 25100 26100)

@@ -1,0 +1,243 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# 24.11.2014 xdhiilm
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+
+    touch /tmp/prep_tmp40013.log || return 1
+	return 0
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+
+    # Checks for expected variables. Exit early if these are not set.
+	if [ "${ORCH_CMD_MODE}xxx" = "xxx" ]; then
+	    echo "Variable ORCH_CMD_MODE is not set. Check your environment file"
+		return 1
+	fi	
+
+    if [ "${ORCH_UPGRADE_DIR}xxx" = "xxx" ]; then
+        echo "Variable ORCH_UPGRADE_DIR is not set. Check your environment file"
+        return 1
+    fi
+
+    if [ "${ORCH_TYPE}xxx" = "xxx" ]; then
+        echo "Variable ORCH_TYPE is not set. Check your environment file"
+        return 1
+    fi
+
+    if [ "${ORCH_SERVER}xxx" = "xxx" ]; then
+        echo "Variable ORCH_SERVER is not set. Check your environment file"
+        return 1
+    fi
+
+    if [ "${ORCH_SERVER_LIVE}xxx" = "xxx" ]; then
+        echo "Variable ORCH_SERVER_LIVE is not set. Check your environment file"	
+		if [ "${ORCH_TYPE}" != "VAPP" ] && [ "${ORCH_TYPE}" != "SINGLE" ]; then
+        return 1
+		fi
+    fi
+
+    if [ "${ORCH_ISO_IP}xxx" = "xxx" ]; then
+        echo "Variable ORCH_ISO_IP is not set. Check your environment file"
+        return 1
+    fi
+	
+	if [ "${CI_DAILY_BUILD_SERV}xxx" = "xxx" ]; then
+        echo "Variable CI_DAILY_BUILD_SERV is not set. Check your environment file"
+        return 1
+    fi
+	
+	if [ "${CI_FQ_SHIPMENT}xxx" = "xxx" ]; then
+        echo "Variable CI_FQ_SHIPMENT is not set. Check your environment file"
+        return 1
+    fi
+	
+	if [ "${CI_FROM_STATE}xxx" = "xxx" ]; then
+        echo "Variable CI_FROM_STATE is not set. Check your environment file"
+        return 1
+    fi
+	
+	
+	if [ "${ORCH_OSSRC_MEDIA}xxx" = "xxx" ]; then
+        echo "Variable ORCH_OSSRC_MEDIA is not set. Check your environment file"
+        return 1
+    fi
+	
+	if [ "${ORCH_OM_MEDIA_DIR}xxx" = "xxx" ]; then
+        echo "Variable CI_FROM_STATE is not set. Check your environment file"
+        return 1
+    fi
+	
+	if [ "${ORCH_COMINF_MEDIA}xxx" = "xxx" ]; then
+        echo "Variable ORCH_COMINF_MEDIA is not set. Check your environment file"
+        return 1
+    fi
+	
+	if [ "${ORCH_OMSAS_MEDIA}xxx" = "xxx" ]; then
+        echo "Variable ORCH_OMSAS_MEDIA is not set. Check your environment file"
+        return 1
+    fi
+
+	
+    # On TC's to be run on the MWS only make sure that the ORCH_CMD_MODE is set to local
+    #export OLD_ORCH_CMD_MODE=${ORCH_CMD_MODE}
+	#export ORCH_CMD_MODE="local"
+
+	# List the variables to be used in the TC.
+	echo "ORCH_CMD_MODE: ${ORCH_CMD_MODE}"
+	echo "ORCH_OM_MEDIA_DIR: ${ORCH_OM_MEDIA_DIR}"
+	echo "ORCH_OSSRC_MEDIA: ${ORCH_OSSRC_MEDIA}"
+	echo "ORCH_COMINF_MEDIA: ${ORCH_COMINF_MEDIA}"
+	echo "ORCH_OMSAS_MEDIA: ${ORCH_OMSAS_MEDIA}"	
+	echo "ORCH_TYPE: ${ORCH_TYPE}"
+	echo "ORCH_SERVER: ${ORCH_SERVER}"
+	echo "ORCH_ISO_IP: ${ORCH_ISO_IP}"
+	echo "CI_FQ_SHIPMENT: ${CI_FQ_SHIPMENT}"
+	echo "CI_FROM_STATE: ${CI_FROM_STATE}"
+	echo "NODE_LABELS : ${NODE_LABELS}"
+	echo "BUILD_TAG : ${BUILD_TAG}"
+	
+	
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+
+    local L_TMP
+    local L_TMP2
+    local L_TMP3
+    local L_TLOG=/tmp/pre_tmp30100.log
+	local L_LOG_EXIST
+	local L_LOG_HAS_CONTENT
+	local L_MODULE_STATUS
+    local L_STATUS_FILE_EXIST
+	local L_ORCH_CMD_MODE="local"
+
+    
+    return 0
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+    # For TC's that are run on MWS only reinstate the ORCH_CMD_MODE variable
+	#export ORCH_CMD_MODE=${OLD_ORCH_CMD_MODE}
+	#echo "ORCH_CMD_MODE: ${ORCH_CMD_MODE}"
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+ 
+    rm /tmp/prep_tmp40013.log || return 1
+
+    return 0
+
+}

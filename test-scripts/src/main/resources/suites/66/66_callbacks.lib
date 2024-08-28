@@ -1,0 +1,69 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Suite Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library if required to setup/cleanup before/after 
+# running suite test cases.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# ts_setup()
+# ts_cleanup()
+
+
+#################################################################################
+#
+# CALLBACK: TS_SETUP
+# 
+# Called before the first test case in the suite is run
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+ts_setup() {
+	handleArgs_func || return 1
+	II_prep || return 1
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TS_CLEANUP
+#
+# Called after the last test case in the suite has run
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+ts_cleanup() {
+	handleArgs_func || return 1
+	#II_postchecks || return 1
+	II_wrapup || return 1
+
+	return 0
+
+}

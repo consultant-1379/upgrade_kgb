@@ -1,0 +1,31 @@
+#!/bin/bash
+
+#Author:Ramprakash H
+#Date:11-Jan-2012
+
+days=$1
+
+dir=/var/lib/jenkins/cominf_build/build_scripts/infrastructure_workspace #dir path for Jenkins Slave
+
+echo "---------------------------------------------------------------------------" > /tmp/house_keeping.out
+echo "House keeping Script run date:`date`" >> /tmp/house_keeping.out
+echo "------------------------------------" >> /tmp/house_keeping.out
+echo "The following Files will be removed:" >> /tmp/house_keeping.out
+echo "------------------------------------" >> /tmp/house_keeping.out
+find $dir -mtime +$days -print >> /tmp/house_keeping.out #to check what all files will be removed
+a=$?
+echo "------------------------------------" >> /tmp/house_keeping.out
+
+#find $dir -mtime +$days |xargs ls -l|awk -F' ' '{print $3}'|sort -u # to check the unique owner of all the files
+
+if [ $a == 0 ]
+then
+	echo "Removing Files" >> /tmp/house_keeping.out
+	find $dir -mtime +$days -exec rm -rf {} \; 2>> /dev/null #command to delete the files
+	echo "Files are removed successfully" >> /tmp/house_keeping.out
+	echo "------------------------------------" >> /tmp/house_keeping.out
+else
+	echo "No files to remove" >> /tmp/house_keeping.out
+	echo "------------------------------------" >> /tmp/house_keeping.out
+fi
+echo "---------------------------------------------------------------------------" >> /tmp/house_keeping.out

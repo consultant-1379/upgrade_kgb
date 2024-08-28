@@ -1,0 +1,108 @@
+#!./expect -- 
+
+#Return 1 if serious problem don't continue
+#Return 2 no mirrors defined, do nothing proceed with upgrade
+#Return 3 in sync, do nothing proceed with upgrade
+#Return 4 boot from detach and sync
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set results(DEFINED) "1"
+set results(INSYNC) "1"
+set results(WARNING) "0"
+set results(SMTOOL) "0"
+set results(INSTALL) "0"
+set D1 "\$1" 
+set D2 "\$2" 
+set D "\$" 
+set PIPESTATUS "\${PIPESTATUS\[0\]}" 
+set FILTER "\[\{,\},\"\]" 
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+if {$ADMIN2 != "NO"} {
+        send "ssh ${ADMIN2}-priv\r"
+        while 1 {
+                expect {
+                        "${ADMIN2}\{root\}" {
+                                break}
+
+                        timeout {
+                                puts "warning: timed out"
+                                exit 1}
+                        }
+        }
+}
+
+set timeout 900
+expect "#"
+send -- "smtool -l | grep -v started | grep -v \"cdm \" | grep -v BI_SMRS_MC\r"
+expect "#"
+ set notstarted $expect_out(buffer)
+set fields [split $notstarted "\r"]
+
+foreach rec1 $fields {
+        set trimmed1 [string trim $rec1]
+                if {[string match "*smtool -l*" $trimmed1]} {
+                        puts "discard\r"
+                } elseif {[string match "*failed*" $trimmed1]} {
+                        set trimmed2 [string trimright $trimmed1 failed]
+                        set trimmed3 [string trim $trimmed2]
+                        puts "failed: $trimmed3\r"
+                        send -- "smtool -coldrestart $trimmed3 -reason=other -reasontext=other\r"
+                        expect "#"
+                        send -- "smtool -p\r"
+                        expect "#"
+                        exec sleep 20 
+                } elseif {[string match "*offline*" $trimmed1]} {
+                        set trimmed2 [string trimright $trimmed1 offline]
+                        set trimmed3 [string trim $trimmed2]
+                        puts "offline:$trimmed3\r"
+                        send -- "smtool -online $trimmed3 \r"
+                        expect "#"
+                        send -- "smtool -p\r"
+                        expect "#"
+                        exec sleep 20
+                } elseif {[string match "*unlicensed*" $trimmed1]} {
+                        set trimmed2 [string trimright $trimmed1 unlicensed]
+                        set trimmed3 [string trim $trimmed2]
+                        puts "offline:$trimmed3\r"
+                        send -- "smtool -online $trimmed3 \r"
+                        expect "#"
+                        send -- "smtool -p\r"
+                        expect "#"
+                        exec sleep 20
+                }       
+
+
+}
+
+##########################################
+############# ONLINE MCs END #############
+##########################################

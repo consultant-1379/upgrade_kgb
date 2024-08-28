@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Thursday 30th of May 2013 11:37:04
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="SCK"
+SPEC_UC_NAME="SCK_X86_MS_POSTINSTALL_WITH_DPASS_PPASS"
+SPEC_TC_ID=690
+SPEC_TC_SLOGAN="Generating and Migrating Data"
+SPEC_TC_TYPE="KGB"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="high"
+SPEC_TC_AUTOMATED=1
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=4500
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xjithbv"
+SPEC_TC_AUTOMATOR="xjithbv"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+#TBD
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#The following chapter describes generating and migrating initial LDAP Name
+#Service Data and Initializing the Master Server as an LDAP Name Service
+#Client.
+#There are two scenarios:
+#• If the ppass anddpass boot argument parameters are used, the Master
+#Server is automatically configured as an LDAP client. .
+#• If the ppassand dpass boot argument parameters are not used, the
+#Master Server is not automatically configured as an LDAP client. In this
+#scenario a number of additional steps are required.
+#The following steps describe how to configure the Master Server as an LDAP
+#client, and migrate the Master Server data to the LDAP Server if the ppass
+#and boot dpass argument parameters are used.
+#1. Generate the LDAP name service data on the OSS Master Server:
+##/opt/ericsson/sck/bin/configure_ldap.bsh -g -y
+#2. The LDAP migration data is generated in:
+#/var/tmp/ossldap/migrate/ldap_mig_files
+#The post-migration Master Server files are generated in:
+#/var/tmp/ossldap/migrate/post_mig_etc_files
+#The log file is:
+#/var/tmp/ossldap/migrate/logs/configure_ldap_log_<tim
+#estamp>.log
+#3. Migrate the LDAP name service data from the OSS Master Server to the
+#O&M Services Server. The migration of the LDAP data, generated in the
+#previous step, is started as follows:
+## /opt/ericsson/sck/bin/configure_ldap.bsh -m
+#4. Install the Master Server post-migration files (remove migrated users and
+#groups from Master Server files):
+## /opt/ericsson/sck/bin/configure_ldap.bsh -e
+#5. Finalize LDAP client setup:
+## /opt/ericsson/sck/bin/maintain_ldap.bsh
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+#TBD
+# END_POST_CONDITIONS

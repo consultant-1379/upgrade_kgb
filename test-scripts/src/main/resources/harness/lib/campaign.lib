@@ -1,0 +1,558 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+# CAMPAIGN function library
+
+# Revision History
+# 20/09/2013    edavmax		Initial script
+
+# OS commands
+if [[ "$(uname)" = "SunOS" ]]; then
+	AWK=/usr/xpg4/bin/awk
+fi
+if [[ "$(uname)" = "Linux" ]]; then
+	AWK=/bin/awk
+fi
+
+FIND=/usr/bin/find
+WC=/usr/bin/wc
+CHMOD=/bin/chmod
+RM=/bin/rm
+TEE=/usr/bin/tee
+MKDIR=/bin/mkdir
+DATE=/bin/date
+MV=/bin/mv
+RM=/bin/rm
+LS=/bin/ls
+SORT=/bin/sort
+HEAD=/usr/bin/head
+GREP=/bin/grep
+CAT=/bin/cat
+XARGS=/usr/bin/xargs
+BASENAME=/bin/basename
+DIRNAME=/usr/bin/dirname
+BC=/usr/bin/bc
+TAR=/bin/tar
+GZIP=/bin/gzip
+SLEEP=/bin/sleep
+KILL=/bin/kill
+PERL=/usr/bin/perl
+TOUCH=/bin/touch
+EGREP=/bin/egrep
+SED=/bin/sed
+
+init_cp_spec() {
+
+        SPEC_CP_NAME=
+        SPEC_CP_ID=
+        SPEC_CP_SLOGAN=
+        SPEC_CP_TIMEOUT=
+        SPEC_CP_AUTHOR=
+        SPEC_CP_INDEPENDENT=
+        declare -a SPEC_CP_OBJ_IDS=()
+        declare -a SPEC_CP_HOST_IDS=()
+
+        return 0
+
+}
+
+#
+# Writes out separate HTML report file
+# for each stage
+#
+
+write_reports_html() {
+	local count=0
+	[ ! -s $CP_RESULT_FILE ] && {
+		echo "Error $FUNCNAME - results file $CP_RESULT_FILE missing or empty"
+		return 1
+	}
+
+	local datetime=$(date "+%Y-%m-%d %H:%M:%S")
+	while [ $count -lt ${#SPEC_CP_OBJ_IDS[@]} ]; do
+		stage=$( expr $count + 1)	
+		html_file=$AT_RESULTS_DIR/stage${stage}_report.html
+		eval ret="\$CP_STAGE${stage}_RETCODE"
+		if [ "$ret" != 99 ]; then
+			write_header_html $html_file
+			printf "<body>\n" >> $html_file
+			write_sidebar $html_file $stage
+			write_content $html_file $stage
+			#printf "<p><b>CI Test Job [${AT_JOB}] completed on target [$(hostname)] at ${datetime}</b></p>\n" >> ${html_file}
+			printf "</body>\n" >> $html_file
+			write_footer_html $html_file
+		fi
+		let count+=1
+	done
+	
+	cd - >/dev/null 2>&1
+	
+	return 0
+
+}
+
+#
+# Single-doc version of the report which contains
+# reports from all stages
+#
+#
+
+write_singlereport_html() {
+	local count=0
+	[ ! -s $CP_RESULT_FILE ] && {
+		echo "Error $FUNCNAME - results file $CP_RESULT_FILE missing or empty"
+		return 1
+	}
+	html_file=$AT_RESULTS_DIR/allstages_report.html
+	write_header_html $html_file
+	printf "<body>\n" >> $html_file
+	write_sidebar $html_file 1 
+	write_all_content $html_file 
+	printf "</body>\n" >> $html_file
+	write_footer_html $html_file
+
+
+}
+
+write_sidebar() {
+	
+	local html_file=$1
+	local sel_stage=$2
+	local count=0
+	local stage
+	printf "<div id=\"sidebar\">\n" >> $html_file
+	printf "<h3>$SPEC_CP_NAME</h3>\n" >> $html_file
+	printf "<div id=\"tablewrap\">\n" >> $html_file
+	printf "<table>\n" >> $html_file
+	while [ $count -lt ${#SPEC_CP_OBJ_IDS[@]} ]; do
+		stage=$( expr $count + 1 )
+		if [ $stage -eq $sel_stage ]; then
+			sel_html="&#9658;"
+		else
+			sel_html="&nbsp;"
+		fi
+		
+		eval ele=\$CP_STAGE${stage}_ELEMENT
+		eval retcode=\$CP_STAGE${stage}_RETCODE
+		eval slogan="\$CP_STAGE${stage}_SLOGAN"
+		eval remark="\$CP_STAGE${stage}_REMARK"
+		eval ele="\$CP_STAGE${stage}_ELEMENT"
+		case "$retcode" in
+		 	0)
+				css_class=success
+				;;
+			99)
+				css_class=not_run
+				;;
+			*)
+				css_class=failure
+				;;
+		esac
+		printf "<tr>\n" >> $html_file
+		printf "<td class=\"$css_class\">\n" >> $html_file
+		printf "<table>\n" >> $html_file
+		printf "<tr>\n" >> $html_file
+		printf "<td><strong>$sel_html STAGE $stage</strong></td>\n" >> $html_file
+		printf "</tr>\n" >> $html_file
+		printf "<tr>\n" >> $html_file
+		printf "<td><em>$ele</em></td>\n" >> $html_file
+		printf "</tr>\n" >> $html_file
+		printf "<tr>\n" >> $html_file
+		printf "<td>$slogan</td>\n" >> $html_file
+		printf "</tr>\n" >> $html_file
+		printf "<tr>\n" >> $html_file
+		printf "<td>$remark</td>\n" >> $html_file
+		printf "</tr>\n" >> $html_file
+		printf "<tr>\n" >> $html_file
+		printf "<td><a href=\"./stage${stage}_report.html\">Report</a></td>\n" >> $html_file
+		printf "</tr>\n" >> $html_file
+		printf "</table>\n" >> $html_file
+		printf "</td>\n" >> $html_file
+		printf "</tr>\n" >> $html_file
+		if [ $( expr ${#SPEC_CP_OBJ_IDS[@]} - $count ) -ge 2 ]; then
+			printf "<tr>\n" >> $html_file
+			printf "<td class=\"largetext\">\n" >> $html_file
+			printf "&darr;\n" >> $html_file
+			printf "</td>\n" >> $html_file
+			printf "</tr>\n" >> $html_file
+		fi
+
+		let count+=1
+	done
+	printf "</table>\n" >> $html_file
+	printf "</div>\n" >> $html_file
+	printf "</div>\n" >> $html_file
+
+}
+
+write_content() {
+	local html_file=$1
+	local stage=$2
+	local datetime=$(date "+%Y-%m-%d %H:%M:%S")
+
+	local index=$( expr $stage - 1 )
+	eval slogan="\$CP_STAGE${stage}_SLOGAN"
+	eval rem="\$CP_STAGE${stage}_REMARK"
+	
+	printf "<div id=\"maincontent\">\n" >> $html_file
+	printf "<h3>$SPEC_CP_NAME</h3>\n" >> $html_file
+	printf "<p>$SPEC_CP_DESC</p>\n" >> $html_file
+	printf "<p>Campaign [${AT_JOB}] completed on target [$(hostname)] at ${datetime}</p>\n" >> ${html_file}
+	printf "<h4>Overall Result: $CP_RESULT</h4>\n" >> $html_file
+	printf "<p><a href=\"allstages_report.html\">Full report</a></p>\n" >> $html_file
+	printf "<h4>STAGE $stage - $slogan ($rem)</h4>\n" >> $html_file
+	if [ -s $CP_RESULT_DIR/${SPEC_CP_OBJ_IDS[$index]}_stage${stage}/index.html ]; then
+		html_content=$( sed -n '/<body>/,/<\/body>/p' $CP_RESULT_DIR/${SPEC_CP_OBJ_IDS[$index]}_stage${stage}/index.html | sed -e 's/\(<body>\|<\/body>\)//g' -e 's,<a href=\(.*\)>,<a href='$SPEC_CP_NAME/${SPEC_CP_OBJ_IDS[$index]}_stage${stage}/'\1>,g' )
+		echo $html_content >> $html_file
+	else
+		echo "Warning - unable to find HTML report for stage $stage $CP_RESULT_DIR/${SPEC_CP_OBJ_IDS[$index]}_stage${stage}/index.html or file empty"
+	fi
+	printf "</div>\n" >> $html_file
+}
+
+write_all_content() {
+	local html_file=$1
+	local count=0
+	local datetime=$(date "+%Y-%m-%d %H:%M:%S")
+	printf "<div id=\"maincontent\">\n" >> $html_file
+	printf "<h3>$SPEC_CP_NAME</h3>\n" >> $html_file
+	printf "<p>$SPEC_CP_DESC</p>\n" >> $html_file
+	printf "<p>Campaign [${AT_JOB}] completed on target [$(hostname)] at ${datetime}</p>\n" >> ${html_file}
+	printf "<h4>Overall Result: $CP_RESULT</h4>\n" >> $html_file
+	printf "<ul>\n" >> $html_file
+	while [ $count -lt ${#SPEC_CP_OBJ_IDS[@]} ]; do
+		stage=$( expr $count + 1 )
+		printf "<li><a href=\"#stage${stage}\">STAGE${stage} Report</a></li>\n" >> $html_file
+		let count+=1
+	done
+	printf "</ul>\n" >> $html_file
+	count=0
+	while [ $count -lt ${#SPEC_CP_OBJ_IDS[@]} ]; do
+		stage=$( expr $count + 1 )
+		eval slogan="\$CP_STAGE${stage}_SLOGAN"
+		eval ret="\$CP_STAGE${stage}_RETCODE"
+		eval rem="\$CP_STAGE${stage}_REMARK"
+		printf "<h4><a id=stage${stage}>STAGE $stage - $slogan ($rem)</a></h4>\n" >> $html_file
+		if [ "$ret" != 99 ]; then
+			if [ -s $CP_RESULT_DIR/${SPEC_CP_OBJ_IDS[$count]}_stage${stage}/index.html ]; then
+				html_content=$( sed -n '/<body>/,/<\/body>/p' $CP_RESULT_DIR/${SPEC_CP_OBJ_IDS[$count]}_stage${stage}/index.html | sed -e 's/\(<body>\|<\/body>\)//g' -e 's,<a href=\(.*\)>,<a href='$SPEC_CP_NAME/${SPEC_CP_OBJ_IDS[$count]}_stage${stage}/'\1>,g' )
+				echo $html_content >> $html_file
+			else
+				echo "Warning - unable to find HTML report for stage $stage $CP_RESULT_DIR/${SPEC_CP_OBJ_IDS[$count]}_stage${stage}/index.html or file empty"
+			fi
+			printf "<hr>\n" >> $html_file
+		fi
+		let count+=1
+	done
+	printf "</div>\n" >> $html_file
+
+}
+
+write_report_txt() {
+	[ ! -s $CP_RESULT_FILE ] && {
+		echo "Error $FUNCNAME - results file $CP_RESULT_FILE missing or empty"
+		return 1
+	}
+	. $CP_RESULT_FILE
+	printf "%-20s %-20s\n" "Overall result: " $CP_RESULT >> $AT_REPORT_TXT
+	printf "%-20s %-20s\n" "Duration: " ${CP_DURATION}s >> $AT_REPORT_TXT
+	printf "%-20s %-20s\n" "Remark: " $CP_REMARK >> $AT_REPORT_TXT
+	local count=0
+	while [ $count -lt ${#SPEC_CP_OBJ_IDS[@]} ]; do
+	   	stage=$( expr $count + 1 )
+		eval ele=\$CP_STAGE${stage}_ELEMENT
+		eval slogan="\$CP_STAGE${stage}_SLOGAN"
+		eval remark="\$CP_STAGE${stage}_REMARK"
+		printf "STAGE:%2d %-10s %-30s %100s\n" $stage $ele "$slogan" "$remark" >> $AT_REPORT_TXT
+		let count+=1
+	done
+	
+
+	return 0
+
+}
+
+write_header_html() {
+
+	local html_file=$1
+
+
+${CAT} >${html_file} << EOF
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US">
+<head><title>Campaign Test Report JOB [${AT_JOB}]</title>
+	<script src="sorttable.js"></script>
+<style>
+
+td {
+        text-align:center;
+        vertical-align:middle;
+}
+
+table {
+        width: 100%;
+
+}
+
+
+.success {
+        background-color: #00FF00;
+}
+.failure {
+        background-color: #FF0000;
+}
+.not_run {
+        background-color: #E0E0E0;
+}
+
+.largetext {
+        font-size: 200%;
+
+}
+
+#sidebar {
+        width: 400px;
+        height: 100%;
+        float: left;
+        background-color: #F2F5A9;
+	overflow:auto;
+}
+
+#tablewrap {
+	margin-left: 50px;
+	margin-right: 50px;
+
+}
+
+#maincontent {
+        height: 100%;
+        padding-left: 15px;
+        margin-left: 400px;
+
+
+}
+
+</style>
+
+</head>
+EOF
+
+	return 0
+
+}
+
+write_footer_html() {
+	local html_file=$1
+${CAT} >>${html_file} << EOF
+</html>
+EOF
+	return 0
+
+}
+
+write_report_archive() {
+
+	declare -i ret
+
+	${RM} -f ${AT_REPORT_ARCHIVE}
+
+	cd ${AT_RESULTS_DIR}/..
+	cp ${AT_LIB}/sorttable.js ${AT_RESULTS_DIR}
+	ret=$?
+	if [[ ${ret} -ne 0 ]]; then
+		printf "WARNING: [cp ${AT_LIB}/sorttable.js ${AT_RESULTS_DIR} failed; error [${ret}] ; index.html will not have sortable columns\n"
+	fi
+	# Archive
+	${TAR} cvf ${AT_REPORT_ARCHIVE} ${AT_JOB} >/dev/null
+	ret=$?
+	if [[ ${ret} -ne 0 ]]; then
+		printf "ERROR: [${TAR} cvf ${AT_REPORT_ARCHIVE} ${AT_JOB}] failed; error [${ret}]\n"
+		exit 1
+	fi
+	
+	# Compress
+	${GZIP} ${AT_REPORT_ARCHIVE}
+	ret=$?
+	if [[ ${ret} -ne 0 ]]; then
+		printf "ERROR: [${TAR} cvf ${AT_REPORT_ARCHIVE} ${AT_JOB}] failed; error [${ret}]\n"
+		exit 1
+	fi
+	
+	printf "Results folder: ${AT_RESULTS_DIR}\n"
+	#printf "Results summary: ${AT_SUMMARY}\n\n"
+	#${CAT} ${AT_SUMMARY} | ${GREP} -v 'bash' 2>/dev/null
+	printf "\nTest report (txt): ${AT_REPORT_TXT}\n"
+	printf "Test report (html): ${AT_REPORT_HTML}\n\n"
+	printf "Report archive: ${AT_REPORT_ARCHIVE}.gz\n\n"
+	
+	return 0
+
+}
+
+####################################
+# Purpose: create output like Solaris "banner" command
+# Usage: bashBanner <text>
+#
+# Return Values:
+# 0 success
+# 1 failure
+#
+# Input globals accessed by this function
+# Group (Oss or Sybase1)
+#
+# Output globals set by this function
+# TO_SERVER    (The server group is swiched to)
+##############################
+bashBanner ()
+{
+
+A=$((1<<0))
+B=$((1<<1))
+C=$((1<<2))
+D=$((1<<3))
+E=$((1<<4))
+F=$((1<<5))
+G=$((1<<6))
+H=$((1<<7))
+
+function outLine
+{
+  typeset r=0 scan
+  for scan
+  do
+    typeset l=${#scan}
+    typeset line=0
+    for ((p=0; p<l; p++))
+    do
+      line="$((line+${scan:$p:1}))"
+    done
+    for ((column=0; column<8; column++))
+      do
+        [[ $((line & (1<<column))) == 0 ]] && n=" " || n="#"
+        raw[r]="${raw[r]}$n"
+      done
+      r=$((r+1))
+    done
+}
+
+function outChar
+{
+    case "$1" in
+    (" ") outLine "" "" "" "" "" "" "" "" ;;
+    ("0") outLine "BCDEF" "AFG" "AEG" "ADG" "ACG" "ABG" "BCDEF" "" ;;
+    ("1") outLine "F" "EF" "F" "F" "F" "F" "F" "" ;;
+    ("2") outLine "BCDEF" "AG" "G" "CDEF" "B" "A" "ABCDEFG" "" ;;
+    ("3") outLine "BCDEF" "AG" "G" "CDEF" "G" "AG" "BCDEF" "" ;;
+    ("4") outLine "AF" "AF" "AF" "BCDEFG" "F" "F" "F" "" ;;
+    ("5") outLine "ABCDEFG" "A" "A" "ABCDEF" "G" "AG" "BCDEF" "" ;;
+    ("6") outLine "BCDEF" "A" "A" "BCDEF" "AG" "AG" "BCDEF" "" ;;
+    ("7") outLine "BCDEFG" "G" "F" "E" "D" "C" "B" "" ;;
+    ("8") outLine "BCDEF" "AG" "AG" "BCDEF" "AG" "AG" "BCDEF" "" ;;
+    ("9") outLine "BCDEF" "AG" "AG" "BCDEF" "G" "G" "BCDEF" "" ;;
+    ("a") outLine "" "" "BCDE" "F" "BCDEF" "AF" "BCDEG" "" ;;
+    ("b") outLine "B" "B" "BCDEF" "BG" "BG" "BG" "ACDEF" "" ;;
+    ("c") outLine "" "" "CDE" "BF" "A" "BF" "CDE" "" ;;
+    ("d") outLine "F" "F" "BCDEF" "AF" "AF" "AF" "BCDEG" "" ;;
+    ("e") outLine "" "" "BCDE" "AF" "ABCDEF" "A" "BCDE" "" ;;
+    ("f") outLine "CDE" "B" "B" "ABCD" "B" "B" "B" "" ;;
+    ("g") outLine "" "" "BCDEG" "AF" "AF" "BCDE" "F" "BCDE" ;;
+    ("h") outLine "B" "B" "BCDE" "BF" "BF" "BF" "ABF" "" ;;
+    ("i") outLine "C" "" "BC" "C" "C" "C" "ABCDE" "" ;;
+    ("j") outLine "D" "" "CD" "D" "D" "D" "AD" "BC" ;;
+    ("k") outLine "B" "BE" "BD" "BC" "BD" "BE" "ABEF" "" ;;
+    ("l") outLine "AB" "B" "B" "B" "B" "B" "ABC" "" ;;
+    ("m") outLine "" "" "ACEF" "ABDG" "ADG" "ADG" "ADG" "" ;;
+    ("n") outLine "" "" "BDE" "BCF" "BF" "BF" "BF" "" ;;
+    ("o") outLine "" "" "BCDE" "AF" "AF" "AF" "BCDE" "" ;;
+    ("p") outLine "" "" "ABCDE" "BF" "BF" "BCDE" "B" "AB" ;;
+    ("q") outLine "" "" "BCDEG" "AF" "AF" "BCDE" "F" "FG" ;;
+    ("r") outLine "" "" "ABDE" "BCF" "B" "B" "AB" "" ;;
+    ("s") outLine "" "" "BCDE" "A" "BCDE" "F" "ABCDE" "" ;;
+    ("t") outLine "C" "C" "ABCDE" "C" "C" "C" "DE" "" ;;
+    ("u") outLine "" "" "AF" "AF" "AF" "AF" "BCDEG" "" ;;
+    ("v") outLine "" "" "AG" "BF" "BF" "CE" "D" "" ;;
+    ("w") outLine "" "" "AG" "AG" "ADG" "ADG" "BCEF" "" ;;
+    ("x") outLine "" "" "AF" "BE" "CD" "BE" "AF" "" ;;
+    ("y") outLine "" "" "BF" "BF" "BF" "CDE" "E" "BCD" ;;
+    ("z") outLine "" "" "ABCDEF" "E" "D" "C" "BCDEFG" "" ;;
+    ("A") outLine "D" "CE" "BF" "AG" "ABCDEFG" "AG" "AG" "" ;;
+    ("B") outLine "ABCDE" "AF" "AF" "ABCDE" "AF" "AF" "ABCDE" "" ;;
+    ("C") outLine "CDE" "BF" "A" "A" "A" "BF" "CDE" "" ;;
+    ("D") outLine "ABCD" "AE" "AF" "AF" "AF" "AE" "ABCD" "" ;;
+    ("E") outLine "ABCDEF" "A" "A" "ABCDE" "A" "A" "ABCDEF" "" ;;
+    ("F") outLine "ABCDEF" "A" "A" "ABCDE" "A" "A" "A" "" ;;
+    ("G") outLine "CDE" "BF" "A" "A" "AEFG" "BFG" "CDEG" "" ;;
+    ("H") outLine "AG" "AG" "AG" "ABCDEFG" "AG" "AG" "AG" "" ;;
+    ("I") outLine "ABCDE" "C" "C" "C" "C" "C" "ABCDE" "" ;;
+    ("J") outLine "BCDEF" "D" "D" "D" "D" "BD" "C" "" ;;
+    ("K") outLine "AF" "AE" "AD" "ABC" "AD" "AE" "AF" "" ;;
+    ("L") outLine "A" "A" "A" "A" "A" "A" "ABCDEF" "" ;;
+    ("M") outLine "ABFG" "ACEG" "ADG" "AG" "AG" "AG" "AG" "" ;;
+    ("N") outLine "AG" "ABG" "ACG" "ADG" "AEG" "AFG" "AG" "" ;;
+    ("O") outLine "CDE" "BF" "AG" "AG" "AG" "BF" "CDE" "" ;;
+    ("P") outLine "ABCDE" "AF" "AF" "ABCDE" "A" "A" "A" "" ;;
+    ("Q") outLine "CDE" "BF" "AG" "AG" "ACG" "BDF" "CDE" "FG" ;;
+    ("R") outLine "ABCD" "AE" "AE" "ABCD" "AE" "AF" "AF" "" ;;
+    ("S") outLine "CDE" "BF" "C" "D" "E" "BF" "CDE" "" ;;
+    ("T") outLine "ABCDEFG" "D" "D" "D" "D" "D" "D" "" ;;
+    ("U") outLine "AG" "AG" "AG" "AG" "AG" "BF" "CDE" "" ;;
+    ("V") outLine "AG" "AG" "BF" "BF" "CE" "CE" "D" "" ;;
+    ("W") outLine "AG" "AG" "AG" "AG" "ADG" "ACEG" "BF" "" ;;
+    ("X") outLine "AG" "AG" "BF" "CDE" "BF" "AG" "AG" "" ;;
+    ("Y") outLine "AG" "AG" "BF" "CE" "D" "D" "D" "" ;;
+    ("Z") outLine "ABCDEFG" "F" "E" "D" "C" "B" "ABCDEFG" "" ;;
+    (".") outLine "" "" "" "" "" "" "D" "" ;;
+    (",") outLine "" "" "" "" "" "E" "E" "D" ;;
+    (":") outLine "" "" "" "" "D" "" "D" "" ;;
+    ("!") outLine "D" "D" "D" "D" "D" "" "D" "" ;;
+    ("/") outLine "G" "F" "E" "D" "C" "B" "A" "" ;;
+    ("\\") outLine "A" "B" "C" "D" "E" "F" "G" "" ;;
+    ("|") outLine "D" "D" "D" "D" "D" "D" "D" "D" ;;
+    ("+") outLine "" "D" "D" "BCDEF" "D" "D" "" "" ;;
+    ("-") outLine "" "" "" "BCDEF" "" "" "" "" ;;
+    ("*") outLine "" "BDF" "CDE" "D" "CDE" "BDF" "" "" ;;
+    ("=") outLine "" "" "BCDEF" "" "BCDEF" "" "" "" ;;
+    ("~") outLine "BC" "ADG" "EF" "" "" "" "" "" ;;
+    ("_") outLine "" "" "" "" "" "" "" "ABCDEFGH" ;;
+    (">") outLine "C" "D" "E" "F" "E" "D" "C" "" ;;
+    ("<") outLine "F" "E" "D" "C" "D" "E" "F" "" ;;
+
+    (*) outLine "ABCDEFGH" "AH" "AH" "AH" "AH" "AH" "AH" "ABCDEFGH" ;;
+    esac
+}
+
+function outArg
+{
+  typeset l=${#1} c r
+  for ((c=0; c<l; c++))
+  do
+    outChar "${1:$c:1}"
+  done
+  echo
+  for ((r=0; r<8; r++))
+  do
+    printf "%-*.*s\n" "${COLUMNS:-80}" "${COLUMNS:-80}" "${raw[r]}"
+    raw[r]=""
+  done
+}
+
+for i
+do
+  outArg "$i"
+  echo
+done
+}
+

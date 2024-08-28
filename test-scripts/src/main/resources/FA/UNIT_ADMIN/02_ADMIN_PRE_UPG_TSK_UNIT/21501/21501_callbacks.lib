@@ -1,0 +1,210 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+    
+    
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+    
+    source /opt/ericsson/sck/lib/admin_common_functions.lib
+
+	#initial cleanup
+    LOCAL_HOSTNAME=$( $UNAME -n )
+    $RM ${DMR_DEF}.${LOCAL_HOSTNAME}
+
+    orc_get_remote_hostname $LOCAL_HOSTNAME
+    RC=$?
+    if [ $RC -eq 0 ]
+    then
+        $RM ${DMR_DEF}.${G_REMOTEHOST}
+    else
+		return 1
+	fi 	
+
+	#Main body of test
+
+    orc_header_2 "Checking mirror configuration on  $($UNAME -n)"
+
+    res=0
+	res_rem=0
+
+	admin_check_mirror_status
+
+
+    res=$?
+
+	#Only run if on a HA cluster
+    if ( ! admin_check_single_node )
+    then
+        admin_check_remote_mirror_status
+
+        res_rem=$?
+        #Only copy files if remote server is reachable
+
+        if [ ${res_rem} -eq 0 ]
+        then
+            [ "${DEBUG}" ] && orc_log_script "About to copy dm_define to remote host"
+            LOCAL_HOSTNAME=$( $UNAME -n )
+
+            #get name of remote host. If successful, should set G_REMOTEHOST env variable
+            orc_get_remote_hostname $LOCAL_HOSTNAME
+            RC=$?
+            if [ $RC -eq 0 ]
+            then
+                admin_make_dm_def_backup $G_REMOTEHOST
+                RC=$?
+                if [ $RC -eq 0 ]
+                then
+                    orc_log_tag "UPGRADE_TASKS_INFO: DMR definition file copied to $G_REMOTEHOST. [OK]"
+                else
+                    orc_log_tag "UPGRADE_TASKS_ERROR: Failed to copy DMR definition file to ${G_REMOTEHOST}. [NOK]"
+                    res_rem=1
+                fi
+            else
+                orc_log_tag "UPGRADE_TASKS_ERROR: Could not identify remote host. Check cluster settings. [NOK]"
+                res_rem=1
+            fi
+        fi
+
+    fi
+	#Main body of test: End 
+
+#Now check for existence of backed up files
+    if [ -f ${DMR_DEF}.${LOCAL_HOSTNAME} ] && [ -f ${DMR_DEF}.${G_REMOTEHOST} ]
+    then
+        $ECHO "Files are  present on local host"
+        return 0
+    else
+        $ECHO "Files NOT present on local host"
+        return 1
+    fi
+
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+	return 0
+
+}
+
+
+

@@ -1,0 +1,577 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+# NFD function library
+# NOTE: Please keep function names consistent and meaningful. i.e use 'get','set','is' 
+#       Please use a variable called RESULT to store the result of a Function, or preferably 
+#       echo the string so that the funtion name can be used as the return string as indicated in the example below.
+# E.G.  [[ $(getHostname) == "atrcxb2214" ]]
+
+# Revision History
+# 10/08/2012    eeidle         Initial script
+#   Provides a set of library functions related to SCK,USCK, STG and SOLARIS Teams
+
+###################
+# GLOBAL VARIABLES
+###################
+
+
+#New generic function to replace server specific functions
+addDHCP_client () {
+# add a dhcp client to the MWS.  Supports different cient types.
+# $1 = server to add as DHCP client
+# $2 = client type [bmr|oss|sol|mws]
+	local _dhcp_client=$1
+	local _dhcp_type=$2
+
+	[[ -z $_dhcp_client || -z $_dhcp_type ]] && {
+		err_msg "arguments required for $FUNCNAME were not supplied. Usage: $FUNCNAME <client> <oss|bmr|sol>" $LINENO $FUNCNAME 1
+		return 1
+	}
+	
+	get_server_details $_dhcp_client || {
+		err_msg "Unable to get $_dhcp_client details, CI config issue" $LINENO $FUNCNAME 1
+		return 1
+	}
+	
+	macaddr=${_SERVER_DETAILS[2]}
+	ip_addr=${_SERVER_DETAILS[1]}
+	ipv6_addr=${_SERVER_DETAILS[10]}
+	march=${_SERVER_DETAILS[3]}
+	server_vendor=${_SERVER_DETAILS[5]}
+	netmask=${_SERVER_DETAILS[14]}
+	# if netmask is not in env file, try pre-ini file
+	[ -z "$netmask" ] && {
+	get_preini_param $CI_ADMIN1_HOSTNAME pubNETMM netmask
+	}
+	
+	if [ $_dhcp_type == "BMR" -o $_dhcp_type == "bmr" ] ;then
+		X86II_create_dhcp_client_file $_dhcp_client $ip_addr $netmask $macaddr $server_vendor "inst_type=ossrc bmr_inst rmirr" || { local _rt=$?; err_msg "Create $_dhcp_type DHCP client file failed" $LINENO $FUNCNAME $_rt; return ${_rt}; }
+	
+	elif [ $_dhcp_type == "sol" ] ;then
+		X86II_create_dhcp_client_file $_dhcp_client $ip_addr $netmask $macaddr $server_vendor "inst_type=cominf config=smrs_slave" || { local _rt=$?; err_msg "Create $_dhcp_type DHCP client file failed" $LINENO $FUNCNAME $_rt; return ${_rt}; }
+		
+	elif [ $_dhcp_type == "mws" ] ;then
+		X86II_create_dhcp_client_file $_dhcp_client $ip_addr $netmask $macaddr $server_vendor "inst_type=solonly config=mws" || { local _rt=$?; err_msg "Create $_dhcp_type DHCP client file failed" $LINENO $FUNCNAME $_rt; return ${_rt}; }
+		
+	elif [ $_dhcp_type == "oss" -o $_dhcp_type == "admin1" -o $_dhcp_type == "admin" ] ;then
+		get_preini_param $_dhcp_client PRIMARYFQHN ldap_server
+		get_preini_param $_dhcp_client LDAPSERVERIP ldap_server_ip
+		rootcer_location=/JUMP/MWS_add_client_files/rootcer/rootca.cer.$ldap_server
+		preini_file=/net/${CI_MWS_IP}/JUMP/MWS_add_client_files/preinirate_${_dhcp_client}
+		get_preini_param $_dhcp_client LDAPDOMAINNAME ldap_domain_name
+		get_preini_param $_dhcp_client LDAPPROXYPASSWORD ldap_proxy_pass
+		get_preini_param $_dhcp_client LDAPCLIENTCERTDBPW ldap_certdb_pass
+		
+		if [ -z "$ldap_server" ]; then
+			ldap_server=none
+			ldap_domain_name=${_dhcp_client}.com
+		else
+		# check if rootca for this ldap server installed on MWS
+			$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@$CI_MWS_HOSTNAME /ericsson/jumpstart/bin/manage_pks_rootcerts.bsh -a list" $CI_MWS_ROOTPW | grep -w $ldap_server > /dev/null || {
+				[[  -f "/var/tmp/rootca.cer.$ldap_server" ]] && rm /var/tmp/rootca.cer.$ldap_server
+				$EXPECT $AT_LIB/exp_files/getldaprootca.exp $ldap_server $ldap_server_ip
+				[[  -f "/var/tmp/rootca.cer.$ldap_server" ]] || { local _rt=$?; err_msg "rootca.cer is missing" $LINENO $FUNCNAME $_rt; return ${_rt}; }
+				if [ -s /net/${CI_MWS_HOSTNAME}/$rootcer_location ]; then
+					/bin/rm -f /net/${CI_MWS_HOSTNAME}/$rootcer_location
+				fi
+            
+				cp /var/tmp/rootca.cer.$ldap_server /net/${CI_MWS_IP}/JUMP/MWS_add_client_files/rootcer/ || { local _rt=$?; err_msg "Failed to copy rootca.cer to MWS" $LINENO $FUNCNAME $_rt; return ${_rt}; }
+				$EXPECT $AT_LIB/exp_files/add_ldap_rootcer.exp $ldap_server $CI_MWS_HOSTNAME $CI_MWS_ROOTPW || { local _rt=$?; err_msg "Failed to add rootca.cer on MWS" $LINENO $FUNCNAME $_rt; return ${_rt}; }
+			}
+		fi
+		
+		X86II_removeDHCPConfig ${_dhcp_client} || { local _rt=$?; err_msg "Failed to remove DHCP client config" $LINENO $FUNCNAME $_rt; return ${_rt}; }
+		mws_clientfile=/net/${CI_MWS_IP}/JUMP/MWS_add_client_files/mws_${_dhcp_client}
+		[ -s $mws_clientfile ] && /bin/rm -f $mws_clientfile
+		touch $mws_clientfile || { local _rt=$?; err_msg "failed to create file $mws_clientfile" $LINENO $FUNCNAME $_rt; return ${_rt}; }
+			
+		sollocmws=$(cat /net/${CI_MWS_HOSTNAME}/export/jumpstart/teams/$CI_TEAM/OSSRC_$CI_RELEASE/$CI_SHIPMENT_SRC/sol_x86.loc)
+		[ -z "$sollocmws" ] && {
+			err_msg "unable to determine solaris jumpstart location for $CI_RELEASE/$CI_SHIPMENT" $LINENO $FUNCNAME $?
+			return 1
+		}
+		
+		if [ "$server_vendor" = vmware ]; then
+			vga_type=VGA
+		else
+			vga_type=NON-VGA
+		fi
+		
+		cat << EOF > $mws_clientfile
+CLIENT_HOSTNAME@$_dhcp_client
+CLIENT_IP_ADDR@$ip_addr
+CLIENT_NETMASK@$netmask
+CLIENT_MAC_ADDR@$macaddr
+CLIENT_ARCH@i86pc
+CLIENT_DISP_TYPE@$vga_type
+LDAP_SERVER_HOSTNAME@$ldap_server
+LDAP_DOMAIN_NAME@$ldap_domain_name
+LDAP_ROOTCERT@$rootcer_location
+CLIENT_JUMP_LOC@$sollocmws
+CLIENT_OM_LOC@/export/SW_LOCATION/OM_MEDIA/OSSRC_$CI_OM_RELEASE/$CI_OM_SHIPMENT
+CLIENT_APPL_TYPE@ossrc
+CLIENT_APPL_MEDIA_LOC@/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_$CI_RELEASE/$CI_SHIPMENT
+IPV6_PARAMETER@${CI_IPV6}
+EOF
+		if [ "$CI_IPV6" = YES ]; then
+			echo "CLIENT_IP_ADDR_V6@$ipv6_addr" >> $mws_clientfile
+			echo "ROUTER_IP_ADDR_V6@$CI_IPV6_ROUTER" >> $mws_clientfile
+		fi
+		if  [ ${CI_PRE_INI} = "YES" ] ;then
+						
+			if [ ! -s $preini_file ]; then
+				err_msg "failed to locate preini file \"$preini_file\" or file empty preini problem" $LINENO $FUNCNAME $?
+				return 1
+			fi
+			
+			getVeritasLicense || {
+			error "Error - failed to get Veritas License key" "Veritas License problem"
+			return 1
+			}
+			
+			installcmd="CLIENT_INSTALL_PARAMS@- install label_disks inst_type=ossrc config=system rmirr ppass=$ldap_proxy_pass dpass=$ldap_certdb_pass pre_ini=${CI_MWS_IP}:/JUMP/MWS_add_client_files/"
+			$SED s/VXVMLIC.*/VXVMLIC=$VER_LIC/ $preini_file > /tmp/preini.$$ &&
+			chmod 777 /tmp/preini.$$
+            /bin/mv -f /tmp/preini.$$ $preini_file || {
+				err_msg "failed to update preini file, preini problem" $LINENO $FUNCNAME $?
+				return 1
+			}
+	
+		else
+        	installcmd="CLIENT_INSTALL_PARAMS@- install inst_type=ossrc config=system environ=test label_disks"
+		fi
+	
+		if [ "$CI_ENVIRON_TEST" = TRUE ]; then
+			installcmd="$installcmd environ=test"
+		fi
+		
+		if [ "$CI_COMPACT_OSS" = TRUE ]; then
+			installcmd="$installcmd environ=basic"
+		fi
+
+		echo $installcmd >> $mws_clientfile
+		wait_mws_dhcp_free || return 1
+		$EXPECT $AT_LIB/exp_files/add_mws_client.exp $( basename $mws_clientfile ) $CI_MWS_HOSTNAME $CI_MWS_ROOTPW
+		_rt=$?
+		if [[ "$_rt" != "0" ]];then
+            err_msg "MWS add client failed" $LINENO $FUNCNAME $?
+			return 1
+        fi
+	
+	fi
+	return 0
+}
+
+x86_jumpHost() {
+#perform network boot of client.
+#should be run after adding dhcp client
+#$1 hostname to jump
+#$2 one of [bmr|oss|sol]
+	local _jump_client=$1
+	local _jump_type=$2
+	
+	[[ -z $_jump_client || -z $_jump_type ]] && {
+		err_msg "arguments required for $FUNCNAME were not supplied. Usage: $FUNCNAME <client> <oss|bmr|sol>" $LINENO $FUNCNAME $?
+		return 1
+		}
+	
+	[ -n "$CI_DEBUG_SKIP_JUMP_RETURN_CODE" ] && {
+		echo "*debug* - exiting $FUNCNAME with code $CI_DEBUG_SKIP_JUMP_RETURN_CODE"
+		[ $CI_DEBUG_SKIP_JUMP_RETURN_CODE -eq 1 ] && err_msg "exiting $FUNCNAME with code $CI_DEBUG_SKIP_JUMP_RETURN_CODE debug exit" $LINENO $FUNCNAME $?
+		return $CI_DEBUG_SKIP_JUMP_RETURN_CODE
+	}
+	get_server_details $_jump_client
+	if [ $? -ne "0" ]; then
+        	err_msg "Admin1 configuration not found.. Unable to continue jumpstart. CI config issue" $LINENO $FUNCNAME $?
+		return 1
+	fi
+	
+	
+	if [ $_jump_type == "oss" ] ;then
+		$EXPECT $AT_BIN/ssh_setup2.sh scp "$AT_BIN/ssh_setup2.sh $AT_LIB/exp_files/delete_fs.bsh root@${CI_MWS_IP}:/var/tmp" $CI_MWS_ROOTPW || {
+		echo  "*WARNING* failed to copy config scripts to MWS"
+		}
+		$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_MWS_IP} /var/tmp/delete_fs.bsh -p /JUMP/MWS_add_client_files/preinirate_${_jump_client}" $CI_MWS_ROOTPW || {
+		echo  "*WARNING* failed to delete cluster file systems from SFS "
+		}
+	fi
+
+	server_vendor=${_SERVER_DETAILS[5]}
+	if [ "$server_vendor" = vmware ]; then
+		vm_host=${_SERVER_DETAILS[12]}
+		if [ -z "$vm_host" ]; then
+			err_msg "Unable to determine vm host of server $_jump_client CI config issue" $LINENO $FUNCNAME $?
+			return 1
+		fi
+		
+		$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@$VMA_SERVER /ci/jumpit_vmware.bsh $vm_host $_jump_client" $VMA_SERVER_ROOTPW || {
+			err_msg "Jumpstart of $_jump_client failed $_jump_client jumpstart failure" $LINENO $FUNCNAME $?
+			return 1
+		}
+	else
+		# assume HP hw
+		ilo_ip=${_SERVER_DETAILS[4]}
+		if [ -z "$ilo_ip" ]; then
+			err_msg "Unable to determine ILO IP of server $_jump_client CI config issue" $LINENO $FUNCNAME $?
+			return 1
+		fi
+		ipmitoolboot=false
+		if [ "$CI_IPMITOOL_PXEBOOT" = TRUE ]; then
+			X86_install_ipmi_pxeboot $_jump_client || {
+				err_msg "Problem occured trying to pxe-boot $_jump_client using ipmitool CI config issue" $LINENO $FUNCNAME $?
+				return 1
+			}
+			ipmitoolboot=true
+		fi
+		
+		if [ $_jump_type == "sol" ];then
+			$EXPECT $AT_LIB/exp_files/jumpit_solonly.exp $_jump_client $ilo_ip | tee -a $LOGDIR/$INSTALL 
+			[ ${PIPESTATUS[0]} -ne 0 ] && {
+				err_msg "Jumpstart of $_jump_client failed $_jump_client jumpstart failure" $LINENO $FUNCNAME $?
+				return 1
+			}
+		elif [ $_jump_type == "bmr" ] ;then
+			$EXPECT $AT_LIB/exp_files/jumpit_admin2.exp $_jump_client $ilo_ip $ipmitoolboot | tee -a $LOGDIR/$INSTALL
+			[ ${PIPESTATUS[0]} -ne 0 ] && { 
+				err_msg "Jumpstart of $_jump_client failed $_jump_client jumpstart failure" $LINENO $FUNCNAME $?
+				return 1
+			}
+		elif [ $_jump_type == "oss" ] ;then
+			$EXPECT $AT_LIB/exp_files/jumpit_mws.exp $_jump_client $ilo_ip $ipmitoolboot | tee -a $LOGDIR/$INSTALL
+			[ ${PIPESTATUS[0]} -ne 0 ] && { 
+				err_msg "Jumpstart of $_jump_client failed $_jump_client jumpstart failure" $LINENO $FUNCNAME $?
+				return 1
+			}
+		else
+			err_msg "Arguments supplied to $FUCNAME function are not valid. Host:$_jump_client Type:_jump_type Failed to jump $_jump_client as type:$_jump_type" $LINENO $FUNCNAME $?
+		fi
+	fi
+	return 0
+}
+
+x86_addNode_prep() {
+# for adding a node to VCS cluster.  This is step 1, prepare the response file 
+# to auto answer the questions during add_cluster_node
+# _addNode is optional.  Leave blank if adding Admin2 for 1st time
+# Specify host to add as _addNode if remaking the cluster after a split.
+local _addNode=$1
+
+
+	add_cluster_file=${AT_ROOT}/build_scripts/infrastructure/etc/preini/add_cluster_node_to_${CI_ADMIN1_HOSTNAME}
+        if [ ! -s $add_cluster_file ]; then
+                err_msg "Unable to find file $add_cluster_file or file empty" $LINENO $FUNCNAME 1
+                return 1
+		elif [ ! -s add_cluster_node.in.template_ipv4 ]; then
+                err_msg "File add_cluster_node.in.template_ipv4 is missing or empty in `pwd`" $LINENO $FUNCNAME 1
+                return 1
+        fi
+        . $add_cluster_file || return 1
+        cp add_cluster_node.in.template_ipv4 add_cluster_node.in.template
+	
+	if [ -z $_addNode ] ;then
+	echo -e " $FUNCNAME is called without arguments. building expect response file for new node in cluster."
+	{   while read line ; do
+                echo -e $line |sed s/CI_ADMIN2_ROOTPW/$CI_ADMIN2_ROOTPW/ |sed s/CI_ADMIN2_HOSTNAME/$CI_ADMIN2_HOSTNAME/ \
+                            |sed s/CI_ADMIN2_IPV4_ADDRESS/$CI_ADMIN2_IPV4_ADDRESS/  \
+                            |sed s/CI_ADMIN2_STORAGE_IP/$CI_ADMIN2_STORAGE_IP/ \
+                            |sed s/CI_ADMIN2_STORAGE_NIC1/$CI_ADMIN2_STORAGE_NIC1/ \
+                            |sed s/CI_ADMIN2_STORAGE_NIC2/$CI_ADMIN2_STORAGE_NIC2/ \
+                            |sed s/CI_ADMIN2_STORAGE_NETMASK/$CI_ADMIN2_STORAGE_NETMASK/ \
+                            |sed s/CI_ADMIN2_PUBLIC_NIC1/$CI_ADMIN2_PUBLIC_NIC1/   \
+                            |sed s/CI_ADMIN2_PUBLIC_NIC2/$CI_ADMIN2_PUBLIC_NIC2/   \
+                            |sed s/CI_ADMIN2_PUBLIC_NETMASK/$CI_ADMIN2_PUBLIC_NETMASK/ \
+                            |sed s/CI_ADMIN2_BACKUP_IP/$CI_ADMIN2_BACKUP_IP/       \
+                            |sed s/CI_ADMIN2_BACKUP_NETMASK/$CI_ADMIN2_BACKUP_NETMASK/ \
+                            |sed s/CI_ADMIN2_PUBLIC_DEFAULT_ROUTER/$CI_ADMIN2_PUBLIC_DEFAULT_ROUTER/ \
+                            |sed s/CI_ADMIN2_IPV6_ADDRESS/$CI_ADMIN2_IPV6_ADDRESS/ \
+                                |sed s/CI_ADMIN2_IPV6_SUBNET_PREFIX/$CI_ADMIN2_IPV6_SUBNET_PREFIX/ \
+                                |sed s/CI_ADMIN2_IPV6_DEFAULT_ROUTER/$CI_ADMIN2_IPV6_DEFAULT_ROUTER/
+
+        done
+	} < add_cluster_node.in.template   > add_cluster_node.in
+
+        echo "Prepare of add_cluster_node input file completed successfully"
+        return 0
+	else
+	echo -e " $FUNCNAME is called with argument: $_addNode. building expect response file to re-add $_addNode to cluster."
+	{   while read line ; do
+        echo -e $line |sed s/CI_ADMIN2_ROOTPW/$CI_ADMIN2_ROOTPW/ |sed s/CI_ADMIN2_HOSTNAME/$_addNode/ \
+                            |sed s/CI_ADMIN2_IPV4_ADDRESS//  \
+                            |sed s/CI_ADMIN2_STORAGE_IP// \
+                            |sed s/CI_ADMIN2_STORAGE_NIC1// \
+                            |sed s/CI_ADMIN2_STORAGE_NIC2// \
+                            |sed s/CI_ADMIN2_STORAGE_NETMASK// \
+                            |sed s/CI_ADMIN2_PUBLIC_NIC1//   \
+                            |sed s/CI_ADMIN2_PUBLIC_NIC2//   \
+                            |sed s/CI_ADMIN2_PUBLIC_NETMASK// \
+                            |sed s/CI_ADMIN2_BACKUP_IP//       \
+                            |sed s/CI_ADMIN2_BACKUP_NETMASK// \
+                            |sed s/CI_ADMIN2_PUBLIC_DEFAULT_ROUTER// \
+                            |sed s/CI_ADMIN2_IPV6_ADDRESS// \
+                            |sed s/CI_ADMIN2_IPV6_SUBNET_PREFIX// \
+                            |sed s/CI_ADMIN2_IPV6_DEFAULT_ROUTER//
+
+        done
+	} < add_cluster_node.in.template   > add_cluster_node.in
+
+        echo "Prepare of add_cluster_node input file completed successfully"
+        return 0
+	fi	
+		
+}
+
+x86_addNode() {
+# for adding a node to VCS cluster.  This is step 2, running the expect file 
+# that was prepared in step 1.
+# $1 is the live node where add_cluster_node script is.
+# $2 is the node being added to the cluster
+
+local _addNode=$1
+local _liveNode=$2	
+	
+	
+	[[ -s output.tmp ]] &&	/bin/rm -f output.tmp
+	
+	[[ -z $_addNode || -z $_liveNode ]] && {
+		err_msg "arguments required for $FUNCNAME were not supplied. Usage: $FUNCNAME <Node to Add> <Live Node>" $LINENO $FUNCNAME 1
+		return 1
+	}
+	
+	${AT_BIN}/con_ex.bsh -b 3600 -d add_cluster_node.in -o expect.exp -c "/ericsson/core/cluster/bin/add_cluster_node"
+        if [ $? -ne 0 ];then
+                err_msg "Error: con_ex.bsh problem" $LINENO $FUNCNAME $?
+                return 1
+        fi
+        echo "con_ex completed successfully, now running expect.exp"
+        /usr/local/bin/expect expect.exp | tee -a output.tmp
+        _rt=${PIPESTATUS[0]}
+		if [ ${_rt} -ne 0 ]; then
+                err_msg "Error: add_cluster_node problem. Return code:$_rt" $LINENO $FUNCNAME $_rt
+                return 1
+        fi
+        echo "expect.exp completed successfully"
+        sleep 150
+        grep "closed by remote host." output.tmp
+        if [ $? -ne 0 ]; then
+                echo "Warning: $_addNode does not appear to have rebooted"
+        else
+			# wait for node to be rebooted
+			sleep 300
+			$EXPECT $AT_LIB/exp_files/check_alive.exp ${_addNode} NO
+            ret=$?
+            if [[ "$ret" != "0" ]];then
+                err_msg "failed to add ${_addNode} to cluster." $LINENO $FUNCNAME $ret
+                return 1
+            fi
+			echo "Success $_addNode has rebooted."
+        fi
+
+		return 0
+}	
+
+dmr_configMirrors () {
+# function will copy a script that will auto configure mirrors to 
+# the target host ($1) and run that script. 
+# the auto configure script is complex and handles most DMR scenarios.
+local _dmrTarget=$1
+	
+	[[ -z $_dmrTarget ]] && {
+		err_msg "arguments required for $FUNCNAME were not supplied. Usage: $FUNCNAME <Node>" $LINENO $FUNCNAME 1
+		return 1
+	}
+
+	get_server_details $_dmrTarget
+	local _rPass=${_SERVER_DETAILS[8]}
+	
+	echo "Configuring DMR mirror definition on $_dmrTarget..."
+    $EXPECT $AT_BIN/ssh_setup2.sh scp "-ostricthostkeychecking=no $AT_LIB/exp_files/dmr_config.bsh root@${_dmrTarget}.athtem.eei.ericsson.se:/var/tmp" $_rPass || {
+        err_msg "Error - failed to copy DMR setup script to $_dmrTarget" $LINENO $FUNCNAME $?
+        return 1
+        }
+    $EXPECT $AT_BIN/ssh_setup2.sh ssh "-ostricthostkeychecking=no root@${_dmrTarget}.athtem.eei.ericsson.se /var/tmp/dmr_config.bsh" $_rPass || {
+        err_msg "Error - failed to setup DMR on $_dmrTarget" $LINENO $FUNCNAME $?
+        return 1
+        }
+	echo "...DMR Mirror definition completed on $_dmrTarget."
+	return 0
+}
+
+dmr_syncMirrors_rmUSCK () {
+local _dmrTarget=$1
+
+	[[ -z $_dmrTarget ]] && {
+		err_msg "arguments required for $FUNCNAME were not supplied. Usage: $FUNCNAME <Node>" $LINENO $FUNCNAME 1
+		return 1
+	}
+
+# Sync mirrors and rm ERICusck on live node (Admin2)
+	$EXPECT $AT_LIB/exp_files/check_mirrors.exp ${_dmrTarget}
+    _rt=$?
+    if [[ "$_rt" != "3" ]];then
+        echo "Mirrors are not synced on $_dmrTarget, proceeding with sync"
+        $EXPECT $AT_LIB/exp_files/liveNode_syncDisks_rmUSCK.exp ${_dmrTarget}
+        _rt=$?
+		if [[ "$_rt" != "0" ]];then
+            err_msg "WARNING: failed to sync disks, continuing..." "$LINENO" "$FUNCNAME" "$_rt"
+        return $_rt
+		fi
+    fi
+	return 0
+}
+
+
+xUG_remakeCluster_prep () {
+# Run post cutover to BMR install the new node ready for adding to the cluster. 
+# to be run locally from jenkins slave to prepare the new node for adding to cluster.
+# Might be possible to use this to remake cluster after split without doing an upgrade.
+# $1 is the node to be added to the cluster
+# $2 is the live node.
+local _addNode=$1
+local _liveNode=$2
+
+local _sleepTime=60
+local _maxCount=180
+local _count=0
+
+	[[ -z $_addNode || -z $_liveNode ]] && {
+		err_msg "arguments required for $FUNCNAME were not supplied. Usage: $FUNCNAME <Node to Add> <Live Node>" $LINENO $FUNCNAME 1
+		return 1
+	}
+
+# Stop and disable VCS on Offline node (Admin1)
+	$EXPECT $AT_LIB/exp_files/isolatedNode_stopVCS_clearKeys.exp ${_liveNode} ${_addNode}
+    ret=$?
+    if [[ "$ret" != "0" ]];then
+        err_msg "failed to stop VCS and remove SCSI3 keys from $_addNode" $LINENO $FUNCNAME $?
+        return 1
+    fi
+# unblock disks on Live node (admin2)
+	$EXPECT $AT_LIB/exp_files/liveNode_unblockDisks.exp ${_liveNode}
+    ret=$?
+    if [[ "$ret" != "0" ]];then
+        err_msg "failed to unblock disk paths from ${_liveNode}" $LINENO $FUNCNAME $?
+		return 1
+    fi
+
+# Sync mirrors on live node
+message "Starting background sync of DMR mirrors on $_liveNode. Process will be monitored after BMR install of $_addNode is complete..."
+dmr_syncMirrors_rmUSCK ${_liveNode} &
+pid=$!
+echo "...Bacground syncing PID=$pid"
+	
+#Update DHCP client details on MWS for BMR inst new node (while sync is on going)
+message "parallel execution begins: adding DHCP client $_addNode..."
+	addDHCP_client ${_addNode} bmr || {
+		err_msg "failed to add DHCP client $_addNode" $LINENO $FUNCNAME $?
+		return 1
+		}
+	echo "... DHCP client $_addNode added."
+	
+#Do BMR inst new node (while sync is on going)
+message "Jumpstarting $_addNode..."
+	x86_jumpHost ${_addNode} bmr || {
+		err_msg "failed to Jumpstart client $_addNode" $LINENO $FUNCNAME $?
+		return 1
+		}
+	echo "...Jumpstart of $_addNode completed."
+	
+# monitor the mirror sync
+	while true; do
+        echo "monitoring dmr_syncMirrors_rmUSCK on $_liveNode"
+        sleep $_sleepTime
+        if [ $_count -gt $_maxCount ]; then
+            echo "Sync mirrors on $_liveNode: process $pid still not finished.  leaving process un-monitored and continuing..."
+            #kill -9 pid > /dev/null 2>&1
+            #exit 1
+			break
+        fi
+        
+		kill -0 $pid 2>/dev/null
+        if [ $? -ne 0 ]; then
+        #process no longer exists
+            wait $pid
+            _rt=$?
+			if [ $_rt -ne 0 ]; then
+                echo "WARNING: Sync mirrors returned a failure; Code $_rt...Continuing"
+                #exit 0
+            else 
+				echo "Sync mirrors completed successfully." 
+			fi
+			break
+        fi
+        
+		let _count+=1
+	done
+
+	
+
+
+
+#network boot Admin1 
+#X86_install_ipmi_pxeboot ${CI_ADMIN1_HOSTNAME}
+#sleep 10
+
+}
+
+xUG_remakeCluster_addNode () {
+# to be run remotely on target after BMR install of new node
+# $1 is node to be added to cluster
+# $2 is live node.
+local _addNode=$1
+local _liveNode=$2
+
+	[[ -z $_addNode || -z $_liveNode ]] && {
+		err_msg "arguments required for $FUNCNAME were not supplied. Usage: $FUNCNAME <Node to Add> <Live Node>" $LINENO $FUNCNAME 1
+		return 1
+	}
+
+#Add new node to cluster
+	echo "Starting to prepare for adding cluster node..."
+	x86_addNode_prep ${_addNode} || {
+		err_msg "ERROR: Preparing cluster node failed!" $LINENO $FUNCNAME $?
+		return 1
+		}
+	echo "... Preparing to add cluster node finished."
+	
+	echo "Starting to add cluster node..."
+	x86_addNode ${_addNode} ${_liveNode} || {
+		err_msg "ERROR: Adding cluster node failed!" $LINENO $FUNCNAME $?
+		return 1
+		}
+	echo "... Adding cluster node finished."
+
+#Switch sybase group over
+	echo "Switching Sybase group to $_addNode..."
+	switchGroup Sybase1 || {
+	err_msg "ERROR: Switching Sybase group failed!" $LINENO $FUNCNAME $?
+		return 1
+		}
+	echo "...Sybase group switch completed."
+	
+
+	#Add root disk - maybe make this a function.
+	echo "Adding root disk on $_addNode..."
+	dmr_configMirrors $_addNode || {
+		err_msg "ERROR: Adding root disk failed on $_addNode!" $LINENO $FUNCNAME $?
+		return 1 
+		}
+	echo "...$_addNode root disk added"
+	return 0
+
+
+}	
+	

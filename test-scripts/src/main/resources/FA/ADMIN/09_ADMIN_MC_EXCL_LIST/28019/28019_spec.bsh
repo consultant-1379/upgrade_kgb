@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Tuesday 15th of April 2014 12:05:48
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="ADMIN"
+SPEC_UC_NAME="09_ADMIN_MC_EXCL_LIST"
+SPEC_TC_ID=28019
+SPEC_TC_SLOGAN="admin_pre_upgrade_verification.bsh excluded MC transitioning (manual)"
+SPEC_TC_TYPE="FT"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="high"
+SPEC_TC_AUTOMATED=0
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=300
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xkriski"
+SPEC_TC_AUTOMATOR="xkriski"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+# log onto admin node
+# ensure one MC is unstartable (ie will go to failed state)
+# log onto MWS and generate exclusion list
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+# on admin server offline the unstartable MC and then online it, then immediately..
+# On admin server run admin_pre_upgrade_verification.bsh supplying MWS ip address, MWS orch_depot path, and MWS OSSRC media path
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+# expect console and log to report waiting for in-progress MCs to complete - retrying the in-progress check
+# expect console and log to report the failed MC matches exclusion list entry
+# expect MC check to pass
+# expect MC check NOT to be reported in summary
+# END_POST_CONDITIONS

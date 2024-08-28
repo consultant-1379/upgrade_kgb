@@ -1,0 +1,78 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set RELEASE [lindex $argv 2]
+set SHIPMENT [lindex $argv 3]
+set MWSIP [lindex $argv 4]
+set year [clock format [clock seconds] -format %y]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+expect_after timeout exit
+set timeout 60
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+expect "#"
+send "ssh ${ADMIN2}-priv\r"
+expect "${ADMIN2}\{root\}"
+set timeout 21600
+expect "#"
+
+send "/opt/ericsson/sck/bin/system_upgrade.bsh -jump_start ${MWSIP}@/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_${RELEASE}/${SHIPMENT}_UG/\r"
+while 1 {
+        expect {
+                "System Upgrade is complete" {
+                        sleep 600 
+                        send "\r"
+                        break}
+                "FATAL ERROR in stage" {
+                        sleep 10
+                        send "\r"
+                        exit 1}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+
+expect "#"
+send "init 6\r"
+                while 1 {
+                        expect {
+                                "closed" {
+                                        exit 0}
+                                eof {
+                                        exit 0}
+                                timeout {
+                                        exit 1}
+                                }
+                        }

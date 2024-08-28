@@ -1,0 +1,99 @@
+#!/bin/bash
+cleanup() {
+	if [ -d "$TEMP_MNT_DIR" ]; then
+		fuser -k $TEMP_MNT_DIR > /dev/null 2>&1
+		umount $TEMP_MNT_DIR > /dev/null 2>&1 
+		/bin/rm -rf $TEMP_MNT_DIR
+	fi
+	if [ -n "$DEV" ]; then
+		lofiadm |  /usr/xpg4/bin/egrep  "[[:space:]]*$DEV[[:space:]]+" > /dev/null && {
+			lofiadm -d $DEV  
+		}
+	fi
+	if [ -f $LOCAL_ISO_FILE ]; then
+		/bin/rm -f $LOCAL_ISO_FILE
+	fi
+
+
+}
+
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+. $G_SCRIPTDIR/ci.env
+trap "cleanup" HUP INT QUIT TERM EXIT
+TEMP_MNT_DIR=/tmp/cominf_ci_iso$$
+[ ! -d $TEMP_MNT_DIR ] && mkdir -p $TEMP_MNT_DIR
+CLEARCASE_HOST=$1
+CLEARCASE_USER=$2
+CLEARCASE_VIEW=$3
+ISO_FILE=$4
+NFS_CACHE_SCRIPT=/ericsson/jumpstart/bin/manage_nfs_media.bsh
+if [ $# -ne 4 ]; then
+	echo "** Error - incorrect number of arguments **"
+	exit 1
+fi
+
+LOCAL_ISO_FILE=$G_MWS_TMPDIR/$( basename $ISO_FILE )
+lofiadm | /usr/xpg4/bin/egrep "[[:space:]]+$LOCAL_ISO_FILE\$" > /dev/null && {
+	dev=$(lofiadm |  /usr/xpg4/bin/egrep "[[:space:]]+$LOCAL_ISO_FILE\$" | awk '{print $1}')
+	mount | /usr/xpg4/bin/egrep "[[:space:]]+$dev[[:space:]]+" > /dev/null && umount $dev 
+	lofiadm -d $dev || {
+		echo "error - failed to unmount iso file or destroy lofi device"
+		exit 1
+	}
+
+}
+
+[ -f $LOCAL_ISO_FILE ] && /bin/rm -f $LOCAL_ISO_FILE
+ssh ${CLEARCASE_USER}@${CLEARCASE_HOST} "$CT setview -exec \"scp $ISO_FILE root@$G_MWS_IP:$G_MWS_TMPDIR\" $CLEARCASE_VIEW" || {
+	echo "error - failed to copy media from build server"
+	exit 1
+}
+[ ! -s $LOCAL_ISO_FILE ] && {
+	echo "error - iso file $LOCAL_ISO_FILE does not exist"
+	exit 1
+}
+DEV=$(lofiadm -a $LOCAL_ISO_FILE)
+[ -z "$DEV" ] && exit 1 
+mount -F hsfs $DEV $TEMP_MNT_DIR || exit 1
+
+$NFS_CACHE_SCRIPT << EOF  | grep 'COMINF BASE SW CI' | tail -1 | awk '{ print $1 }' | sed -e 's/.*\[//g' -e 's/\].*//g' > /tmp/foo$$
+1
+2
+
+q
+q
+EOF
+ci_media=$( cat /tmp/foo$$ 2>/dev/null )
+rm -f /tmp/foo$$
+if [ -n "$ci_media" ]; then
+	# media aleady cached - we must remove it first
+	echo "Removing old CI media"
+$NFS_CACHE_SCRIPT << EOF
+1
+3
+$ci_media
+Yes
+
+q
+q
+EOF
+	if [ $? -ne 0 ]; then
+		echo "error - failed to remove existing media"
+		exit 1
+	fi
+fi
+
+# cache new media
+echo "Caching new CI media"
+$NFS_CACHE_SCRIPT << EOF
+1
+1
+$TEMP_MNT_DIR
+Yes
+q
+q
+EOF
+if [ $? -ne 0 ]; then
+	echo "error - failed to cache new media"
+	exit 1
+fi

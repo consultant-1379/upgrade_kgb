@@ -1,0 +1,44 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+
+#main
+
+spawn ssh -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+expect "#"
+send "hastatus -sum |grep -v \"W_\"| grep \" ONLINE\"| grep -c Oss  && echo \"admin1\"\r"
+        expect "#"
+        set c1 $expect_out(buffer)
+        set c2 [split $c1 "\r\n"]
+        if {[lindex $c2 4] != "admin1"} {
+	exit 1}
+
+
+send "touch /var/opt/ericsson/sck/log/HA_start_upg_proc_`date +%Y-%m-%d-%H-%M`\r"
+expect "#"
+exit 0

@@ -1,0 +1,190 @@
+<workflow name="OSS-RC deployment">
+<display>
+<task cmd="/ericsson/orchestrator/bin/orc_display.bsh $SERVERTYPE $SERVERIP" id="disp_om" hosts="*" server="OM_SERVICES" optional="true" continueOnFail="true" runLocal="true"/>
+<task cmd="/ericsson/orchestrator/bin/orc_display.bsh $SERVERTYPE $SERVERIP" id="disp_nedss" hosts="*" server="NEDSS" optional="true" continueOnFail="true" runLocal="true"/>
+<task cmd="/ericsson/orchestrator/bin/orc_display.bsh $SERVERTYPE $SERVERIP" id="disp_uas" hosts="*" server="UAS" optional="true" continueOnFail="true" runLocal="true"/>
+<task cmd="/ericsson/orchestrator/bin/orc_display.bsh $SERVERTYPE $SERVERIP" id="disp_peer" hosts="*" server="PEER" optional="true" continueOnFail="true" runLocal="true"/>
+<task cmd="/ericsson/orchestrator/bin/orc_display.bsh $SERVERTYPE $SERVERIP" id="disp_ebas" hosts="*" server="EBAS" optional="true" continueOnFail="true" runLocal="true"/>
+<task cmd="/ericsson/orchestrator/bin/orc_display.bsh $SERVERTYPE $SERVERIP" id="disp_admin" hosts="*" server="ADMIN" optional="true" continueOnFail="true" runLocal="true"/>
+<task cmd="/ericsson/orchestrator/bin/orc_display.bsh $SERVERTYPE $SERVERIP" id="disp_omsas" hosts="*" server="OMSAS" optional="true" continueOnFail="true" runLocal="true"/>
+<task cmd="/ericsson/orchestrator/bin/orc_display.bsh $SERVERTYPE $SERVERIP" id="disp_mws" hosts="*" server="MWS" optional="true" continueOnFail="true" runLocal="true"/>
+</display>
+
+<pre-check>
+
+<task cmd="/ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh $ORCH_DEPOT $SERVERIP" id="om_slu_prepare_for" hosts="*" server="OM_SERVICES" optional="true" continueOnFail="true" dependency="disp_om" runLocal="true" osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh $ORCH_DEPOT $SERVERIP" id="nedss_slu_prepare_for" hosts="*" server="NEDSS" optional="true" continueOnFail="true" dependency="disp_nedss" runLocal="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh $ORCH_DEPOT $SERVERIP" id="uas_slu_prepare_for" hosts="*" server="UAS" optional="true" continueOnFail="true" dependency="disp_uas" runLocal="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh $ORCH_DEPOT $SERVERIP" id="peer_slu_prepare_for" hosts="*" server="PEER" optional="true" continueOnFail="true" dependency="disp_peer" runLocal="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh $ORCH_DEPOT $SERVERIP" id="ebas_slu_prepare_for" hosts="*" server="EBAS" optional="true" continueOnFail="true" dependency="disp_ebas" runLocal="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh $ORCH_DEPOT $SERVERIP" id="admin_slu_prepare_for" hosts="*" server="ADMIN"  checkparams="server_status=upgrade_node|single_node" optional="true" continueOnFail="true" dependency="disp_admin" runLocal="true" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh $ORCH_DEPOT $SERVERIP" id="omsas_slu_prepare_for" hosts="*" server="OMSAS" optional="true" continueOnFail="true" dependency="disp_omsas" runLocal="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/slu_prepare_for_upgrade.bsh $ORCH_DEPOT $SERVERIP" id="mws_slu_prepare_for" hosts="*" server="MWS" optional="true" continueOnFail="true" dependency="disp_mws" runLocal="true"  osversion="R11A09"/>
+
+<task cmd="/ericsson/orchestrator/bin/admin_prepare_for_upgrade.bsh $MWS_IP $OSSRC_MEDIA $ORCH_DEPOT $ADMINHOST1 $ADMINHOST2" id="admin_prepare_for" hosts="*" server="ADMIN" optional="true" continueOnFail="true" dependency="disp_admin" checkparams="server_status=non_upgrade_node|single_node" runLocal="true" />
+
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_pre_upgrade_verification.bsh $MWS_IP $ORCH_DEPOT $OSSRC_MEDIA" checkparams="server_status=non_upgrade_node|single_node" id="pre_ver_admin" hosts="*" server="ADMIN" optional="true" continueOnFail="true" dependency="admin_prepare_for" depsinglehost="true"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_verification.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_ver_om" hosts="*" server="OM_SERVICES" checkparams="om_primary=n" optional="true" continueOnFail="true" dependency="om_slu_prepare_for" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_verification.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_ver_omm" hosts="*" server="OM_SERVICES" checkparams="om_primary=y" optional="true" continueOnFail="true" dependency="om_slu_prepare_for" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_verification.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_ver_nedss" hosts="*" server="NEDSS" optional="true" continueOnFail="true" dependency="nedss_slu_prepare_for"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_verification.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_ver_uas" hosts="*" server="UAS" optional="true" continueOnFail="true" dependency="uas_slu_prepare_for"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_verification.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_ver_peer" hosts="*" server="PEER" optional="true" continueOnFail="true" dependency="peer_slu_prepare_for"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_verification.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_ver_ebas" hosts="*" server="EBAS" optional="true" continueOnFail="true" dependency="ebas_slu_prepare_for"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_verification.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_ver_omsas" hosts="*" server="OMSAS" optional="true" continueOnFail="true" dependency="omsas_slu_prepare_for"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_verification.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_ver_mws" hosts="*" server="MWS" optional="true" continueOnFail="true" dependency="mws_slu_prepare_for"  osversion="R11A09"/>
+
+</pre-check>
+
+<execute>
+
+<parallel id="MWS_OMSAS_upgrade">
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_omsas_slu" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="disp_omsas"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_omsas_slu" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="pre_tasks_omsas_slu"  osversion="R11A09"/>
+
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_mws_slu" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="disp_mws"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_mws_slu" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="pre_tasks_mws_slu"  osversion="R11A09"/>
+
+</parallel>
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_mws_slu" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="upgrade_mws_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_copy_status_files.bsh -c" id="copy_status_files" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="post_upgrade_mws_slu" runLocal="true"  osversion="R11A09"/>
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_mws_slu" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="copy_status_files"  osversion="R11A09"/>
+
+<escape id="Rebooting_MWS_escape" msg="The MWS reboot has been initiated.  This will take a few minutes and your session will terminate.  Once the MWS reboots then reconnect to the server, re-run a screen session, and continue with the upgrade." server="MWS" hosts="*"/>
+
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_mws_slu" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="reboot_mws_slu" runLocal="true"  osversion="R11A09"/>
+
+<task cmd="/ericsson/orchestrator/bin/orc_copy_status_files.bsh -r" id="remove_copy_status_files" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="wait_mws_slu" runLocal="true"  osversion="R11A09"/>
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -N 60 $SERVERTYPE" id="post_reboot_mws_slu" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="remove_copy_status_files"  osversion="R11A09"/>
+
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="mws_om_prepare_for" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="post_reboot_mws_slu" runLocal="true" />
+
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $OM_MEDIA" id="mws_om_upgrade" hosts="*" server="MWS" optional="true" continueOnFail="false" dependency="mws_om_prepare_for" />
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_omsas_slu" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="upgrade_omsas_slu"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_omsas_slu" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="post_upgrade_omsas_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_omsas_slu" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="reboot_omsas_slu" runLocal="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -N 60 $SERVERTYPE" id="post_reboot_omsas_slu" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="wait_omsas_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="omsas_om_prepare_for" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="post_reboot_omsas_slu" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $OM_MEDIA" id="omsas_om_upgrade" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="omsas_om_prepare_for" />
+<task cmd="/ericsson/orchestrator/bin/cominf_prepare_for_upgrade.bsh $COMINF_MEDIA $SERVERIP" id="omsas_cominf_prepare_for" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="omsas_om_upgrade" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/cominf/cominf_upgrade_tasks.bsh $SERVERTYPE $MASHOST $MWS_IP $COMINF_MEDIA" id="omsas_cominf_upgrade" hosts="*" server="OMSAS" optional="true" continueOnFail="false" dependency="omsas_cominf_prepare_for" />
+
+
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_pre_upgrade_tasks.bsh -d $MWS_IP $ORCH_DEPOT $OSSRC_MEDIA" id="pre_tasks_admin" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="disp_admin" checkparams="server_status=non_upgrade_node|single_node" />
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_split_cluster.bsh" id="admin_split_cluster" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="pre_tasks_admin" checkparams="server_status=non_upgrade_node|single_node" />
+
+<parallel id="Admin_upgrade">
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_om_slu" hosts="*" server="OM_SERVICES" optional="true" continueOnFail="false" checkparams="om_primary=n" dependency="disp_om" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_om_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=n" optional="true" continueOnFail="false" dependency="pre_tasks_om_slu" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_om_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=n" optional="true" continueOnFail="false" dependency="upgrade_om_slu" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_om_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=n" optional="true" continueOnFail="false" dependency="post_upgrade_om_slu" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_om_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=n" optional="true" continueOnFail="false" dependency="reboot_om_slu" runLocal="true" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -N 60 $SERVERTYPE" id="post_reboot_om_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=n" optional="true" continueOnFail="false" dependency="wait_om_slu"  depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="om_om_prepare_for" hosts="*" server="OM_SERVICES" checkparams="om_primary=n" optional="true" continueOnFail="false" dependency="post_reboot_om_slu" runLocal="true" depsinglehost="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $OM_MEDIA" id="om_om_upgrade" hosts="*" server="OM_SERVICES" checkparams="om_primary=n" optional="true" continueOnFail="false" dependency="om_om_prepare_for" depsinglehost="true"/>
+<task cmd="/ericsson/orchestrator/bin/cominf_prepare_for_upgrade.bsh $COMINF_MEDIA $SERVERIP" id="om_cominf_prepare_for" hosts="*" server="OM_SERVICES" optional="true" continueOnFail="false" dependency="om_om_upgrade" checkparams="om_primary=n" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/cominf/cominf_upgrade_tasks.bsh $SERVERTYPE $MASHOST $MWS_IP $COMINF_MEDIA" id="om_cominf_upgrade" hosts="*" server="OM_SERVICES" optional="true" continueOnFail="false" checkparams="om_primary=n" dependency="om_cominf_prepare_for" />
+
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_uas_slu" hosts="*" server="UAS" optional="true" continueOnFail="false"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_uas_slu" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="pre_tasks_uas_slu"  osversion="R11A09"/>
+
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $BKP_MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_admin_slu" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_split_cluster" checkparams="server_status=upgrade_node|single_node"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $BKP_MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_admin_slu" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="pre_tasks_admin_slu" checkparams="server_status=upgrade_node|single_node"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_admin_slu" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="upgrade_admin_slu" checkparams="server_status=upgrade_node|single_node"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_admin_slu" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="post_upgrade_admin_slu" checkparams="server_status=upgrade_node|single_node"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_admin_slu" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="reboot_admin_slu" runLocal="true" checkparams="server_status=upgrade_node|single_node"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -N 60 $SERVERTYPE" id="post_reboot_admin_slu" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="wait_admin_slu" checkparams="server_status=upgrade_node|single_node"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="admin_om_prepare_for" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="post_reboot_admin_slu" runLocal="true" checkparams="server_status=upgrade_node|single_node" />
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $BKP_MWS_IP $OM_MEDIA" id="admin_om_upgrade" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_om_prepare_for" checkparams="server_status=upgrade_node|single_node" />
+</parallel>
+
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_final_pre_checks.bsh $BKP_MWS_IP $ORCH_DEPOT" id="admin_final_checks" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_om_upgrade" checkparams="server_status=upgrade_node|single_node" />
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_upgrade_tasks.bsh $BKP_MWS_IP $OSSRC_MEDIA" id="admin_upgrade" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_final_checks" checkparams="server_status=upgrade_node|single_node" />
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_reboot_tasks.bsh" id="admin_reboot" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_upgrade" checkparams="server_status=upgrade_node|single_node" />
+
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_admin" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_reboot" runLocal="true" checkparams="server_status=upgrade_node|single_node" />
+
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_post_upgrade_tasks.bsh -d" id="admin_post_upgrade" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="wait_admin" checkparams="server_status=upgrade_node|single_node" />
+
+
+<parallel id="NEDSS and EBAS_and_PEER">
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_nedss_slu" hosts="*" server="NEDSS" optional="true" continueOnFail="false" dependency="disp_nedss"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_nedss_slu" hosts="*" server="NEDSS" optional="true" continueOnFail="false" dependency="pre_tasks_nedss_slu"  osversion="R11A09"/>
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_peer_slu" hosts="*" server="PEER" optional="true" continueOnFail="false" dependency="disp_peer"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_peer_slu" hosts="*" server="PEER" optional="true" continueOnFail="false" dependency="pre_tasks_peer_slu"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_peer_slu" hosts="*" server="PEER" optional="true" continueOnFail="false" dependency="upgrade_peer_slu"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_peer_slu" hosts="*" server="PEER" optional="true" continueOnFail="false" dependency="post_upgrade_peer_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_peer_slu" hosts="*" server="PEER" optional="true" continueOnFail="false" dependency="reboot_peer_slu" runLocal="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -d -N 60 $SERVERTYPE" id="post_reboot_peer_slu" hosts="*" server="PEER" optional="true" continueOnFail="false" dependency="wait_peer_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="peer_om_prepare_for" hosts="*" server="PEER" optional="true" continueOnFail="false" dependency="post_reboot_peer_slu" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $OM_MEDIA" id="peer_om_upgrade" hosts="*" server="PEER" optional="true" continueOnFail="false" dependency="peer_om_prepare_for" />
+
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_ebas_slu" hosts="*" server="EBAS" optional="true" continueOnFail="false" dependency="disp_ebas"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_ebas_slu" hosts="*" server="EBAS" optional="true" continueOnFail="false" dependency="pre_tasks_ebas_slu"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_ebas_slu" hosts="*" server="EBAS" optional="true" continueOnFail="false" dependency="upgrade_ebas_slu"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_ebas_slu" hosts="*" server="EBAS" optional="true" continueOnFail="false" dependency="post_upgrade_ebas_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_ebas_slu" hosts="*" server="EBAS" optional="true" continueOnFail="false" dependency="reboot_ebas_slu" runLocal="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -d -N 60 $SERVERTYPE" id="post_reboot_ebas_slu" hosts="*" server="EBAS" optional="true" continueOnFail="false" dependency="wait_ebas_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="ebas_om_prepare_for" hosts="*" server="EBAS" optional="true" continueOnFail="false" dependency="post_reboot_ebas_slu" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $OM_MEDIA" id="ebas_om_upgrade" hosts="*" server="EBAS" optional="true" continueOnFail="false" dependency="ebas_om_prepare_for" />
+
+</parallel>
+
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_pre_cutover_tasks.bsh $BKP_MWS_IP $ORCH_DEPOT" id="admin_pre_cutover" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_post_upgrade" checkparams="server_status=upgrade_node|single_node" />
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_cutover_tasks.bsh $BKP_MWS_IP $ORCH_DEPOT" id="admin_cutover" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_pre_cutover" checkparams="server_status=upgrade_node|single_node" />
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_post_cutover_tasks.bsh" id="admin_post_cutover" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_cutover" checkparams="server_status=upgrade_node|single_node" />
+
+<task cmd="/bin/ssh root@$SERVERIP /sbin/init 6" id="admin_wa_reboot_uas" hosts="*" server="UAS" optional="true" continueOnFail="true" dependency="admin_post_cutover" runLocal="true"/>
+
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_pre_remake_cluster_tasks.bsh " id="admin_pre_remake" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_post_cutover" checkparams="server_status=upgrade_node|single_node" />
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_jumpstart_tasks.bsh $ADMIN_ILO1 $ADMIN_ILO2" id="admin_jumpstart" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_pre_remake" checkparams="server_status=upgrade_node" />
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_remake_cluster_tasks.bsh " id="admin_remake" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_pre_remake" checkparams="server_status=upgrade_node|single_node" />
+<task cmd="/usr/local/bin/sudo /opt/ericsson/sck/bin/admin_post_remake_cluster_tasks.bsh $BKP_MWS_IP $ORCH_DEPOT" id="admin_post_remake" hosts="*" server="ADMIN" optional="true" continueOnFail="false" dependency="admin_remake" checkparams="server_status=upgrade_node|single_node" />
+
+
+
+
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_nedss_slu" hosts="*" server="NEDSS" optional="true" continueOnFail="false" dependency="upgrade_nedss_slu"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_nedss_slu" hosts="*" server="NEDSS" optional="true" continueOnFail="false" dependency="post_upgrade_nedss_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_nedss_slu" hosts="*" server="NEDSS" optional="true" continueOnFail="false" dependency="reboot_nedss_slu" runLocal="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -N 60 $SERVERTYPE" id="post_reboot_nedss_slu" hosts="*" server="NEDSS" optional="true" continueOnFail="false" dependency="wait_nedss_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="nedss_om_prepare_for" hosts="*" server="NEDSS" optional="true" continueOnFail="false" dependency="post_reboot_nedss_slu" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $OM_MEDIA" id="nedss_om_upgrade" hosts="*" server="NEDSS" optional="true" continueOnFail="false" dependency="nedss_om_prepare_for" />
+
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_pre_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="pre_tasks_omm_slu" hosts="*" server="OM_SERVICES" optional="true" continueOnFail="false" checkparams="om_primary=y" dependency="disp_om" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $BOOT_MEDIA $PATCH_MEDIA" id="upgrade_omm_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=y" optional="true" continueOnFail="false" dependency="pre_tasks_omm_slu" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_omm_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=y" optional="true" continueOnFail="false" dependency="upgrade_omm_slu" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_omm_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=y" optional="true" continueOnFail="false" dependency="post_upgrade_omm_slu" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_omm_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=y" optional="true" continueOnFail="false" dependency="reboot_omm_slu" runLocal="true" depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -d -N 60 $SERVERTYPE" id="post_reboot_omm_slu" hosts="*" server="OM_SERVICES" checkparams="om_primary=y" optional="true" continueOnFail="false" dependency="wait_omm_slu"  depsinglehost="true"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="omm_om_prepare_for" hosts="*" server="OM_SERVICES" checkparams="om_primary=y" optional="true" continueOnFail="false" dependency="post_reboot_omm_slu" runLocal="true" depsinglehost="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $OM_MEDIA" id="omm_om_upgrade" hosts="*" server="OM_SERVICES" checkparams="om_primary=y" optional="true" continueOnFail="false" dependency="omm_om_prepare_for" depsinglehost="true"/>
+<task cmd="/ericsson/orchestrator/bin/cominf_prepare_for_upgrade.bsh $COMINF_MEDIA $SERVERIP" id="omm_cominf_prepare_for" hosts="*" server="OM_SERVICES" optional="true" continueOnFail="false" dependency="omm_om_upgrade" checkparams="om_primary=y" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/cominf/cominf_upgrade_tasks.bsh $SERVERTYPE $MASHOST $MWS_IP $COMINF_MEDIA" id="omm_cominf_upgrade" hosts="*" server="OM_SERVICES" optional="true" continueOnFail="false" checkparams="om_primary=y" dependency="omm_cominf_prepare_for" />
+
+
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_upgrade_tasks.bsh $SERVERTYPE" id="post_upgrade_uas_slu" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="upgrade_uas_slu"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_reboot_tasks.bsh" id="reboot_uas_slu" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="post_upgrade_uas_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/orc_wait_for_reboot.bsh -d -N 30 $SERVERIP" id="wait_uas_slu" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="reboot_uas_slu" runLocal="true"  osversion="R11A09"/>
+<task cmd="/usr/local/bin/sudo /var/tmp/Liveupgrade/slu_post_reboot_tasks.bsh -N 60 $SERVERTYPE" id="post_reboot_uas_slu" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="wait_uas_slu"  osversion="R11A09"/>
+<task cmd="/ericsson/orchestrator/bin/om_prepare_for_upgrade.bsh $OM_MEDIA $SERVERIP" id="uas_om_prepare_for" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="post_reboot_uas_slu" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/oam_utils/om_upgrade_tasks.bsh $SERVERTYPE $MWS_IP $OM_MEDIA" id="uas_om_upgrade" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="uas_om_prepare_for" />
+<task cmd="/ericsson/orchestrator/bin/cominf_prepare_for_upgrade.bsh $COMINF_MEDIA $SERVERIP" id="uas_cominf_prepare_for" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="uas_om_upgrade" runLocal="true" />
+<task cmd="/usr/local/bin/sudo /var/tmp/cominf/cominf_upgrade_tasks.bsh $SERVERTYPE $MASHOST $MWS_IP $COMINF_MEDIA" id="uas_cominf_upgrade" hosts="*" server="UAS" optional="true" continueOnFail="false" dependency="uas_cominf_prepare_for" />
+
+</execute>
+
+<post-check>
+</post-check>
+</workflow>

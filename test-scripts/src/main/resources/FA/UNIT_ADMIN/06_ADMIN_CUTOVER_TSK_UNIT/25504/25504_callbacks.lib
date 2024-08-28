@@ -1,0 +1,198 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	
+    
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	#Pre-condition, CP_STATUS_FILE must exist
+    CP_STATUS_FILE=/var/opt/ericsson/sck/data/cp.status
+    CP_STATUS_FILE_TMP=/var/opt/ericsson/sck/data/cp_tmp.status
+    local -i RES=0
+    test -f $CP_STATUS_FILE
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+        return 1
+    fi
+    
+    #Back up CP status file
+    mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP
+    
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to move ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+        return 1
+    fi
+    
+    #Set up "Known" CP status file values
+    echo "CP_STATUS OSSRC_O14_4_Shipment_14.4.8 AOM_901110 R2H_EU05" > $CP_STATUS_FILE
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to setup ${CP_STATUS_FILE}"
+        return 1
+    fi
+    
+    return 0
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+    
+    source /opt/ericsson/sck/lib/admin_common_functions.lib
+    DEBUG=TRUE
+	
+    admin_get_current_cp_rstate_info 
+    res=$?
+
+    if [ $res -eq 0 ] 
+    then
+        orc_log_script "Positive test of admin_get_current_cp_rstate_info was successful"
+    else
+        orc_log_script "ERROR: Positive test of admin_get_current_cp_rstate_info failed"
+        return 1
+    fi
+    
+    echo "Current rstate is: ${CURRENT_CP_STATUS}"
+    
+    if [ "${CURRENT_CP_STATUS}" != "R2H_EU05" ]
+    then
+        orc_log_script "ERROR: Positive test of admin_get_current_cp_rstate_info failed, incorrect value received for: ${CURRENT_CP_STATUS}"
+        return 1
+    fi
+    return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+  
+  CP_STATUS_FILE=/var/opt/ericsson/sck/data/cp.status
+  CP_STATUS_FILE_TMP=/var/opt/ericsson/sck/data/cp_tmp.status
+    
+  #Back up CP status file
+  mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE
+    
+  RES=$?
+  if [ $RES -ne 0 ]
+  then
+    echo "ERROR: Failed to move ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    return 1
+  fi
+    
+  return 0
+
+}
+

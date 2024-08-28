@@ -1,0 +1,2188 @@
+#!/bin/bash
+# ----------------------------------------------------------------------
+#
+# NAME system_checks.bsh
+#
+# COPYRIGHT Ericsson Radio Systems AB, Sweden, 2011
+# All rights reserved.
+#
+# The Copyright to the computer program(s) herein is the property of Ericsson
+# Radio Systems AB, Sweden. The program(s) may be used and/or copied only with
+# the written permission from Ericsson Radio Systems AB or in accordance with
+# the terms and conditions stipulated in the agreement/contract under which the
+# program(s) have been supplied.
+#
+# Revision History:
+#  Date        Who       Comments
+#  19-01-2010  EDAVGLY   Base Script for 11.2.11 sparc/x86
+
+COMMON_FUNCTIONS_LIB=/ericsson/core/lib/common_functions.lib
+. ${COMMON_FUNCTIONS_LIB}
+
+
+# Command
+UNAME=/usr/bin/uname
+EGREP=/usr/bin/egrep
+GREP=/usr/bin/grep
+HEAD=/bin/head
+NAWK=/usr/bin/nawk
+SED=/usr/bin/sed
+MKDIR=/usr/bin/mkdir
+ID=/usr/bin/id
+VXLICREP=/sbin/vxlicrep
+PKGINFO=/usr/bin/pkginfo
+NAWK=/usr/bin/nawk
+TAIL=/usr/bin/tail
+SHOWREV=/usr/bin/showrev
+NSLOOKUP=/usr/sbin/nslookup
+VXDG=/sbin/vxdg
+TOUCH=/usr/bin/touch
+HARES=/opt/VRTSvcs/bin/hares
+SSH=/bin/ssh
+SMTOOL=/opt/ericsson/nms_cif_sm/bin/smtool
+HASTATUS=/opt/VRTSvcs/bin/hastatus
+CIST=/opt/ericsson/nms_cif_ist/bin/cist
+TEE=/bin/tee
+HAGRP=/opt/VRTS/bin/hagrp
+LUMOUNT=/usr/sbin/lumount
+LUUMOUNT=/usr/sbin/luumount
+CP=/bin/cp
+SCRATCHPAD=/tmp/tmp.$$
+RM=/usr/bin/rm
+MV=/usr/bin/mv
+CAT=/usr/bin/cat
+GREP=/usr/bin/grep
+NAWK=/usr/bin/nawk
+HOST=$(hostname)
+SSH=/bin/ssh
+MAINCF_DIR=/etc/VRTSvcs/conf/config
+# Scripts
+RELEASE_SCRIPT=/opt/ericsson/sck/lib/releases
+USCK_TMP=/tmp/usck
+SYBASEINFO=/ericsson/syb/util/sybase_info
+MC_START_LIST_SSR=/etc/opt/ericsson/nms_cif_smssr/mc_start_list
+BJAVAPOLICY=/opt/sun/jre/jre1.5.0/lib/security/java.policy
+RJAVAPOLICY=/var/log/ericsson/java.policy_pre_upgrade
+# Environment
+SYBASE_ENV=/ericsson/syb/etc/sybase.env
+[[ -f ${SYBASE_ENV} ]] && . ${SYBASE_ENV}
+
+
+#/////////////////////////////////////////////
+# Print Header
+#
+#
+#
+#/////////////////////////////////////////////
+header_print()
+{
+        echo "$1" | awk '{n1=length($0);n2=36-n1/2-n1%2;n3=34-n1/2;printf("\n\n");for(n=1;n<n2;n++)printf("=");printf("=< %s >=",$0);for(n=1;n<n3;n++)printf("=");printf("\n\n")}'
+}
+#/////////////////////////////////////////////
+# Print Header
+#
+#
+#
+#/////////////////////////////////////////////
+setup() {
+
+        local _new_cp_status_loc_=$(find /ossrc/upgrade -name cp.status)
+        local _new_cp_status_=""
+        local _tmp_cp_status_=/ericsson/config/.cu_cp_status
+
+        [[ -f ${RELEASE_SCRIPT} ]] && RELEASE=${RELEASE=$( ${GREP} RELEASE= ${RELEASE_SCRIPT} | ${HEAD} -1 | ${NAWK} -F= '{ print $2 }' | ${SED} "s/\"//g" ) }
+
+        RELEASE=$( echo ${RELEASE} | ${SED} "s/ //g" )
+
+        # NOTE - First part of if will be used for CU and EU Upgrades
+        if [[ ! -f ${_tmp_cp_status_} ]]; then
+                if [[ -n ${_new_cp_status_loc_} ]]; then
+
+                        # Copy cp.status to /ericsson/config. Done since Upgrade will delete cache at end.
+                        cp ${_new_cp_status_loc_} ${_tmp_cp_status_}
+                        _new_cp_status_=$( nawk '/CP_STATUS/ {print $4 }' ${_tmp_cp_status_} )
+                        LOGDIR=/var/opt/ericsson/sck/log/SUG/${_new_cp_status_}
+                else
+                        LOGDIR=/var/opt/ericsson/sck/log/SUG/${RELEASE}
+                fi
+        else
+                _new_cp_status_=$( nawk '/CP_STATUS/ {print $4 }' ${_tmp_cp_status_} )
+                LOGDIR=/var/opt/ericsson/sck/log/SUG/${_new_cp_status_}
+        fi
+
+        $MKDIR -p ${USCK_TMP}
+        $MKDIR -p ${LOGDIR}
+
+}
+#/////////////////////////////////////////////
+# start_log
+# This is to be called at the start of each user function within this script
+# It requires one parameter, which is the name of the file.
+# It creates log file of the user run using fancy pipes
+#
+#/////////////////////////////////////////////
+start_log() {
+
+        LOG_STAGE=$1
+
+        LOGFILE=${LOGDIR}/${LOGPREFIX}${LOG_STAGE}_$( date +%y%m%d-%H_%M_%S ).log
+
+        $TOUCH ${LOGFILE}
+
+        [ -e ${USCK_TMP}/sug.fifo ] && rm -f ${USCK_TMP}/sug.fifo
+        mkfifo ${USCK_TMP}/sug.fifo
+        # save stdout/stderr to 3 & 4
+        exec 3>&1 4>&2
+
+        # start tee in the background
+        tee -a ${LOGFILE} < ${USCK_TMP}/sug.fifo >&3 &
+        tee_pid=$!
+
+         # redirect stdout/stderr to the named pipe
+        exec >${USCK_TMP}/sug.fifo 2>&1
+}
+#/////////////////////////////////////////////
+# stop_log
+# This is to be called at the end of each user function within this script
+# It closes the log file and pipes
+#
+#/////////////////////////////////////////////
+stop_log() {
+
+        # restore fds, close 3 & 4
+        exec 1>&3 3>&- 2>&4 4>&-
+
+        # tee should have exited now, as its fd was closed when restoring 3 & 4 fds to 1 & 2
+        # for some reason, tee doesnt exit in stage 15 ?!?
+        # so we kill it, instead of doing a wait
+
+        # sleep for a bit, to allow tee to die on its own
+        sleep 6
+        ps -p $tee_pid 1>/dev/null && kill $tee_pid
+
+}
+#/////////////////////////////////////////////
+# pre_system_upgrade
+# Main user function to pre-check oss system
+# prior to upgrade
+#
+#
+#/////////////////////////////////////////////
+pre_system_upgrade() {
+
+        local _failed_=0
+        local _testinstall_="none"
+        if [ -f /ericsson/config/environ ]; then
+                _testinstall_=`$CAT /ericsson/config/environ`
+        fi
+
+        start_log "pre_sys_upg_check"
+
+# Print Header
+        header_print "Pre System Upgrade Checks"
+        echo $( date +%y%m%d_%H:%M:%S )
+
+# Check Platform, print arch
+        header_print "System Arch"
+        echo -e "   --- `$UNAME -p`"
+
+        if [[ "${ARCH_TYPE}" == "i386" ]]; then
+                header_print "HA Status"
+                $HASTATUS -sum
+
+                if [ "${_testinstall_}" != "basic" ]; then
+                        header_print "HA Group Check"
+                        ha_sybase_check
+                        if [[ $? != 0 ]]; then
+                                _failed_=1
+                         fi
+                fi
+
+                run_sybaseinfo_ha
+                if [[ $? != 0 ]]; then
+                        _failed_=1
+                fi
+
+        fi
+
+
+
+# Verify Veritas Licence
+        verify_veritas_lic
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+ #Validate Hosts
+        validate_hosts
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Disable core dumps for SPARC or Compact OSS-RC
+        if [[ "${ARCH_TYPE}" == "sparc" || "${_testinstall_}" = "basic" ]]; then
+                disable_core_dumps
+                if [[ $? != 0 ]]; then
+                        _failed_=1
+                fi
+        fi
+
+# Get node count
+        get_node_count
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Run info extract (provide own funtion here)
+
+        if [[ "${ARCH_TYPE}" == "sparc" ]]; then
+
+# Run sybase info
+                run_sybaseinfo
+                if [[ $? != 0 ]]; then
+                        _failed_=1
+                fi
+
+        fi
+
+# Check MC
+        check_all_mcs
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Check DNS
+        check_dns
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Fix TSS adb database
+        tss_adb_fix
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+# Save Mirror Configuration
+
+        save_mirror_config
+        if [[ $? != 0 ]]; then
+			_failed_=1
+         fi
+
+# Work around for Hyperic
+        if [[ "${ARCH_TYPE}" == "sparc" ]]; then
+                work_around_hyperic
+                if [[ $? != 0 ]]; then
+                        _failed_=1
+                 fi
+        fi
+
+# Save ifconfig Configuration
+        save_ifconfig_config
+        if [[ $? != 0 ]]; then
+			_failed_=1
+        fi
+#backup for java.policy file for sparc
+        if [[ "${ARCH_TYPE}" == "sparc" ]]; then
+                backup_java_policy
+        fi
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+# Fix ERICpms and ERICimm packages
+        fix_pms_imm_package
+        if [[ $? != 0 ]]; then
+			_failed_=1
+        fi
+
+        header_print "Complete CIST Listing"
+        check_cist_status
+
+        if [[ $? != 0 ]]; then
+			_failed_=1
+        fi
+
+        print_package_listing
+        if [[ $? != 0 ]]; then
+			_failed_=1
+        fi
+
+        print_patch_listing
+
+        header_print "Checking Sybase password"
+        check_sybase_password
+        if [[ $? != 0 ]]; then
+			_failed_=1
+        fi
+
+        header_print "Pre System Upgrade Check Result"
+
+        if [[ ${_failed_} == 1 ]]; then
+                echo -e "\n   --- One or more Pre Checks Failed"
+                echo -e "   --- Please check the log file: \n"
+        else
+                echo -e "\n   --- Pre Upgrade Checks Passed "
+                echo -e "   --- See log file: \n"
+        fi
+        echo -e "   --- ${LOGFILE}\n\n"
+
+        stop_log
+                
+        #echo "Value of failed in pre_system_upgrade Function = " $_failed_
+                
+        [ $_failed_ -eq 0 ]
+        return $?
+        #TR HS67979
+}
+#/////////////////////////////////////////////
+# post_system_upgrade
+# Main user function to post-check oss system
+# after upgrade
+#
+#
+#/////////////////////////////////////////////
+post_system_upgrade()
+{
+
+        local _failed_=0
+
+        start_log "post_sys_upg_check"
+
+# Print Header
+        header_print "Post System Upgrade Checks"
+        echo $( date +%y%m%d_%H:%M:%S )
+
+# Check Platform, print arch
+        header_print "System Arch"
+        echo -e "   --- `$UNAME -p`"
+
+        if [[ "${ARCH_TYPE}" == "i386" ]]; then
+                header_print "HA Status"
+                $HASTATUS -sum
+        fi
+
+# Verify Veritas Licence
+        verify_veritas_lic
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+ #Validate Hosts
+        validate_hosts
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Get node count
+        get_node_count
+        if [[ $? != 0 ]]; then
+                _failed_=1
+		fi
+
+# Run info extract (provide own funtion here)
+
+# Run sybase info
+        run_sybaseinfo
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Check MC
+        check_all_mcs
+        if [[ $? != 0 ]]; then
+                _failed_=1
+		fi
+
+# Check DNS
+        if [ "${ARCH_TYPE}" == "sparc" ]
+        then
+                check_dns
+                if [[ $? != 0 ]]; then
+                        _failed_=1
+                fi
+        fi
+
+        enable_core_dumps
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+        #restore for java.policy file for sparc and x86
+        restore_java_policy
+        if [[ $? != 0 ]]; then
+                _failed_=1
+		fi
+
+        header_print "Complete CIST Listing"
+
+        check_cist_status
+        if [[ $? != 0 ]]; then
+        _failed_=1
+        fi
+
+        print_package_listing
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+        print_patch_listing
+
+        header_print "Post System Uprgade Check Result"
+
+        if [[ ${_failed_} == 1 ]]; then
+                echo -e "\n   --- One or more Post Upgrade Checks Failed"
+                echo -e "   --- Please check the log file: \n"
+        else
+                echo -e "\n   --- Post Upgrade Checks Passed "
+                echo -e "   --- See log file:  \n"
+        fi
+        echo -e "   --- ${LOGFILE}\n\n"
+
+        stop_log
+        #echo "Value of failed in post_system_upgrade Function = " $_failed_     
+        [ $_failed_ -eq 0 ]
+        return $?
+        #TR HS67979
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+pre_split_cluster() {
+# Copy MC start list file
+# Mod sybase config file
+echo
+
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+post_split_cluster() {
+
+# Check we can see MWS and cant see Admin 1 on public LAN
+#Start up service groups and sybase
+echo
+
+}
+#/////////////////////////////////////////////
+# pre_oss_upgrade
+# Main user function to pre-check oss system
+# prior to upgrade
+#
+#
+#/////////////////////////////////////////////
+pre_oss_upgrade() {
+
+        local _failed_=0
+
+        start_log "pre_oss_upg_check"
+
+# Print Header
+        header_print "Pre System Upgrade Checks"
+        echo $( date +%y%m%d_%H:%M:%S )
+
+# Check Platform, print arch
+        header_print "System Arch"
+        echo -e "   --- `$UNAME -p`"
+
+        if [[ "${ARCH_TYPE}" == "i386" ]]; then
+                header_print "HA Status"
+                $HASTATUS -sum
+        fi
+
+        ha_group_check
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+        mc_start_list_check
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Verify Veritas Licence
+        verify_veritas_lic
+        if [[ $? != 0 ]]; then
+                _failed_=1
+       fi
+
+ #Validate Hosts
+        validate_hosts
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+        disable_core_dumps
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Fix PMS and IMM packages
+        fix_pms_imm_package
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Fix ERICrtt and ERICrpmo packages
+        fix_rtt_rpmo_package
+		if [[ $? != 0 ]]; then
+                _failed_=1
+       fi
+
+# Fix ERICurbck pkgmap
+        fix_urbcg_package
+		if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Copy full split_cluster.log
+        copy_split_cluster_log
+
+# Get node count
+        get_node_count
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Check for Unsupported Mount points
+        header_print "Checking for Unsupported Mounts Points"
+        check_unsupp_mountpoint
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+# Run info extract (provide own funtion here)
+
+# Run sybase info
+        run_sybaseinfo
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+#backup for java.policy file for X86
+        backup_java_policy
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+        header_print "Complete CIST Listing"
+        check_cist_status
+
+        if [[ $? != 0 ]]; then
+        _failed_=1
+        fi
+
+        print_package_listing
+        if [[ $? != 0 ]]; then
+                _failed_=1
+        fi
+
+        print_patch_listing
+
+        header_print "Pre System Upgrade Check Result"
+
+        if [[ ${_failed_} == 1 ]]; then
+                echo -e " "
+                echo -e "   --- One or more Pre Checks Failed\n"
+                echo -e "   --- Please check the log file \n\n"
+                echo -e "   --- ${LOGFILE}\n\n"
+        else
+                echo -e " "
+                echo -e "   --- No failed Pre Checks detected\n"
+                echo -e "   --- Please check the log file \n\n"
+                echo -e "   --- ${LOGFILE}\n\n"
+        fi
+        stop_log
+        #echo "Value of failed in pre_oss_upgrade Function = " $_failed_ 
+        [ $_failed_ -eq 0 ]
+        return $?
+        #TR HS67979
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+usage()
+{
+        [[ -d ${SCRATCHPAD} ]] || ${MKDIR} -p ${SCRATCHPAD}
+        ${TOUCH} ${SCRATCHPAD}/.usage
+        echo
+        echo "Usage  : system_checks.bsh [ -option [argument] ]
+
+                -a  pre_sys_upgrade             :  Pre system upgrade checks
+                -a  post_sys_upgrade            :  Post system upgrade checks
+                -c  pre_oss_upgrade             :  Pre OSS upgrade checks (Valid for X86 only)
+                -d  volume_checks               :  Expand specific volumes if necessary
+                -e  post_ec_upgrade             :  Post EC upgrade checks
+                -f  update_veritas_config_files :  Update Veritas Configuration files( Valid for X86 only)
+                -f  update_cluster_ini_files    :  Update Cluster ini files ( Valid for X86 only)
+                -f  reblock_disk_access         :  Reblock disk access
+                -f  update_new_boot_env         :  Update_veritas_config_files and reblock disk access (valid for X86 only)
+                -s  sybase                      :  Run sybase info"
+
+        exit_script 1
+}
+
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+main_wrapper() {
+
+        local RESULT=0
+        while getopts n:is:v:a:f:d:e:c:hH DOWHAT; do
+                case ${DOWHAT} in
+
+                        H|h) usage  #What can I do you for?!
+                                ;;
+
+                        a) case ${OPTARG} in
+                                pre_sys_upgrade) pre_system_upgrade
+                                (( $? != 0 )) && RESULT=1
+                                                                echo "Value of result :"
+                                                                echo $RESULT
+                                ;;
+
+                                post_sys_upgrade) post_system_upgrade
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+
+                                *)      echo "Unsupported argument -a ${OPTARG}!"
+                                        usage
+                                        ;;
+                        esac
+                        ;;
+
+                        b) case ${OPTARG} in
+                                pre_sys_split) pre_split_cluster
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+
+                                post_sys_split) post_split_cluster
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+
+                                *)      echo "Unsupported argument -b ${OPTARG}!"
+                                        usage
+                                        ;;
+                        esac
+                        ;;
+
+                        c) case ${OPTARG} in
+                                pre_oss_upgrade) pre_oss_upgrade
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+
+                                post_oss_upgrade) post_oss_upgrade
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+
+                                *)      echo "Unsupported argument -c ${OPTARG}!"
+                                        usage
+                                        ;;
+                        esac
+                        ;;
+
+                        d) case ${OPTARG} in
+                                volume_checks) check_volume_sizes
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+
+                                *)      echo "Unsupported argument -d ${OPTARG}!"
+                                        usage
+                                        ;;
+                        esac
+                        ;;
+                        e) case ${OPTARG} in
+                                post_ec_upgrade) post_ec_upgrade
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+
+                                *)      echo "Unsupported argument -d ${OPTARG}!"
+                                        usage
+                                        ;;
+                        esac
+                        ;;
+                        f) case ${OPTARG} in
+                                update_veritas_config_files) update_veritas_config_files $3
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+                                update_cluster_ini_files) update_cluster_ini_files
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+                                reblock_disk_access) reblock_disk_access $3
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+                                update_new_boot_env) update_veritas_config_files $3
+                                (( $? != 0 )) && RESULT=1
+                                reblock_disk_access $3
+                                (( $? != 0 )) && RESULT=1
+                                ;;
+
+                                *)      echo "Unsupported argument -f ${OPTARG}!"
+                                        usage
+                                        ;;
+                        esac
+                        ;;
+
+                        s) if [[ "${OPTARG}" = "sybase" ]]; then
+                                run_sybaseinfo
+                                (( $? != 0 )) && RESULT=1
+                        elif [[ "${OPTARG}" = "disk" ]]; then
+                                check_dskspace
+                                (( $? != 0 )) && RESULT=1
+                        else
+                                echo "Unsupported argument -s ${OPTARG}!"
+                                usage
+                        fi
+                        ;;
+
+
+
+                        *) RESULT=1
+                                usage            #invalid parameter
+                                ;;
+                esac
+        done
+        exit $RESULT
+		#TR HS67979
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+check_dns()
+{
+        local _dns_resolv_file_=/etc/resolv.conf
+        local _return_value_=0
+        local _temp_dns_data_=/var/tmp/dnslookup
+
+        # This check is done for HA-CS who rename the /etc/resolv.conf file
+        if [[ -f ${_dns_resolv_file_} ]]; then
+                local _name_server_ip_=$( ${GREP} nameserver ${_dns_resolv_file_} | ${NAWK} '{ print $2 }' )
+        else
+                return 0
+        fi
+
+        touch ${_temp_dns_data_}
+
+        if [ "${ARCH_TYPE}" == "sparc" ]
+        then
+                ifconfig -a | grep NOARP >/dev/null 2>&1
+                if [ $? -eq 0 ]
+                then
+                        return 0
+                fi
+        fi
+
+        header_print "Checking DNS"
+
+        if [[ -z ${_name_server_ip_} ]]; then
+                echo -e "The DNS sever is not defined in ${_dns_resolv_file_}."
+                L_RESULT=1
+        else
+                L_RESULT=1
+                for EACH_NS in ${_name_server_ip_}; do
+                        ${NSLOOKUP} ${EACH_NS} >> ${_temp_dns_data_}
+                        #(( $? == 0 )) && L_RESULT=0
+                done
+        fi
+
+        cat ${_temp_dns_data_} | egrep -i "can\'t|connection timed out" >/dev/null 2>&1
+        L_RESULT=$?
+
+        if (( L_RESULT == 1 )); then
+                echo "===DNS       OK"
+                _return_value_=0
+        else
+                echo "****DNS       NOK***"
+                _return_value_=1
+        fi
+
+        rm -rf ${_temp_dns_data_}
+        return ${_return_value_}
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+ check_all_mcs()
+ {
+        local _return_value_=0
+        header_print "Checking MCs"
+
+        local _mc_not_started_list_=$( su - nmsadm -c "${SMTOOL} -list" | ${EGREP} -i "failed|unlicensed|offline|initializing...|retrying...|terminating...|stopped|restart scheduled|no ssr")
+
+        if [[ -z ${_mc_not_started_list_} ]]; then
+                echo "   --- All MCs are started.     OK"
+                _return_value_=0
+        else
+                echo -e "   --- The following MCs are NOT started, verify before proceeding."
+                echo -e "   --- If all MC states are as expected then proceed, otherwise correct as appropriate."
+                echo -e "   --- Not started MCs:\n"
+                su - nmsadm -c "${SMTOOL} -list" | ${EGREP} -i "failed|unlicensed|offline|initializing...|retrying...|terminating...|stopped|restart scheduled|no ssr"
+                echo -e "\n   --- MCs         NOK\n"
+                _return_value_=1
+        fi
+
+        return ${_return_value_}
+
+ }
+disable_core_dumps()
+{
+
+        local _return_value_=0
+
+        header_print "Disabling Core Dumps"
+
+        coreadm -d global -d process -d global-setid -d proc-setid -d log
+
+        header_print "Disabling Java Heap Dumps"
+
+        chmod a-rwx /ossrc/upgrade/JREheapdumps
+
+        return ${_return_value_}
+}
+
+enable_core_dumps()
+{
+
+        local _return_value_=0
+        local _core_dir_=/ossrc/upgrade/core
+
+        header_print "Enabling Core Dumps"
+
+        if [[ -d ${_core_dir_} ]]; then
+                chmod 1777 ${_core_dir_}
+        else
+                mkdir -p -m 1777 ${_core_dir_}
+        fi
+
+        coreadm -G all -i ${_core_dir_}/core_%n_%f_%u_%g_%p -g ${_core_dir_}/core_%n_%f_%u_%g_%p -d global -e process -e global-setid -d proc-setid -e log
+
+        echo "Core dumps will be saved to ${_core_dir_}"
+
+        header_print "Enabling Java Heap Dumps"
+
+        chmod ug+rwx /ossrc/upgrade/JREheapdumps
+
+        return ${_return_value_}
+}
+
+ ha_sybase_check()
+ {
+        local _return_value_=0
+        header_print "HA Sybase Group Check"
+
+        local _oss_group_running_=`$HAGRP -state Oss | $GREP ONLINE | $NAWK '{print $3}'`
+                #gives server name on which Oss is running
+        local _sybase_group_running_=`$HAGRP -state Sybase1 | $GREP ONLINE | $NAWK '{print $3}'`
+                #gives server name Sybase is running
+        local _host_name_=`echo $HOSTNAME`
+                #gives server name where this script is runnning
+
+        echo -e "   --- Script is running on ${_host_name_}\n"
+
+        echo -e "   --- Oss group is running on ${_oss_group_running_}\n"
+
+        echo -e "   --- Sybase1 group is running on ${_sybase_group_running_}\n"
+
+        if [[ ${_oss_group_running_} = ${_sybase_group_running_} ]]; then
+                echo -e "\n   --- Oss and Sybase1 are running on the same admin server"
+                echo -e "   --- During normal runtime, Sybase1 should be on the other admin server --- NOK\n"
+                echo -e "   --- This warning can be ignored if you are aware of this --- NOK\n"
+                _return_value_=1
+        fi
+
+        return ${_return_value_}
+ }
+ ha_group_check()
+ {
+        local _return_value_=0
+        header_print "HA Group Check"
+
+        local _host_name_=`echo $HOSTNAME`
+        local _oss_group_running_=`$HAGRP -state Oss -sys ${_host_name_}`
+        local _sybase_group_running_=`$HAGRP -state Sybase1 -sys ${_host_name_}`
+
+
+        echo -e "   --- Oss group: ${_oss_group_running_}\n"
+        if [[ ${_oss_group_running_} != "ONLINE" ]]; then
+                echo -e "   --- Oss Group is not ONLINE, please check!   -   NOK\n\n"
+                _return_value_=1
+        fi
+
+        echo -e "   --- Sybase1 group: ${_sybase_group_running_}\n"
+        if [[ ${_sybase_group_running_} != "ONLINE" ]]; then
+                echo -e "   --- Sybase1 Group is not ONLINE, please check!   -   NOK\n\n"
+                _return_value_=1
+        fi
+
+        return ${_return_value_}
+ }
+ mc_start_list_check()
+ {
+        local _return_value_=0
+
+        header_print "Critical MC Start List Check"
+
+        local _host_name_=`echo $HOSTNAME`
+        local _mc_start_list_location_=/etc/opt/ericsson/nms_cif_smssr/mc_start_list
+
+        if [[ -a ${_mc_start_list_location_} ]]; then
+
+                echo -e "   --- Critical MC Start List is in the correct location"
+
+        else
+
+                echo -e "   --- Critical MC Start List does not exist in"
+                echo -e "   --- /etc/opt/ericsson/nms_cif_smssr/"
+                echo -e "   --- Please check split_cluster   ---   NOK\n\n"
+                _return_value_=1
+                return ${_return_value_}
+
+        fi
+
+
+        header_print "Checking Critical MCs Started"
+
+        for each_critical_mc in `cat ${_mc_start_list_location_}`; do
+                su nmsadm -c "${SMTOOL} -list ${each_critical_mc} " >> /tmp/critical_mc_state.$$
+        done
+
+        ${GREP} -v started /tmp/critical_mc_state.$$   >/dev/null 2>&1
+        if [[ $? == 0 ]]; then
+                echo -e "\n   --- All Critical MCs are not started    ----  NOK"
+                echo -e "\n   --- The following critical MCs are not started:   "
+                ${GREP}  -v started /tmp/critical_mc_state.$$ |nawk '{print $1}'
+                _return_value_=1
+        else
+                echo -e "\n   --- All Critical MCs are started --- \n\n "
+                _return_value_=0
+        fi
+        rm  -f /tmp/critical_mc_state.$$
+
+        return ${_return_value_}
+ }
+ #/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+ check_ssr_create_syb() {
+
+        local _host_name_=`hostname`
+        local _ssr_ha_control_=`$HARES  -state smssr -sys ${_host_name_}`
+
+        if [[ ${_ssr_ha_control_} != "ONLINE" ]]; then
+                echo -e "\n   --- SSR not started, enable it before relaunching the upgrade.\n"
+                exit 1
+        fi
+
+        return 0
+}
+#/////////////////////////////////////////////
+#
+#This function is called post ec on x86
+#Removes mc_start_list and restarts the MC's
+#
+#
+#/////////////////////////////////////////////
+post_ec_upgrade()
+{
+        start_log "post_ec_upgrade"
+                local  Return_Value=0
+        if [[ -a ${MC_START_LIST_SSR} ]]; then
+                header_print "Remove Subset MC List"
+                $RM ${MC_START_LIST_SSR}
+                RESTART_MCS=YES
+        else
+                #MC_START_LIST_SSR not found
+                #echo "MC_START_LIST_SSR not found "
+                Return_Value=1
+        fi
+
+        if [[ ${RESTART_MCS} = "YES" ]]; then
+                header_print "Starting All Managed Components"
+
+                su nmsadm -c "${SMTOOL} -coldrestart -all -reason=other -reasontext=post_ec_upgrade"
+                                echo "\n   --- Success\n"
+                                echo -e "\n"
+                                echo -e "\n"
+        else
+                #RESTART_MCS !=YES
+				#echo "RESTART_MCS is not equal to yes"
+				Return_Value=1
+        fi
+
+        
+        stop_log
+
+        header_print "Log File Location"
+
+        echo -e "   --- Log file can be viewed at"
+        echo -e "   --- ${LOGFILE}\n\n"
+
+         #return 0
+       [ $Return_Value -eq 0 ]
+         return $?
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+check_volume_sizes()
+{
+        start_log "pre_upgrade_volume_checks"
+
+        _temp_volume_loc_="/tmp"
+        _upgrade_volume_loc_="/ossrc/upgrade"
+        _disk_groups_file_="/ericsson/config/.su_disk_groups"
+        _wran_db_="/export/versant/db/WRAN_SUBNETWORK_MIRROR_CS"
+        _versant_loc_="/ossrc/versant"
+        _oss_dg_found_=NO
+        _sybase_dg_found_=NO
+
+        typeset -i _root_free_space_=$( df -kl / | grep -v '^Filesystem' | nawk '{print $4}' )/1024
+        typeset -i _temp_free_space_=$( df -kl ${_temp_volume_loc_} | grep -v '^Filesystem' | nawk '{print $4}' )/1024
+        typeset -i _upgrade_total_space_=$( df -kl ${_upgrade_volume_loc_} | grep -v '^Filesystem' | nawk '{print $2}' )/1024
+        typeset -i _export_total_space_=$( df -kl /export | grep -v '^Filesystem' | nawk '{print $2}' )/1024
+        typeset -i _export_free_space_=$( df -kl /export | grep -v '^Filesystem' | nawk '{print $4}' )/1024
+        typeset -i _versant_total_space_=$( df -kl ${_versant_loc_} | grep -v '^Filesystem' | nawk '{print $2}' )/1024
+        typeset -i _versant_free_space_=$( df -kl ${_versant_loc_} | grep -v '^Filesystem' | nawk '{print $4}' )/1024
+        typeset -i _wran_db_size_=$( ls -l ${_wran_db_} | nawk '{sum += $5} END {printf "%d\n", sum/1024}')/1024
+
+
+        header_print "Volume Checks"
+
+        header_print "Checking Disk Groups"
+
+        $VXDG list > ${_disk_groups_file_}
+
+        grep ossdg ${_disk_groups_file_} >/dev/null 2>&1
+        if [[ $? == 0 ]]; then
+                echo -e "\n   --- OSS disk group available"
+                _oss_dg_found_=YES
+        fi
+
+        grep sybasedg ${_disk_groups_file_} >/dev/null 2>&1
+        if [[ $? == 0 ]]; then
+                echo -e "\n   --- Sybase disk group available"
+                _sybase_dg_found_=YES
+        fi
+
+# Check /export volume
+
+        _total_non_db_=`echo ${_export_total_space_} - ${_wran_db_size_} | bc -l | nawk -F. '{print $1}'` # Total - DB size
+        _total_non_db_=`echo ${_total_non_db_} - ${_export_free_space_} | bc -l | nawk -F. '{print $1}'`  # - free space
+        header_print "Export Volume Dimensioning"
+
+
+        echo -e "\n   --- Total Current Export Space = ${_export_total_space_} MB"
+        echo -e "   --- WRAN Database Size = ${_wran_db_size_} MB"
+        echo -e "   --- Export Volume Space Used for applications other than WRAN Database = ${_total_non_db_} MB"
+        echo -e "   --- Total Free Export Volume Space = ${_export_free_space_} MB"
+
+        echo -e "\n   --- Calculating WRANMOM requirement for Upgrade"
+        echo -e "   --- Using the following formula:"
+
+        _total_export_increase_=`echo ${_wran_db_size_} + 3072 | bc -l` # (${wran_db_size} + 3GB)
+        _total_export_increase_=`echo ${_total_export_increase_}*1.7 | bc -l`     # (${wran_db_size} + 3GB) * 1.7
+        _total_export_increase_=`echo ${_total_export_increase_}+5120 | bc -l | nawk -F . '{print $1}'`    # 5GB + ((${wran_db_size} + 3GB) * 1.7)
+        # This includes space alreadry allocated to WRAN DB
+        _total_export_increase_=`echo ${_total_export_increase_}+ ${_total_non_db_} + ${_wran_db_size_}  | bc -l | nawk -F . '{print $1}'`  #Above + Non_wran_db_use + wran_db_size
+
+        echo -e "       5GB + ((${_wran_db_size_}MB + 3GB)*1.7 + ${_total_non_db_} + ${_wran_db_size_}) = ${_total_export_increase_} MB"
+
+        if [[ ${_total_export_increase_} -gt ${_export_total_space_} ]]; then
+                echo -e "\n   --- Export Volume will be set at ${_total_export_increase_} MB"
+
+                header_print "Increasing /export volume"
+
+                if [[ `df -k /export |nawk '/\//{sub(/%/,"",$5);print $5}'` = "100" ]]; then
+                        echo "\n   --- NOK: /export filesystem is 100% full, resize will not work"
+                        echo "   --- Please clean up FS and re-run this script\n"
+
+                        exit 1
+                fi
+                /ericsson/dmr/bin/dmtool -s alter_volume ossdg export ${_total_export_increase_}m
+         else
+                echo -e "\n   --- Export Volume has sufficient free space "
+
+        fi
+
+
+# Check /ossrc/versant volume
+
+        header_print "/ossrc/versant Volume Dimensioning"
+
+
+        echo -e "\n   --- WRAN Database Size = ${_wran_db_size_} MB"
+        echo -e "   --- Total Current /ossrc/versant Space = ${_versant_total_space_} MB"
+        echo -e "   --- Total Free Versant Volume Space = ${_versant_free_space_} MB"
+
+        echo -e "\n   --- Calculating Minimum Free Space required in /ossrc/versant Volume "
+        echo -e "   --- Using the following formula:"
+
+        _total_versant_increase_=`echo ${_wran_db_size_} + 3072 | bc -l` # (${wran_db_size} + 3GB)
+        _total_versant_increase_=`echo ${_total_versant_increase_}*1.7 | bc -l | nawk -F. '{print $1}'`     # (${wran_db_size} + 3GB) * 1.7
+        # HR70835 commented below line to change the formula
+        # _total_versant_increase_=`echo ${_total_versant_increase_} + ${_wran_db_size_} | bc -l | nawk -F. '{print $1}'`
+
+        echo -e "       ((${_wran_db_size_}MB + 3GB) * 1.7 ) = ${_total_versant_increase_} MB"
+
+        if [[ ${_versant_free_space_} -gt ${_total_versant_increase_} ]]; then
+
+                echo -e "\n   --- Versant Volume has sufficient free space with ${_versant_free_space_} MB"
+        else
+                 _versant_free_space_touse_=$((${_versant_free_space_}-2048))
+
+                _total_free_space_toadd_=`echo ${_total_versant_increase_} - ${_versant_free_space_touse_} + 1 | bc -l | nawk -F. '{print $1}'`
+                _total_versant_increase_=$((${_total_free_space_toadd_} + ${_versant_total_space_}))
+
+                echo -e "\n   --- /ossrc/versant Volume will be set at ${_total_versant_increase_} MB"
+
+                header_print "Increasing /ossrc/versant volume"
+
+                if [[ `df -k /ossrc/versant |nawk '/\//{sub(/%/,"",$5);print $5}'` = "100" ]]; then
+                        echo "\n   --- NOK: /ossrc/versant filesystem is 100% full, resize will not work correctly"
+                        echo "   --- Please clean up FS and re-run this script\n"
+
+                        exit 1
+                fi
+
+
+                /ericsson/dmr/bin/dmtool -s alter_volume ossdg versant ${_total_versant_increase_}m
+        fi
+
+# Check /ossrc/upgrade volume
+
+        header_print "Upgrade Volume Dimensioning"
+
+        if [[ "${ARCH_TYPE}" == "i386" ]]; then
+                if [[ ${_upgrade_total_space_} -gt 9000 ]]; then
+                        echo -e "\n   --- Upgrade volume is at correct size above 9000MB\n"
+                        echo -e "   --- Current Size = ${_upgrade_total_space_}MB"
+                else
+                        header_print "Increasing /ossrc/upgrade volume"
+                        /ericsson/dmr/bin/dmtool -s alter_volume ossdg upgrade 9216m
+                fi
+        else
+                if [[ ${_upgrade_total_space_} -gt 9728 ]]; then
+                        echo -e "\n   --- Upgrade volume is at correct size above 9500MB\n"
+                        echo -e "   --- Current Size = ${_upgrade_total_space_}MB"
+                else
+                        header_print "Increasing /ossrc/upgrade volume"
+                        /ericsson/dmr/bin/dmtool -s alter_volume ossdg upgrade 9728m
+                fi
+        fi
+
+
+        header_print "Root Space Check"
+
+        if [[ ${_root_free_space_} -gt 5000 ]]; then
+                echo -e "\n   --- Root volume is at correct size above 5000MB\n"
+                echo -e "   --- Current Available Free = ${_root_free_space_}MB"
+        else
+                echo -e "\nNOK - Current Available Free = ${_root_free_space_}MB is not sufficient to proceed with Upgrade"
+                echo -e "\n   --- Root needs to have at least 5000MB free\n"
+                echo -e "Please check manually\n"
+                exit 1
+        fi
+
+        header_print "Swap Space Check"
+
+        if [[ ${_temp_free_space_} -gt 5000 ]]; then
+                echo -e "\n   --- Swap is at correct size above 5000MB\n"
+                echo -e "   --- Current Available Free = ${_temp_free_space_}MB"
+        else
+                echo -e "\nNOK - Current Available Free = ${_temp_free_space_}MB is not sufficient to proceed with Upgrade"
+                echo -e "\n   --- Swap needs to have at least 5000MB free\n"
+                echo -e "Please check manually\n"
+                exit 1
+        fi
+
+        echo -e "\n"
+
+        stop_log
+
+        header_print "Log File Location"
+
+        echo -e "   --- Log file can be viewed at"
+        echo -e "   --- ${LOGFILE}\n\n"
+
+        # Check log file for any volume resize error from using DMR
+        ${GREP} -i error ${LOGFILE} >/dev/null 2>&1
+        if [[ $? == 0 ]]; then
+                echo -e "   --- NOK - DMR returned error code when trying to increase space in one or more volumes"
+                echo -e "   --- Please check log file\n\n"
+                exit 1
+        fi
+                
+        exit 0
+                
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+get_node_count() {
+
+        local _yang_file_=/var/opt/ericsson/nms_umts_cms_nead_seg/neadStatus.log.yang
+        local _yin_file_=/var/opt/ericsson/nms_umts_cms_nead_seg/neadStatus.log.yin
+                
+        header_print "Checking Number of Network Elements"
+
+        echo "   --- This check is valid for WRAN installations only"
+
+        if [[ -f ${_yang_file_} ]]; then
+                local _number_of_elements_yang_=`$TAIL -100 ${_yang_file_} | $GREP TOTAL_NODES |  $TAIL -1`
+                echo -e "\n   --- Total number of Network Elements in ${_yang_file_}:"
+                echo -e "      ${_number_of_elements_yang_}"
+        else
+                echo -e "\n${_yang_file_} does not exist\n"
+                                
+        fi
+
+        if [[ -f ${_yin_file_} ]]; then
+                local _number_of_elements_yin_=`$TAIL -100 ${_yin_file_} | $GREP TOTAL_NODES |  $TAIL -1`
+                echo -e "\n   --- Total number of Network Elements in ${_yin_file_}:"
+                echo -e "      ${_number_of_elements_yin_}"
+        else
+                echo -e "\n   --- ${_yin_file_} does not exist NOK"
+                                
+        fi
+
+        return 0
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////	////////////
+save_mirror_config()
+{
+                local Return_Value=0
+        L_LOGFILE=${LOGDIR}/${SCRIPTNAME%.bsh}.DMR_MIRROR_CONFIG_$( date +%y%m%d-%H_%M_%S ).log
+        remotehost=$(cat /etc/hosts | grep -i priv | nawk '{print $2}' | grep -v $HOST)
+        ${TOUCH} ${L_LOGFILE}
+        DMR_DEF=/ericsson/dmr/etc/dm_define
+        echo
+        echo ${SEPARATOR}
+        echo
+		header_print "Printing Mirror Configuration for $HOST"
+        echo "Printing Mirror Configuration for $HOST" >> $L_LOGFILE
+        echo "" >> $L_LOGFILE
+        if [[ -a ${DMR_DEF} ]] && [[ -s ${DMR_DEF} ]] ; then
+                cd /ericsson/dmr/bin
+                ./dmtool s c > $L_LOGFILE
+                echo "" >> $L_LOGFILE
+                echo "" >> $L_LOGFILE
+                echo "" >> $L_LOGFILE
+                if [[ "${ARCH_TYPE}" == "i386" ]]; then
+                        _thishost_=$(hostname)
+                        _remotehost_=$($GREP system $MAINCF_DIR/main.cf | $AWK '{print $2}' | $GREP -v ${_thishost_})
+                        echo "Remote host = " $_remotehost_
+						#gives the other server name
+                                if [ "${_remotehost_}" != "" ]; then
+									echo "" >> $L_LOGFILE
+									echo "Printing Mirror Configuration for $remotehost" >> $L_LOGFILE
+									echo "" >> $L_LOGFILE
+									$SSH -q ${remotehost} "echo 2>&1"
+									if [ $? == 0 ];then
+										echo " ssh to ${remotehost} is OK" >> $L_LOGFILE
+										$SSH ${remotehost} '/ericsson/dmr/bin/dmtool s c ' >> $L_LOGFILE
+									else
+										echo "ssh to ${remotehost} failed. Please investigate with ${remotehost} status" >> $L_LOGFILE
+										Return_Value=1
+									fi
+								else
+									echo "Remote host not found "
+									#[ "${_remotehost_}" == "" ]
+									Return_Value=1
+								fi
+				fi
+                echo "DMR Mirror Config has been saved to $L_LOGFILE"
+                cat $L_LOGFILE
+        else
+                echo "Cannot print Mirror Definition as it does not exist"
+                echo "Please run DMR to setup Mirror Definition"
+                echo
+                echo
+				Return_Value=1
+                rm -rf ${L_LOGFILE}
+				
+        fi
+        #return 0
+        return $Return_Value
+        #TR HS67979
+}
+
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+save_ifconfig_config()
+{
+                local Return_Value=0
+                ifconfig_LOGFILE=${LOGDIR}/${SCRIPTNAME%.bsh}.IFCONFIG_LOG_$( date +%y%m%d-%H_%M_%S ).log
+                remotehost=$(cat /etc/hosts | grep -i priv | nawk '{print $2}' | grep -v $HOST)
+                ${TOUCH} ${ifconfig_LOGFILE}
+				echo ${SEPARATOR}
+				echo
+				header_print "Printing ifconfig Configuration for $HOST" 
+                echo "Printing ifconfig Configuration for $HOST" >> $ifconfig_LOGFILE
+                echo "" >> $ifconfig_LOGFILE
+                echo "" >> $ifconfig_LOGFILE
+                /sbin/ifconfig -a >> $ifconfig_LOGFILE
+                echo "" >> $ifconfig_LOGFILE
+                echo "" >> $ifconfig_LOGFILE
+                if [[ "${ARCH_TYPE}" == "i386" ]]; then
+                        _thishost_=$(hostname)
+                        _remotehost_=$($GREP system $MAINCF_DIR/main.cf | $AWK '{print $2}' | $GREP -v ${_thishost_})
+                        echo "Remote host = " $_remotehost_
+						if [ "${_remotehost_}" != "" ]; then
+                                echo "" >> $ifconfig_LOGFILE
+                                echo "---------< Printing ifconfig Configuration for $remotehost >-----"   >> $ifconfig_LOGFILE
+                                echo "" >> $ifconfig_LOGFILE
+                                echo "" >> $ifconfig_LOGFILE
+                                $SSH -q ${remotehost} "echo 2>&1"
+								if [ $? == 0 ];then
+									echo " ssh to ${remotehost} is OK"  >> $ifconfig_LOGFILE
+									$SSH ${remotehost} '/sbin/ifconfig -a' >> $ifconfig_LOGFILE
+								else
+									echo "ssh to ${remotehost} failed. Please investigate with ${remotehost} status " >> $ifconfig_LOGFILE
+									Return_Value=1
+								fi
+                        else
+							echo "Remote host not found ERROR"
+							#[ "${_remotehost_}" == "" ]
+                            Return_Value=1
+                        fi
+                fi
+                cd /
+                cat $ifconfig_LOGFILE
+        #return 0
+                return $Return_Value
+                #TR HS67979
+}
+
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+backup_java_policy()
+{
+        if [ -f ${BJAVAPOLICY} ];  then
+                header_print "Backing up java.policy file to ${RJAVAPOLICY}"
+ # Create backup directory if does not exist
+                $MKDIR -p /var/log/ericsson
+                ${CP} ${BJAVAPOLICY} ${RJAVAPOLICY} > /dev/null 2>&1
+                if [ $? == 0 ]; then
+                        echo -e "OK - ${BJAVAPOLICY} has been backed up"
+                        return 0
+                else
+                        echo -e "NOK     Error when trying to backup  ${BJAVAPOLICY}"
+                        return 1
+                fi
+        else
+                 echo -e "OK ${BJAVAPOLICY} file is not present. No backup necessary"
+                 return 0
+        fi
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+restore_java_policy()
+{
+        if [ -f  ${RJAVAPOLICY} ];  then
+                header_print "Restoring java.policy file"
+                ${MV} ${RJAVAPOLICY} ${BJAVAPOLICY} > /dev/null 2>&1
+                if [ $? == 0 ]; then
+                         echo -e "OK - ${RJAVAPOLICY} has been restored in ${BJAVAPOLICY}"
+                         return 0
+                else
+                        echo -e "NOK Error when trying to restore  ${RJAVAPOLICY}"
+                        return 1
+                fi
+        else
+                echo -e "OK ${RJAVAPOLICY} file is not present. No restore necessary".
+                return 0
+        fi
+}
+
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+fix_pms_imm_package()
+{
+        header_print "Update for ERICpms and ERICimm packages"
+                local Return_Value=0
+        if [ -f /var/sadm/pkg/ERICpms/pkginfo ]; then
+                ${SED} 's/BACKUP=Y/BACKUP=N/' /var/sadm/pkg/ERICpms/pkginfo > /var/sadm/pkg/ERICpms/pkginfo.new
+                mv /var/sadm/pkg/ERICpms/pkginfo.new /var/sadm/pkg/ERICpms/pkginfo
+        else
+                  #if the file do not exist
+                  Return_Value=1
+        fi
+
+        if [ -f /var/sadm/pkg/ERICimm/pkginfo ]; then
+                ${SED} 's/BACKUP=Y/BACKUP=N/' /var/sadm/pkg/ERICimm/pkginfo > /var/sadm/pkg/ERICimm/pkginfo.new
+                mv /var/sadm/pkg/ERICimm/pkginfo.new /var/sadm/pkg/ERICimm/pkginfo
+        else
+                  #if the file do not exist
+                  Return_Value=1
+        fi
+
+        #return 0
+        return $Return_Value
+		#TR HS67979
+}
+
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+fix_rtt_rpmo_package()
+{
+        header_print "Update pkgmap for ERICrtt, ERICrpmo and ERICurred packages"
+        BASEDIR="opt/ericsson"
+                local Return_Value=0
+        if [ -f /var/sadm/pkg/ERICrtt/pkginfo ]; then
+                /usr/sbin/removef ERICrtt /var/"\$BASEDIR"/eba_rtt/data  > /dev/null 2>&1
+                /usr/sbin/removef ERICrtt /var/opt/ericsson/eba_rtt/data  > /dev/null 2>&1
+                /usr/sbin/removef ERICrtt /var/"\$BASEDIR"/eba_rtt/data/traces > /dev/null 2>&1
+                /usr/sbin/removef ERICrtt /var/opt/ericsson/eba_rtt/data/traces > /dev/null 2>&1
+                /usr/sbin/removef -f ERICrtt   > /dev/null 2>&1
+        else
+                        #if file do not exist
+                        Return_Value=1
+        fi
+
+        if [ -f /var/sadm/pkg/ERICrpmo/pkginfo ]; then
+              /usr/sbin/removef ERICrpmo /var/"\$BASEDIR"/eba_rede/data  > /dev/null 2>&1
+              /usr/sbin/removef ERICrpmo /var/opt/ericsson/eba_rede/data  > /dev/null 2>&1
+              /usr/sbin/removef -f  ERICrpmo   > /dev/null 2>&1
+        else
+                        #if file do not exist
+                        Return_Value=1
+        fi
+
+        if [ -f /var/sadm/pkg/ERICurred/pkginfo ]; then
+              /usr/sbin/removef ERICurred /var/"\$BASEDIR"/nms_umts_pms_seg/segment1  > /dev/null 2>&1
+              /usr/sbin/removef ERICurred /var/opt/ericsson/nms_umts_pms_seg/segment1  > /dev/null 2>&1
+              /usr/sbin/removef -f  ERICurred   > /dev/null 2>&1
+        else
+                        #if file do not exist
+                        Return_Value=1
+        fi
+
+        if [ -f /var/sadm/pkg/ERICrtt/save/pspool/ERICrtt/pkgmap ]; then
+                $CAT /var/sadm/pkg/ERICrtt/save/pspool/ERICrtt/pkgmap | ${EGREP} -v  "data |data/traces" > /tmp/rtt_pkgmap.$$
+                $MV /tmp/rtt_pkgmap.$$ /var/sadm/pkg/ERICrtt/save/pspool/ERICrtt/pkgmap
+        else
+                        #if file do not exist
+                        Return_Value=1
+        fi
+
+        #return 0
+        return $Return_Value
+        #TR HS67979
+}
+#/////////////////////////////////////////////
+# Update ERICurbcg pkgmap
+#/////////////////////////////////////////////
+fix_urbcg_package()
+{
+                local Return_Value=0
+       if [ -f /var/sadm/pkg/ERICurbcg/save/pspool/ERICurbcg/pkgmap ]; then
+                header_print "Update pkgmap for ERICurbcg package"
+                /usr/sbin/removef    ERICurbcg /home/nmsadm > /dev/null 2>&1
+                /usr/sbin/removef    ERICurbcg /root        > /dev/null 2>&1
+                /usr/sbin/removef -f ERICurbcg              > /dev/null 2>&1
+       else
+                        #if file do not exist
+                        Return_Value=1
+       fi
+       return $Return_Value
+       #TR HS67979
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+check_cist_status()
+ {
+          local _return_value_=0
+          local _cist_list_file_=${LOGDIR}/${LOGPREFIX}cist_list_$( date +%y%m%d-%H_%M_%S ).log
+
+
+          ${CIST} -status |$TEE ${_cist_list_file_}
+
+          echo -e " "
+          echo -e "   --- CIST listing copied to file:"
+          echo -e "   --- ${_cist_list_file_}"
+          echo -e " "
+
+
+          $GREP -i "INST_FAILED" ${_cist_list_file_} > /dev/null 2>&1
+
+          if [ $? == 0 ]; then
+                echo -e "   --- NOK - There is application(s) with FAILED status"
+                echo -e "   --- Please check the CIST listing file  ${_cist_list_file_}  "
+                _return_value_=1
+          fi
+
+          return ${_return_value_}
+
+ }
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+print_package_listing()
+{
+        local _return_value_=0
+        local _pack_list_file_=${LOGDIR}/${LOGPREFIX}package_list_$( date +%y%m%d-%H_%M_%S ).log
+
+        header_print "Complete Package Listing"
+
+        $PKGINFO -l > ${_pack_list_file_}
+
+        echo -e " "
+        echo -e "   --- Package listing redirected to file: "
+        echo -e "   --- ${_pack_list_file_}"
+        echo -e " "
+
+        $GREP -i "Partially installed" ${_pack_list_file_} > /dev/null
+        if [ $? == 0 ]; then
+                echo -e "   --- NOK - There are partially installed packages on the server"
+                echo -e "   --- Please check the Package listing file  ${_pack_list_file_}  "
+                _return_value_=1
+        fi
+
+        return ${_return_value_}
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+print_patch_listing()
+{
+        local _patch_list_file_=${LOGDIR}/${LOGPREFIX}patch_list_$( date +%y%m%d-%H_%M_%S ).log
+
+        header_print "Complete Patch Listing"
+
+        $SHOWREV -p > ${_patch_list_file_}
+
+        echo -e " "
+        echo -e "   --- Patch listing redirected to file: "
+        echo -e "   --- ${_patch_list_file_}"
+        echo -e " "
+
+        return 0
+}
+
+##################################################
+#
+#
+##################################################
+check_unsupp_mountpoint()
+{
+       mount |egrep -v "\/dev\/fd|\/dev\/odm|\/etc\/dfs\/sharetab|\/etc\/mnttab|\/etc\/svc\/volatile|\/lib\/libc.so.1|\/proc|\/system\/contract|\/system\/object|\/tmp on|\/var\/run|\/var\/spool|\/var\/mail|ossrc|nas|vx|\/opt\/ericsson|system|md|\/devices on" > /tmp/unsupp_mount_file.$$
+
+        if [[ -s  /tmp/unsupp_mount_file.$$ ]]; then
+
+                echo -e "\n   --- There are possible unsupported mount point(s).   --- NOK "
+                echo -e "   --- Unsupported mount points will cause problems while stopping and starting the cluster. "
+                echo -e "   --- Please check the following mount point(s) and unmount if not valid: \n"
+
+                cat /tmp/unsupp_mount_file.$$ | awk -F" " '{print $3 "   " $1}'
+                return 1
+        fi
+
+        return 0
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+run_sybaseinfo()
+{
+        header_print "Sybase Information"
+        su - sybase -c ${SYBASEINFO} | ${NAWK} '{
+                if ( NF < 6 ) { print $0 ; exit 0}
+                else if ( $1 == "DATABASE" ) { print $0 ; exit 0}
+                else { dbsize=$6
+                        gsub("%", "", dbsize)
+                        if ( dbsize == "Used()" ) { print $0 ; exit 0}
+                        else if ( int(dbsize) >= int(92) ) 
+                                                { print $0 "   ***NOK***" ; exit 1 }
+                                                else { print $0 ; exit 0} }
+        }'
+
+        #return 0
+        return $?
+        #TR HS67979
+
+}
+run_sybaseinfo_ha()
+{
+        header_print "Sybase Information"
+
+        local _sybase_group_running_=`$HAGRP -state Sybase1 | $GREP ONLINE | $NAWK '{print $3}'`
+        local _hostname_=`echo $HOSTNAME`
+        if [[ ${_sybase_group_running_} = ${_hostname_} ]]; then
+
+                su - sybase -c ${SYBASEINFO} | ${NAWK} '{
+                if ( NF < 6 ) { print $0 ; exit 0 }
+                else if ( $1 == "DATABASE" ) { print $0 ; exit 0 }
+                else { dbsize=$6
+                        gsub("%", "", dbsize)
+                        if ( dbsize == "Used()" ) { print $0 ; exit 0  }
+                        else if ( int(dbsize) >= int(92) ) 
+                                                { print $0 "   ***NOK***" ; exit 1 }
+                else { print $0 ; exit 0 } }
+        }'
+
+        else
+
+                $SSH ${_sybase_group_running_}-priv su - sybase -c ${SYBASEINFO} | ${NAWK} '{
+                if ( NF < 6 ) { print $0 ; exit 0 }
+                else if ( $1 == "DATABASE" ) { print $0 ; exit 0 }
+                else { dbsize=$6
+                        gsub("%", "", dbsize)
+                        if ( dbsize == "Used()" ) { print $0 ; exit 0 }
+                        else if ( int(dbsize) >= int(92) ) 
+                                                { print $0 "   ***NOK***" ; exit 1 }
+                                                else { print $0 ; exit 0 } }
+        }'
+
+        fi
+
+        #return 0
+        return $?
+        #TR HS67979
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+validate_hosts() {
+
+        local _hosts_file_=/etc/hosts
+        local _hosts_file_link_=/etc/inet/hosts
+        local _host_name_="masterservice"
+        local _return_value_=0
+
+        header_print "Validate Hosts"
+
+        if [[ -L ${_hosts_file_} ]]; then
+                if [[ -f ${_hosts_file_link_} && `$GREP masterservice ${_hosts_file_link_}` ]]; then
+                        echo -e "   --- Hosts File OK"
+                        _return_value_=0
+                else
+                        echo -e "   --- Verify ${_hosts_file_} is linked correctly to ${_hosts_file_link_}"
+                        echo -e "   --- and masterservice entry exits - NOK"
+                        _return_value_=1
+                fi
+        else
+                echo -e "   --- ${_hosts_file_} is not a soft link - NOK"
+                _return_value_=1
+        fi
+
+        return ${_return_value_}
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+verify_veritas_lic()
+{
+
+        local _return_value_=0
+
+        header_print "Verify Veritas Licences"
+
+        ${VXLICREP}
+
+        if ( ${VXLICREP} | ${EGREP} -i -e 'Invalid|Expired|err' >/dev/null 2>&1 ); then
+                echo -e "\nSome Veritas License key(s) are invalid or may have expired, verify it/them.\n"
+                echo "***Veritas license         NOK*****"
+                _return_value_=1
+        elif ( ${VXLICREP} | ${EGREP} -i -e 'warn' >/dev/null 2>&1 ); then
+                echo -e "\n There were some warning messages.\n"
+                echo "   --- Veritas License OK"
+                _return_value_=0
+      else
+                echo "   --- Veritas License OK"
+                _return_value_=0
+      fi
+
+      return ${_return_value_}
+}
+update_veritas_config_files()
+{
+
+        local alt_boot_env=$1
+
+        local temp_mount_path="/tmp/temp_mount_sol.$$"
+        local sck_trigger_base="/opt/ericsson/sck/etc/cluster/triggers"
+        local vcs_agent_sybase="${temp_mount_path}/opt/VRTSagents/ha/bin/Sybase"
+        local vcs_agent_sybasebk="${temp_mount_path}/opt/VRTSagents/ha/bin/SybaseBk"
+        local vcs_trigger_base="${temp_mount_path}/opt/VRTSvcs/bin/triggers"
+        local sck_cf_files="/opt/ericsson/sck/etc/cluster"
+        local vcs_cf_files="${temp_mount_path}/etc/VRTSvcs/conf/config"
+        local cluster_template="${temp_mount_path}/ericsson/templates/system"
+
+        start_log "update_vertias_trig"
+
+        header_print "Mounting Alt Boot Env"
+
+        if [[ -z ${alt_boot_env} ]]; then
+                echo -e "\n   --- No alternate boot env provided"
+                exit 1
+		fi
+
+        $LUMOUNT ${alt_boot_env} ${temp_mount_path} > /dev/null
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Unable to mount alt boot env ${alt_boot_env}"
+                exit 1
+        fi
+
+        sleep 5
+
+        header_print "Copy Updated Vertias Files to correct locations"
+
+        echo -e "\n   --- Copy online_Sybase to ${vcs_agent_sybase}\n"
+        $CP ${sck_trigger_base}/online_Sybase  ${vcs_agent_sybase}/online
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_trigger_base}/online_Sybase  ${vcs_agent_sybase}/online\n"
+                exit 1
+		fi
+
+        echo -e "   --- Copy online_SybaseBk to ${vcs_agent_sybasebk}\n"
+        $CP ${sck_trigger_base}/online_SybaseBk  ${vcs_agent_sybasebk}/online
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_trigger_base}/online_SybaseBk  ${vcs_agent_sybasebk}/online\n"
+                exit 1
+		fi
+
+        echo -e "   --- Copy postoffline to ${vcs_trigger_base}\n"
+        $CP ${sck_trigger_base}/postoffline  ${vcs_trigger_base}/postoffline
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_trigger_base}/postoffline  ${vcs_trigger_base}/postoffline\n"
+                exit 1
+        fi
+
+        echo -e "   --- Copy preonline to ${vcs_trigger_base}\n"
+        $CP ${sck_trigger_base}/preonline  ${vcs_trigger_base}/preonline
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_trigger_base}/preonline  ${vcs_trigger_base}/preonline\n"
+                exit 1
+        fi
+
+        echo -e "   --- Copy resfault to ${vcs_trigger_base}\n"
+        $CP ${sck_trigger_base}/resfault  ${vcs_trigger_base}/resfault
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_trigger_base}/resfault  ${vcs_trigger_base}/resfault\n"
+                exit 1
+        fi
+
+        echo -e "   --- Copy postonline to ${vcs_trigger_base}\n"
+        $CP ${sck_trigger_base}/postonline  ${vcs_trigger_base}/postonline
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_trigger_base}/postonline  ${vcs_trigger_base}/postonline\n"
+                exit 1
+        fi
+
+
+        header_print "Unmounting alt boot env"
+
+        $LUUMOUNT ${alt_boot_env}
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Unable to unmount alt boot env ${alt_boot_env}"
+                exit 1
+        fi
+
+        sleep 5
+
+        rm -rf ${temp_mount_path}
+
+        stop_log
+
+        header_print "Log File Location"
+
+        echo -e "   --- Log file can be viewed at"
+        echo -e "   --- ${LOGFILE}\n\n"
+
+       return 0
+          
+update_cluster_ini_files()
+{
+
+        start_log "update_cluster_ini"
+
+        local sck_cf_files="/opt/ericsson/sck/etc/cluster"
+        local vcs_cf_files="${temp_mount_path}/etc/VRTSvcs/conf/config"
+        local cluster_template="${temp_mount_path}/ericsson/templates/system"
+
+        echo -e "   --- Copy oss.cf to ${vcs_cf_files}\n"
+        $CP ${sck_cf_files}/oss.cf ${vcs_cf_files}/oss.cf
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_cf_files}/oss.cf ${vcs_cf_files}/oss.cf\n"
+                exit 1
+        fi
+
+        echo -e "   --- Copy types.cf to ${vcs_cf_files}\n"
+        $CP ${sck_cf_files}/types.cf ${vcs_cf_files}/types.cf
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_cf_files}/types.cf ${vcs_cf_files}/types.cf\n"
+                exit 1
+        fi
+
+        echo -e "   --- Copy cluster.ini to ${cluster_template}\n"
+        $CP ${sck_cf_files}/cluster.ini  ${cluster_template}/cluster.ini
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Failed to copy ${sck_cf_files}/cluster.ini ${cluster_template}/cluster.ini\n"
+                exit 1
+        fi
+
+        stop_log
+
+        header_print "Log File Location"
+
+        echo -e "   --- Log file can be viewed at"
+        echo -e "   --- ${LOGFILE}\n\n"
+
+		return 0
+        
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+tss_adb_fix()
+{
+        local _return_value_=0
+        local _sa_pass_=`pwAdmin -get masterdataservice SQL sa`
+
+        header_print "Set TSS database to truncate logs"
+
+        su - sybase -c "${ISQL} -Usa -P${_sa_pass_}" <<-TSQL 2> /dev/null
+dump tran adb with no_log
+go
+quit
+TSQL
+
+        su - sybase -c "${ISQL} -Usa -P${_sa_pass_} < /opt/ericsson/nms_tss_server/etc/change_db_option.sql"
+
+        return ${_return_value_}
+}
+#/////////////////////////////////////////////
+#
+#
+#Hyperic Work around function for release prior 13.2.4
+#
+#
+#/////////////////////////////////////////////
+work_around_hyperic()
+{
+
+      local _cp_status_file_=/var/opt/ericsson/sck/data/cp.status
+      local _access_mgmt_=0
+      local _hyperic_="Hyperic Access Management"
+      local _proff_=/etc/security/prof_attr
+      local _execf_=/etc/security/exec_attr
+      header_print "Checking shipment R state for Hyperic Workaround"
+      grep 075 ${_cp_status_file_} > /dev/null 2>&1 && _access_mgmt_=1
+      grep R1K ${_cp_status_file_} > /dev/null 2>&1 && grep 092 ${_cp_status_file_} > /dev/null 2>&1 && _access_mgmt_=1
+
+      header_print "Modifying the security files for Hyperic Workaround"
+      if [ ${_access_mgmt_} -eq 1 ] ; then
+            sed "s/${_hyperic_}.*//g" ${_proff_} | sed '/^$/d' > ${_proff_}.tmp
+           $MV ${_proff_}.tmp ${_proff_}
+            sed "s/${_hyperic_}.*//g" ${_execf_}| sed '/^$/d' > ${_execf_}.tmp
+           $MV ${_execf_}.tmp ${_execf_}
+      fi
+          
+      return 0
+}
+
+#/////////////////////////////////////////////
+# Copy split_cluster.log from remote server  /
+#/////////////////////////////////////////////
+copy_split_cluster_log()
+{
+        remotehost=$($CAT /etc/hosts | $GREP -i priv | nawk '{print $2}' | $GREP -v $HOST)
+        _splitfile_=$($SSH ${remotehost} ls -l "${LOGDIR}/split_cluster.log" |nawk '{print $11}')
+        header_print "Copying Split cluster log file to $HOST"
+        # scp cluster log file from remote host
+        scp ${remotehost}:${_splitfile_}  ${LOGDIR}  > /dev/null 2>&1
+
+        return 0
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+check_sybase_password()
+{
+        if [[ -x /opt/ericsson/sck/etc/val_syb_sa_mon_pw.sh ]]; then
+                . /opt/ericsson/sck/etc/val_syb_sa_mon_pw.sh
+                if [[ $? != 0 ]]; then
+                        echo "****Sybase Password NOK***"
+                        return 1
+                else
+                        echo "****Sybase Password OK***"
+                fi
+        fi
+        return 0
+}
+#----------------
+#   p _ s e d
+#----------------
+# Edits a file with 'sed' commands.
+# $1 = filename
+# $2 = 'sed' command(s)
+# Uses: TMPFILE
+p_sed()
+{
+        typeset efile=$1
+        shift
+        sed "$*" $efile >$TMPFILE
+        [ $? -eq 0 ] && cp $TMPFILE $efile
+}
+
+#/////////////////////////////////////////////
+#  reblock_disk_access
+#
+#
+#
+#
+#/////////////////////////////////////////////
+reblock_disk_access()
+{
+        TMPFILE=/tmp/reblocklogfile.$$
+        local alt_boot_env=$1
+
+        local temp_mount_path="/tmp/temp_mount_sol.$$"
+
+        start_log "reblock_disk_access"
+
+        header_print "Mounting Alt Boot Env"
+
+        if [[ -z ${alt_boot_env} ]]; then
+                echo -e "\n   --- No alternate boot env provided"
+                exit 1
+        fi
+
+        $LUMOUNT ${alt_boot_env} ${temp_mount_path} > /dev/null
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Unable to mount alt boot env ${alt_boot_env}"
+                exit 1
+		fi
+
+        sleep 5
+
+        TIME=`date +%y%m%d.%H:%M:%S`
+        HOST=$(hostname)
+
+        # Check that .exclude files exist and if not, create
+
+        EXCLUDE_FILE=${temp_mount_path}/etc/vx/vxvm.exclude
+
+        if [ -f $EXCLUDE_FILE ]; then
+                header_print "Creating backup of $EXCLUDE_FILE file"
+                $CP $EXCLUDE_FILE $EXCLUDE_FILE.$TIME
+        else
+                header_print "Error"
+                echo "Could not find $EXCLUDE_FILE"
+                echo "--> NOK"
+                exit 1
+        fi
+
+        header_print "Re-blocking access to disks on $HOST"
+
+        diskList=$(nawk '$2~/^\//&&a==1{print $1}$1=="paths"{a=1}' $EXCLUDE_FILE)
+
+        if [ "$diskList" = "" ]; then
+                header_print "Error"
+                echo "No disks present in $EXCLUDE_FILE to block"
+                echo "--> NOK"
+                exit 1
+        fi
+
+        for disk in $diskList; do
+                dev=/dev/dsk/$disk
+                LO_PATH=$(nawk '$1=="'"$disk"'"{print $2}' $EXCLUDE_FILE)
+                DEV_PATH=$(ls -l $dev | sed -e 's#.*devices##' -e 's#:[^/]*$##')
+
+                if [ $LO_PATH != $DEV_PATH ]; then
+                        header_print "Modifying $EXCLUDE_FILE to valid format for VxVM"
+                        p_sed $EXCLUDE_FILE "s#$LO_PATH#$DEV_PATH#"
+                        if [ $? != 0 ]; then
+                                header_print "Error"
+                                echo "Error modifying $EXCLUDE_FILE on $HOST"
+                                echo "--> NOK"
+                                $MV $EXCLUDE_FILE.$TIME $EXCLUDE_FILE
+                                exit 1
+						else
+                                echo "Disk $disk successfully renamed to valid format"
+                                echo "OK"
+                        fi
+                else
+                        echo "Disk $disk already in a valid format. Ok to continue!"
+
+                fi
+        done
+
+
+        header_print "Unmounting alt boot env"
+
+        $LUUMOUNT ${alt_boot_env}
+        if [[ $? != 0 ]]; then
+                echo -e "\n   --- Unable to unmount alt boot env ${alt_boot_env}"
+                exit 1
+        fi
+
+        sleep 5
+
+        rm -rf ${temp_mount_path}
+
+        stop_log
+
+        header_print "Log File Location"
+
+        echo -e "   --- Log file can be viewed at"
+        echo -e "   --- ${LOGFILE}\n\n"
+
+		return 0
+              }
+#/////////////////////////////////////////////
+#
+#
+#
+#/////////////////////////////////////////////
+copy_file()
+{
+   typeset file=$(basename $1)
+   $ECHO "\n->  $2/$file"
+   $CP $1 $2/$file
+   chmod 755 $2/$file
+}
+#/////////////////////////////////////////////
+#
+#
+#
+#
+#
+#/////////////////////////////////////////////
+exit_script()
+{
+
+
+        echo -e "\n FATAL ERROR \n"
+        exit 1
+
+}
+##### MAIN
+##### MAIN
+##### MAIN
+##### MAIN
+##### MAIN
+##### MAIN
+##### MAIN
+##### MAIN
+
+#===========================================
+
+
+# Must be run as user root
+if ! ( ${ID} | ${GREP} '(root)' 1>/dev/null 2>&1 ); then
+        echo "You must be 'root' to run this script!"
+        exit_script 1
+fi
+
+# Exit if no options defined
+(( $# == 0 )) && usage
+
+trap exit_script TERM INT HUP
+
+setup
+
+ARCH_TYPE=`$UNAME -p`
+if [ $? -ne 0 ]; then
+        echo -e "Arch could not be determined, exiting" && exit_script
+fi
+
+main_wrapper $*

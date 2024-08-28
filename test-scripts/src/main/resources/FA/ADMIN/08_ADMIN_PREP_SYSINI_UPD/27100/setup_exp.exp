@@ -1,0 +1,195 @@
+#!/usr/local/bin/expect
+
+set O_DEPOT [lindex $argv 0]
+set O_SERVER [lindex $argv 1]
+set timeout 30 
+send_user "Depot is $O_DEPOT and Server IP is $O_SERVER\n"
+
+spawn su - orcha -c "/ericsson/orchestrator/bin/admin_prepare_for_system_ini_updates.bsh $O_DEPOT $O_SERVER"
+
+expect {
+    "Total number of RNCs \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+expect {
+    "Will the one minute GPEH application be used \\\[YES\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Will the cell trace application be used \\\[YES\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of MSRBS_V2 nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Total number of IPROUTER Nodes \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Number of EPGSSR nodes in the Core Network \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Number of MTAS nodes in the Core Network \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Number of CSCF nodes in the Core Network \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Number of WCG nodes in the Core Network \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Number of CBA_PGM nodes in the Core Network \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Number of MIO nodes in the Core Network \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Is 5 minute ROP collection Supported \\\[NO\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Number of Redback Nodes which are EdgeRouter Nodes \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Number of HSS nodes in the Core Network \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of PICO WCDMA cells \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of PICO LTE cells \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of TCU nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of DSC nodes \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of BSP nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of SASNSSR nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of SDC nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of DUA_S nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of RNC's on 1MIN \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of MPs on 15MIN \\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the GPEH FILE SIZE on 1 MINUTE :\\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of MP's on 1MIN :\\\[1\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of LANSWITCH nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of SBG nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    "Please enter the number of WIFI nodes \\\[0\\\]:" { send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+    eof {}
+    timeout { send_user "Error: timed out waiting for process to finish\n"; exit 99}
+}
+
+
+# Got EOF, so return exit code of script
+catch wait result
+set value [lindex $result 3]
+
+send_user "Script exited with value $value\n"
+exit $value
+

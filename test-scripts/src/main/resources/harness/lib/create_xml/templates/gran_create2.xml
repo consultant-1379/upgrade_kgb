@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_3.dtd">
+<Model version="1" importVersion="6.3">
+   <Create>
+      <SubNetwork>
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="%nename%-F001"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=MSBAF03"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://9.9.152.151:80/"/>
+                  <ipAddress ip_v4="9.9.152.151"/>
+                  <hostname string="%nename%-F001"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="%nename%-F001"/>
+                  <Type string="SECURE"/>
+                  <User string="%nename%-F002"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="%nename%-F001"/>
+                  <Type string="NORMAL"/>
+                  <User string="%nename%-F001"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03,BssFunction=BSS_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=%nename%-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_BssFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-FW,FirewallFunction=FIREWALL_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=%nename%-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_FirewallFunction"/>
+               <AssociableNode TO_FDN="SubNetwork=NETSim,ManagedElement=BAF03-RTS,TimeserverFunction=TIMESERVER_ManagedFunction" FROM_FDN="SubNetwork=0100-S1,ManagedElement=%nename%-F001,StnFunction=STN_ManagedFunction" AssociationType="StnFunction_to_TimeserverFunction"/>
+            </Relationship>
+         </ManagedElement>
+      </SubNetwork>
+   </Create>
+</Model>

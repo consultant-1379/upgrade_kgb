@@ -1,0 +1,243 @@
+ #!/bin/bash
+TODAY=`/bin/date +"%d_%m_%Y"`
+mkdir -p ~/drops/DROP_${TODAY}
+PUSH="FALSE"
+BUILD="FALSE"
+shipment=O16.0
+NEW_VERSION=""
+
+SOURCE="${BASH_SOURCE[0]}"
+RDIR="$( dirname "$SOURCE" )"
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+# Contains all the neccessary environment variables needed to run the ant build.
+source "${DIR}"/sserv_env_exactly.env
+echo ${SCRIPTPATH}
+function parse_supplied_params()
+{
+
+	# Parse the optional parameters
+	echo "Attempting to parse inputs"
+  # while getopts ":f:d" ARG
+  while getopts ":pbabcde" ARG
+  do 
+    case ${ARG} in
+      p)    PUSH="TRUE"
+			echo "Push is set to true:"
+            ;;
+      b)    BUILD="TRUE"
+			echo "BUILD is set to true:"
+            ;;				
+      *)    echo "ERROR: Invalid option ${OPTARG} supplied"
+            exit 1
+            ;;
+    esac
+  done
+  
+  return 0
+}
+
+function set_config_spec()
+{
+	echo "CS is: sck_dev-o16.0_orchestrator.cs"
+	cleartool setcs /view/sck/vobs/oss_sck/tools/cs/sck_dev-o16.0_orchestrator.cs
+	#cleartool catcs | grep ".../orch_upgrade*"
+	return $?
+}
+
+
+function increment_omsas_media_state(){
+	
+	cleartool co -nc /vobs/sec/sec_design/cominf/LZY_214_3550/product.properties
+	
+	sed "s/prod.revision=.*/prod.revision=${NEW_VERSION}/" < /vobs/sec/sec_design/cominf/LZY_214_3550/product.properties > /tmp/pkginfo.$$
+	cp /tmp/pkginfo.$$ /vobs/sec/sec_design/cominf/LZY_214_3550/product.properties
+	rm -f /tmp/pkginfo.$$
+	
+	cleartool ci -nc -iden /vobs/sec/sec_design/cominf/LZY_214_3550/product.properties
+}
+
+function increment_ericsinst_state(){
+	
+	cleartool co -nc /vobs/sec/sec_design/cominf/ERICsinst/product.properties
+	
+	sed "s/prod.revision=.*/prod.revision=${NEW_VERSION}/" < /vobs/sec/sec_design/cominf/ERICsinst/product.properties > /tmp/ericsinstpkginfo.$$
+	cp /tmp/ericsinstpkginfo.$$ /vobs/sec/sec_design/cominf/ERICsinst/product.properties
+	rm -f /tmp/ericsinstpkginfo.$$
+	
+	cleartool ci -nc -iden /vobs/sec/sec_design/cominf/ERICsinst/product.properties
+}
+
+
+function get_new_ver {
+    pattern='^R([0-9]*)([a-zA-Z])([0-9]*)$'
+    [[ $UPG_VER =~ $pattern ]]
+    MAJOR=${BASH_REMATCH[1]}
+    SEP=${BASH_REMATCH[2]}
+    MINOR=${BASH_REMATCH[3]}
+    NEW=`expr $MINOR + 1`
+	NEW_VERSION="R${MAJOR}${SEP}${NEW}"
+}
+
+#*************************************************************************
+#
+# Step 1: Parse build options
+#
+#*************************************************************************
+
+parse_supplied_params "${@}" || exit 1
+
+#*************************************************************************
+#
+# Step 2: Set configuration specification 
+#
+#*************************************************************************
+
+set_config_spec || exit 1
+
+#*************************************************************************
+#
+# Step 3: Build 
+#
+#*************************************************************************
+
+if [ "${BUILD}" = "TRUE" ] ; then
+	preliminary_flag=0
+	RES=0
+	# Create latest ERICocs
+	# Get current version
+	UPG_VER=$(cat /vobs/sec/sec_design/cominf/LZY_214_3550/product.properties | awk -F= '/prod.revision/{print $2}')
+	get_new_ver
+	
+	echo ""
+	echo "================================================================================================================"
+    echo "					LZY_214_3550 BUILD						"
+	echo "================================================================================================================"
+	echo ""
+	
+	echo "============================="
+    echo "Current ISO	  	Revision "	
+	echo "============================="
+	echo "LZY_214_3550            $UPG_VER"
+	echo ""
+	increment_omsas_media_state
+	echo "============================="
+    echo "New ISO	 		Revision "	
+	echo "============================="
+	echo "LZY_214_3550            $NEW_VERSION"
+	echo ""
+	
+	
+	#Create Drop directory
+	mkdir -p ~/drops/DROP_$TODAY/
+	RES=$?
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed to make directory ~/drops/DROP_${TODAY}/"
+		exit 1
+	fi
+	echo "Script created/reused directory ~/drops/DROP_${TODAY}/"
+	
+	#OMSAS Media Scripts overlay generation
+	rm -f ~/drops/DROP_$TODAY/LZY_214_3550_*
+	# increment_omsas_media_state
+	directory=$(pwd)
+	cd /vobs/sec/sec_design/cominf/
+	tar cvf ~/drops/DROP_$TODAY/LZY_214_3550_${NEW_VERSION}.tar ./LZY_214_3550
+	label=LZY_214_3550.tar-${shipment}_${NEW_VERSION}
+	
+	echo ""
+	echo "========================================================"
+    echo "New ISO	 		New Label "	
+	echo "========================================================"
+	echo "LZY_214_3550            $label"
+	echo ""
+	
+	
+	cd /vobs/sec/sec_design/cominf/LZY_214_3550/
+	
+	if [ $preliminary_flag -eq 1 ]; then
+		echo "prelminary flag selected - no labelling will occur"
+	else
+        echo "Labelling the vob with $label ... "
+		cleartool lstype -kind lbtype:$label -inv /vobs/sec/sec_design/cominf/LZY_214_3550/ 1 >/dev/null 2>&1 
+        if [ $? -ne 0 ]; then
+                cleartool mklbtype -nc $label
+        elif [ "$force" -eq 0 ]; then
+            error "Label $label already exists, use the -f flag if you're ABSOLUTELY 100% sure you want to reuse this r-state"
+		fi
+		cleartool mklabel -replace -recurse $label /vobs/sec/sec_design/cominf/LZY_214_3550 >/dev/null
+	fi
+	
+	
+	echo ""
+	echo "================================================================================================================"
+    echo "					ERICsinst BUILD						"
+	echo "================================================================================================================"
+	echo ""
+	
+	
+	cd /vobs/sec/sec_design/cominf/ERICsinst
+	
+	
+	UPG_VER=$(cat /vobs/sec/sec_design/cominf/ERICsinst/product.properties | awk -F= '/prod.revision/{print $2}')
+	get_new_ver
+	
+	echo "============================="
+    echo "Current PKG	  	Revision "	
+	echo "============================="
+	echo "ERICsinst            $UPG_VER"
+	echo ""
+	increment_ericsinst_state
+	echo "============================="
+    echo "New PKG	 		Revision "	
+	echo "============================="
+	echo "ERICsinst            $NEW_VERSION"
+	echo ""
+	
+	label=ERICSINST-${shipment}_${NEW_VERSION}
+	
+	echo ""
+	echo "========================================================"
+    echo "New PKG	 		New Label "	
+	echo "========================================================"
+	echo "ERICsinst            $label"
+	echo ""
+	
+	ant clean ; ant
+	RES=$?
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed build ERICsinst"
+		exit 1
+	fi
+	
+	if [ $preliminary_flag -eq 1 ]; then
+		echo "prelminary flag selected - no labelling will occur"
+	else
+        echo "Labelling the vob with $label ... "
+		cleartool lstype -kind lbtype:$label -inv /vobs/sec/sec_design/cominf/ERICsinst 1 >/dev/null 2>&1 
+        if [ $? -ne 0 ]; then
+                cleartool mklbtype -nc $label
+        elif [ "$force" -eq 0 ]; then
+            error "Label $label already exists, use the -f flag if you're ABSOLUTELY 100% sure you want to reuse this r-state"
+		fi
+		cleartool mklabel -replace -recurse $label /vobs/sec/sec_design/cominf/ERICsinst >/dev/null
+	fi
+	rm -f ~/drops/DROP_$TODAY/19089-CXC1727212-*
+	cp /vobs/sec/sec_design/compile/ERICsinst/19089-CXC1727212-${NEW_VERSION}.zip ~/drops/DROP_$TODAY/
+	cd $directory
+	
+fi
+
+	# #Push to MWS #1
+
+	if [ "${PUSH}" = "TRUE" ] ; then
+		echo "Going to push build to MWS#1"
+		cd ~/drops
+		tar cvf DROP_$TODAY.tar ./DROP_$TODAY
+		gzip -f DROP_$TODAY.tar
+		scp DROP_$TODAY.tar.gz root@10.44.234.130:/JUMP/UPGRADE_SW/daily_builds/
+	fi
+
+

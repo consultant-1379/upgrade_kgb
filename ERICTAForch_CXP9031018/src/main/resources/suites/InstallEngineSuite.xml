@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="InstallEngineSuite">
+    <test name="InstallEngineSuite">
+        <classes>
+            <class name="com.ericsson.oss.orchestrator.test.cases.OrcEngineInstallScenario" />
+        </classes>
+    </test>
+</suite>
+

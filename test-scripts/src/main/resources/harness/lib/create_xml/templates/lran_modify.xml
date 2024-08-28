@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_3.dtd">
+<Model version="1" importVersion="6.3">
+   <Modify>
+      <Site userLabel="MSE2E_ERBS01">
+         <altitude string="200"/>
+         <location string="N58-25-12/E15-37-48"/>
+         <longitude string="56268000"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <Site userLabel="MSE2E_ERBS02">
+         <altitude string="250"/>
+         <location string="N58-25-12/E15-43-0"/>
+         <longitude string="56580500"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <ManagedElement sourceType="CELLO">
+         <ManagedElementId string="%nename%01"/>
+         <primaryType type="ERBS"/>
+         <managedElementType types=""/>
+         <associatedSite string="Site=MSE2E_ERBS02"/>
+         <nodeVersion string=""/>
+         <platformVersion string=""/>
+         <swVersion string=""/>
+         <vendorName string="Ericsson"/>
+         <userDefinedState string="Active"/>
+         <managedServiceAvailability int="1"/>
+         <isManaged boolean="true"/>
+         <neMIMVersion string="A.5.0"/>
+         <connectionStatus string="OFF"/>
+         <Connectivity>
+            <DEFAULT>
+               <emUrl url="http://9.0.0.1:80/em/index.html"/>
+               <ipAddress ip_v4="9.0.0.1"/>
+               <hostname string=""/>
+               <nodeSecurityState state="ON"/>
+               <boardId string=""/>
+               <Protocol number="0">
+                  <protocolType string="CORBA"/>
+                  <port int="0"/>
+                  <protocolVersion string="V2.3"/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string="http://9.0.0.1:80/cello/ior_files/nameroot.ior"/>
+                  <namingPort int="0"/>
+                  <notificationIRPAgentVersion string="3.2"/>
+                  <alarmIRPAgentVersion string="3.2"/>
+                  <notificationIRPNamingContext context="NOTIFICATION_IRP_VERSION_1_1"/>
+                  <alarmIRPNamingContext context="ALARM_IRP_VERSION_1_1"/>
+               </Protocol>
+               <Protocol number="1">
+                  <protocolType string="SFTP"/>
+                  <port int="22"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Protocol number="2">
+                  <protocolType string="FTP"/>
+                  <port int="21"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Protocol number="3">
+                  <protocolType string="SSH"/>
+                  <port int="22"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Protocol number="4">
+                  <protocolType string="TELNET"/>
+                  <port int="23"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Browser>
+                  <browser string=""/>
+                  <browserURL string=""/>
+                  <bookname string=""/>
+               </Browser>
+            </DEFAULT>
+         </Connectivity>
+         <Tss>
+            <Entry>
+               <System string="%nename%01"/>
+               <Type string="NORMAL"/>
+               <User string="netsim"/>
+               <Password string="netsim"/>
+            </Entry>
+            <Entry>
+               <System string="%nename%01"/>
+               <Type string="SECURE"/>
+               <User string="netsim"/>
+               <Password string="netsim"/>
+            </Entry>
+         </Tss>
+         <Relationship>
+            <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-LRAN-%slave%,FtpService=lran-backup-%slave%" AssociationType="ManagedElement_to_ftpBackupStore"/>
+            <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-LRAN-%slave%,FtpService=lran-keystore-%slave%" AssociationType="ManagedElement_to_ftpLicenseKeyStore"/>
+            <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-LRAN-%slave%,FtpService=lran-swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+            <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+         </Relationship>
+
+      </ManagedElement>
+   </Modify>
+</Model>

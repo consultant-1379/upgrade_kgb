@@ -1,0 +1,60 @@
+Do you want to add/modify a system in the /ericsson/config/cluster.ini file (y/n)? 
+y
+Enter hostname of system to add or modify*
+CI_ADMIN2_HOSTNAME
+hostname                                      
+CI_ADMIN2_HOSTNAME
+IPaddress* 
+CI_ADMIN2_IPV4_ADDRESS
+*PASSWD*
+CI_ADMIN2_ROOTPW
+*PASSWD*
+CI_ADMIN2_ROOTPW
+IPv6address*
+CI_ADMIN2_IPV6_ADDRESS
+IPv6 subnet prefix length*
+CI_ADMIN2_IPV6_SUBNET_PREFIX
+Default IPv6 router*
+CI_ADMIN2_IPV6_DEFAULT_ROUTER
+First Storage LAN NIC (NIC1)*
+      
+Second Storage LAN NIC (NIC2)*
+   
+First Storage LAN NIC (NIC1) Base IP address*   
+CI_ADMIN2_STORAGE_NIC1
+Second Storage LAN NIC (NIC2) Base IP address* 
+CI_ADMIN2_STORAGE_NIC2
+Storage IP Address* 
+CI_ADMIN2_STORAGE_IP
+Storage LAN Netmask*
+CI_ADMIN2_STORAGE_NETMASK
+First Public LAN NIC (NIC1)*
+
+Second Public LAN NIC (NIC2)*
+
+First Public LAN NIC (NIC1) Base IP address*
+CI_ADMIN2_PUBLIC_NIC1
+Second Public LAN NIC (NIC2) Base IP address* 
+CI_ADMIN2_PUBLIC_NIC2
+Public LAN Netmask*
+CI_ADMIN2_PUBLIC_NETMASK
+Public LAN default router* 
+CI_ADMIN2_PUBLIC_DEFAULT_ROUTER
+First Cluster Heartbeat NIC (NIC1)*
+
+Second Cluster Heartbeat NIC (NIC2)*
+
+Private LAN NIC*
+
+Private LAN NIC IP address*
+
+Private LAN Netmask*
+
+Backup LAN NIC*
+
+Backup LAN NIC IP address* 
+CI_ADMIN2_BACKUP_IP
+Backup LAN Netmask*
+CI_ADMIN2_BACKUP_NETMASK
+Are these values correct (y/n)*
+y

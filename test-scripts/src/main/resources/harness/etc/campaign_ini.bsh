@@ -1,0 +1,33 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# COMInf Automated Test Harness Config File
+
+# Revision History
+# 04/05/2012	v1.0	eedmaxw	
+
+# Config file is a BASH script of variable settings sourced by the test harness script
+
+# Results root directory
+RESULTS_ROOT=/var/tmp/campaign/results
+ATCOMINF_RESULTS_ROOT=/var/tmp/results
+
+# Reports root directory
+REPORTS_ROOT=/var/tmp/campaign/reports
+ATCOMINF_REPORTS_ROOT=/var/tmp/reports
+
+# date when test harness started
+export WDATE=`date '+%Y%m%d-%H:%M:%S'`

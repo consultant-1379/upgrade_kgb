@@ -1,0 +1,304 @@
+;#################################################################
+
+;
+
+;  This file is used by the inirator to set variables such that
+
+;  default values from the file are presented for every inirator
+
+;  question.
+
+;
+
+;  Default questions for fencing and data LUNS cannot be set as
+
+;  it is not possible to determine the LUN ids before jumpstart.
+
+;  However, if the correct number and type of LUNs are connected
+
+;  to the server, the the inirator function will figure out the
+
+;  defaults itself. Otherwise the LUNS can be manually changed
+
+;  during inirator execution
+
+;
+
+;  For use by inirator, this file should be used in accordance with the relevant
+
+; Initial Installation documentation and be named preinirate_<hostname>
+
+;
+
+;#################################################################
+
+
+
+[PREINIRATE]
+
+; The autoini variable can be set to yes to complete full automatic installation through
+
+; the inirator phase. Note: Make sure that all default variables are correct before setting
+
+; this value to yes. It is advisable to set the value to no for the first time installation
+
+; to verify that all default values are picked up correctly by the inirator. The value can then
+
+; be set to yes for subsequent installs when default values are verified.
+
+autoini=yes
+
+; The clearscsi3 variable can be set to yes to automatically clear scsi3 registration/reservation
+
+; keys on LUNS. If scsi3 keys are detected on any LUNS connected to the server, core.sh will bail
+
+; out before starting inirator. Setting this variable to yes will prevent bailout of core.sh and
+
+; will automatically clear the scsi3 keys from the LUNs.
+
+clearscsi3=yes
+
+;cluster name
+clustername=ieatrcxb3708_09
+;Test IP Address for first Storage VLAN NIC
+storBaseIPP1=10.44.234.51
+;Test IP Address for second Storage VLAN NIC
+storBaseIPP2=10.44.234.52
+;Storage VIP address
+storVIPP1=10.44.234.50
+;Storage VLAN Netmask
+storNETMM=255.255.255.128
+;OSS System Identifier
+OssIDD=xb3708
+;NAS master Password
+nasMasPWW=master
+;NAS support Password
+nasSupPWW=symantec
+;IP address for NAS1 server
+nasServ1IPP=10.44.234.30
+;IP address for NAS2 server
+nasServ2IPP=10.44.234.31
+;IP address for NAS Console
+nasServConn=10.44.234.34
+;Test IP Address for first Public VLAN NIC
+pubBaseIPP1=10.44.234.141
+;Test IP Address for second Public VLAN NIC
+pubBaseIPP2=10.44.234.142
+;Public VLAN Default router IP Address
+pubDRR=10.44.234.129
+;Public VLAN Netmask
+pubNETMM=255.255.255.192
+;IPv6 address for the host itself
+IPv6address_def=none
+;IPv6 subnet prefix length
+ipv6_prefix_len_def=none
+;Default IPv6 router
+ipv6_pub_router_def=none
+;IP address for Private LAN NIC
+privBaseIPP1=200.200.200.15
+;Private LAN Netmask
+privNETMM=255.255.255.0
+;IP address for Backup LAN NIC
+bkupBaseIPP=10.44.234.195
+;Backup LAN Netmask
+bkupNETMM=255.255.255.224
+;Virtual IP address for OSSFS
+ossfsIPP=10.44.234.150
+;Virtual IP address for IPv6 OSSFS
+ossfsIPv6_def=none
+;Virtual IP address for PMS
+pmsIPP=10.44.234.151
+;Virtual IP address for IPv6 PMS
+pmsIPv6_def=none
+;Virtual IP address for CMS
+cmsIPP=10.44.234.152
+;Virtual IP address for IPv6 CMS
+cmsIPv6_def=none
+;Virtual IP address for Sybase
+sybaseIPP=10.44.234.153
+;Virtual IP address for SNMP *The Virtual IP address for SNMP has no function in x86, but must be entered. OSSFS IP is used to receive SNMP traps
+snmpIPP=10.44.234.154
+;Virtual IP address for OSS bkup
+ossbkupIPP=10.44.234.196
+;Virtual IP address for Sybase bkup
+syb1bkupIPP=10.44.234.197
+;Do you want to use Host-Based Mirroring ( YES/NO)
+ossmirror=YES
+;Total number of GSM Cells
+GSMDEF=50
+;Total number of UTRAN Cells
+UTRANDEF=50
+;Total number of LTE Cells
+LTEDEF=5
+;Total number of Core Nodes
+COREDEF=5
+;Total number of RNCs
+RNCDEF=2
+;Number of AXD based nodes
+AXDnodes=2
+;Use TGR application ( YES/NO )
+OSSTGR=YES
+;Number of TeS nodes *Enter 0 if TGR Application not used
+TeSnodes=2
+;Will the one minute GPEH application be used (YES/NO)
+MINUTE_GPEH=NO
+;Will the cell trace application be used (YES/NO)
+CELL_TRACE=NO
+;Allocate space for SGW ( YES/NO )
+ADDSGW=YES
+;Allocate space for PMS ( YES/NO )
+ADDPMS=YES
+;Allocate space for EBSW ( YES/NO )
+ADDEBSW=YES
+;Allocate space for RPMO ( YES/NO )
+ADDRPMO=YES
+;Allocate space for EBS ( YES/NO )
+ADDEBS=YES
+;Allocate space for RTT ( YES/NO )
+ADDRTT=YES
+;Setup RNO Database Export Interface ( YES/NO )
+ADDRNDBI=YES
+;Allocate space for EBS-S ( YES/NO )
+ADDEBSS=YES
+;Number of OSSRC Sites
+NumSites=2
+;Number of CPP MGW nodes in the Core Network
+Nummgw=2
+;Number of STN nodes OSSRC supports
+Numstn=2
+;Number of SGSN nodes in the Core Network
+Numsgsn=2
+;Number of SGSN MME nodes in the Core Network
+Numsgsnmme=2
+;Number of GGSN nodes in the Core Network
+Numggsn=2
+;Number of 2G/3G SAUs per OSS-RC
+Num2g3gsaus=2
+;Number of 4G SAUs per OSS-RC
+Num4gsaus=2
+;Combined number of cells on all OSS-RC servers that will be audited by IRATHOM application
+Numirathomcells=2
+;Number of APG43 equipped nodes in the  Network
+Numapg43=2
+;Number of Redback SmartEdge equipped nodes in the  Network
+Numredback=2
+;Number of SASN nodes with SARA functionality equipped nodes in the  Network
+Numsasnsara=2
+;Installation type
+INS_TYPE=ii
+;The hostname of the OSS server
+HOSTNAME=ieatrcxb3708
+;Netgroup name
+NETGROUPNAME=atomcoall
+;Default password for the OSS-RC sybase users. Must be 6 or more characters.
+SQL_DEF_USER_PW=sybase11
+;Timezone for your geographical region or offset from GMT
+TIMEZONE=Eire
+;defaultrouter IP address. The address of the gateway to the rest of the network.
+DEFAULTROUTERS=10.44.234.129
+;DNS-server's ip-address. Leave empty if not used. *OPTIONAL
+NAMESERVERS=10.44.86.4
+;DNS-domain e.g company.domain.com
+DNSDOMAIN=ammeonvpn.com
+;LDAP-domain e.g company.domain.com
+LDAPDOMAIN=ieatrcxb3708.com
+;SLS server name e.g https://<slsserver>:8443/ericsson/servlet/sls *OPTIONAL
+SLS_SERVER=none
+;Sentinel license file path. Leave value empty if license file is not to be added automatically *OPTIONAL
+SENTINEL_LICENSE_FILE_PATH=/var/tmp/sentinel_license_full
+;Type of xml file installation -  server
+SEC_TYPE=server
+;The Veritas VM license key.
+VXVMLIC="AJPU-K84P-UP6O-27LK-R9PP-8ONC-4O4O-6NR"
+;This is either GSM1900 or GSM900/1800 depending on the frequencies used by the GSM network.
+NETWORK_TYPE=GSM900/1800
+;Name of the network root object in the information model.
+IM_ROOT=ONRM_ROOT_MO
+;The X29 suffix to be used.
+X29_SUFF=_X29
+;The IP address of the WEBI server. If unknown accept default and change later in /etc/hosts. *OPTIONAL
+NT_SERVER_IPADDRESS=192.168.5.100
+;The IP address of the first Windows Application Server. If unknown press enter and add it later. *OPTIONAL
+WAS_IP_1=
+;The IP address of the second Windows Application Server. If unknown press enter and add it later. *OPTIONAL
+WAS_IP_2=
+;The IP address of the third Windows Application Server. If unknown press enter and add it later. *OPTIONAL
+WAS_IP_3=
+;The IP address of the fourth Windows Application Server. If unknown press enter and add it later. *OPTIONAL
+WAS_IP_4=
+;The IP address of the fifth Windows Application Server. If unknown press enter and add it later. *OPTIONAL
+WAS_IP_5=
+;LDAP DS Server IP address *SEE NOTES
+LDAPSERVERIP=10.44.234.161
+;LDAP Fully Qualified Hostname *SEE NOTES
+PRIMARYFQHN=ieatrcxb3503.ammeonvpn.com
+;LDAP Domain Name *SEE NOTES
+LDAPDOMAINNAME=ieatrcxb3708.com
+;LDAP Proxy Password*SEE NOTES
+LDAPPROXYPASSWORD=ldapadmin
+;LDAP Client's Certificate Database Password *SEE NOTES
+LDAPCLIENTCERTDBPW=ldapadmin
+;LDAP Client Profile *SEE NOTES
+LDAPCLIENTPROFILE=
+;Full path to valid PKS root CA certificate *SEE NOTES
+PKSCACERTIFICATE=/var/tmp/rootca.cer
+;Do you want to configure a secondary LDAP server now? [Y|N]*SEE NOTES
+SECONDARYLDAP=YES
+;Secondary LDAP DS Server IP address *SEE NOTES
+SECONDARYLDAPSERVERIP=10.44.234.162
+;Secondary LDAP Fully Qualified Hostname*SEE NOTES
+SECONDARYFQHN=ieatrcxb3504.ammeonvpn.com
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

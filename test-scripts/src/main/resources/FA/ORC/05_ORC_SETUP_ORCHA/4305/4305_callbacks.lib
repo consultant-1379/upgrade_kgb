@@ -1,0 +1,309 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+    
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+  echo "checking env vars"
+  if [ "${ORCH_TYPE}xxx" = "xxx" ]; then
+        echo "Variable ORCH_TYPE is not set. Check your environment file"
+        return 1
+  else echo "ORCH_TYPE: ${ORCH_TYPE}"
+  fi
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+
+    TMPF=/tmp/4300.$$
+    if [ "${ORCH_TYPE}" = "CLUSTER" ]; then
+        echo "Setting up orcha keys for ORCH_TYPE CLUSTER"
+        echo "ADMIN,$ORCH_SERVER,$ORCH_PASS" > $TMPF
+        if [ "$ORCH_SERVER_LIVE" != "" ]; then
+            echo "ADMIN,$ORCH_SERVER_LIVE,$ORCH_PASS_LIVE" >> $TMPF
+        fi
+        ./setup_exp_cluster.exp $TMPF
+        RC=$?
+    elif [ "${ORCH_TYPE}" = "VAPP" ]; then
+        local LIST_SERV
+        echo "Setting up orcha keys for ORCH_TYPE VAPP"
+        echo "MWS,mws,shroot" > $TMPF
+        echo "ADMIN,ossmaster,shroot" >> $TMPF
+        echo "EBAS,ebas,shroot" >> $TMPF
+        echo "NEDSS,nedss,shroot" >> $TMPF
+        echo "UAS,uas1,shroot" >> $TMPF
+        echo "PEER,peer1,shroot" >> $TMPF
+        echo "OM_SERVICES,omsrvm,shroot" >> $TMPF
+        echo "OM_SERVICES,omsrvs,shroot" >> $TMPF
+        echo "OMSAS,omsas,shroot" >> $TMPF
+        ./setup_exp_vapp.exp $TMPF
+        RC=$?
+    elif [ "${ORCH_TYPE}" = "SINGLE" ]; then
+        echo "Setting up orcha keys for ORCH_TYPE SINGLE"
+        echo "ADMIN,$ORCH_SERVER,$ORCH_PASS" > $TMPF
+	    ./setup_exp_single.exp $TMPF
+        RC=$?
+    else
+        echo "ORCH_TYPE ${ORCH_TYPE} not recognised"
+        RC=1
+	fi
+
+    # Now check that the sudoers files on all hosts are correct
+	local REMSUDO=/tmp/remsudo.$$
+	local LOCSUDO=/tmp/locsudo.$$
+	if [ $RC -eq 0 ]; then
+		# All OK, so check the sudoers files
+		OIFS=$IFS
+		IFS=,
+		while read host_type host passwd; do
+			IFS=$OIFS
+			echo Check sudoers for $host_type server $host
+			case $host_type in
+                MWS) cat > $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/var/tmp/Liveupgrade/*
+orcha ALL= NOPASSWD:/var/tmp/oam_utils/*
+orcha ALL= NOPASSWD:/bin/rm
+orcha ALL= NOPASSWD:/orcha/.orc/orc_wrapper.bsh
+orcha ALL= NOPASSWD:/ericsson/orchestrator/bin/*
+EOF
+					;;
+                ADMIN) cat > $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/var/tmp/Liveupgrade/*
+orcha ALL= NOPASSWD:/var/tmp/oam_utils/*
+orcha ALL= NOPASSWD:/bin/rm
+orcha ALL= NOPASSWD:/orcha/.orc/orc_wrapper.bsh
+orcha ALL= NOPASSWD:/var/tmp/cominf/*
+orcha ALL= NOPASSWD:/opt/ericsson/sck/bin/*
+orcha ALL= NOPASSWD:/opt/ericsson/bin/pwAdmin
+EOF
+                    if [ "${CI_FQ_SHIPMENT%%.*}" != "15" ]; then
+                        cat >> $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/usr/bin/ls
+orcha ALL= NOPASSWD:/opt/ericsson/secpf/scripts/bin/security.ksh
+EOF
+                    fi
+					;;
+                EBAS) cat > $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/var/tmp/Liveupgrade/*
+orcha ALL= NOPASSWD:/var/tmp/oam_utils/*
+orcha ALL= NOPASSWD:/bin/rm
+orcha ALL= NOPASSWD:/orcha/.orc/orc_wrapper.bsh
+orcha ALL= NOPASSWD:/var/tmp/cominf/*
+orcha ALL= NOPASSWD:/opt/ericsson/sck/bin/*
+orcha ALL= NOPASSWD:/opt/ericsson/bin/pwAdmin
+EOF
+                    if [ "${CI_FQ_SHIPMENT%%.*}" != "15" ]; then
+                        cat >> $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/usr/bin/ls
+orcha ALL= NOPASSWD:/opt/ericsson/secpf/scripts/bin/security.ksh
+EOF
+                    fi
+					;;
+                NEDSS) cat > $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/var/tmp/Liveupgrade/*
+orcha ALL= NOPASSWD:/var/tmp/oam_utils/*
+orcha ALL= NOPASSWD:/bin/rm
+orcha ALL= NOPASSWD:/orcha/.orc/orc_wrapper.bsh
+EOF
+					;;
+                UAS) cat > $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/var/tmp/Liveupgrade/*
+orcha ALL= NOPASSWD:/var/tmp/oam_utils/*
+orcha ALL= NOPASSWD:/bin/rm
+orcha ALL= NOPASSWD:/orcha/.orc/orc_wrapper.bsh
+orcha ALL= NOPASSWD:/var/tmp/cominf/*
+orcha ALL= NOPASSWD:/opt/ericsson/sck/bin/*
+orcha ALL= NOPASSWD:/opt/ericsson/bin/pwAdmin
+EOF
+                    if [ "${CI_FQ_SHIPMENT%%.*}" != "15" ]; then
+                        cat >> $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/usr/bin/ls
+orcha ALL= NOPASSWD:/opt/ericsson/secpf/scripts/bin/security.ksh
+EOF
+                    fi
+					;;
+                PEER) cat > $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/var/tmp/Liveupgrade/*
+orcha ALL= NOPASSWD:/var/tmp/oam_utils/*
+orcha ALL= NOPASSWD:/bin/rm
+orcha ALL= NOPASSWD:/orcha/.orc/orc_wrapper.bsh
+orcha ALL= NOPASSWD:/var/tmp/cominf/*
+orcha ALL= NOPASSWD:/opt/ericsson/sck/bin/*
+orcha ALL= NOPASSWD:/opt/ericsson/bin/pwAdmin
+EOF
+                    if [ "${CI_FQ_SHIPMENT%%.*}" != "15" ]; then
+                        cat >> $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/usr/bin/ls
+orcha ALL= NOPASSWD:/opt/ericsson/secpf/scripts/bin/security.ksh
+EOF
+                    fi
+					;;
+                OM_SERVICES) cat > $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/var/tmp/Liveupgrade/*
+orcha ALL= NOPASSWD:/var/tmp/oam_utils/*
+orcha ALL= NOPASSWD:/bin/rm
+orcha ALL= NOPASSWD:/orcha/.orc/orc_wrapper.bsh
+orcha ALL= NOPASSWD:/var/tmp/cominf/*
+orcha ALL= NOPASSWD:/var/tmp/sserv/*
+orcha ALL= NOPASSWD:/ericsson/sdee/bin/*
+orcha ALL= NOPASSWD:/opt/mysql/bin/mysql
+EOF
+					;;
+                OMSAS) cat > $LOCSUDO <<EOF
+orcha ALL= NOPASSWD:/var/tmp/Liveupgrade/*
+orcha ALL= NOPASSWD:/var/tmp/oam_utils/*
+orcha ALL= NOPASSWD:/bin/rm
+orcha ALL= NOPASSWD:/orcha/.orc/orc_wrapper.bsh
+orcha ALL= NOPASSWD:/var/tmp/cominf/*
+orcha ALL= NOPASSWD:/var/tmp/sserv/*
+orcha ALL= NOPASSWD:/ericsson/sdee/bin/*
+orcha ALL= NOPASSWD:/opt/mysql/bin/mysql
+orcha ALL= NOPASSWD:/usr/sbin/svcadm
+EOF
+					;;
+                *) echo ERROR: Unrecognised host type $host_type for host $host
+					RC=1
+					break
+					;;
+			esac
+			su - orcha -c "scp -o StrictHostKeyChecking=no ${host}:/usr/local/etc/sudoers.d/orcha_sudo $REMSUDO" < /dev/null >/dev/null
+			if ! diff $LOCSUDO $REMSUDO ; then
+				echo ERROR: orcha_sudo file on type $host_type, host $host is wrong
+                #TODO: Don't regard this as an error until we build 16A with a proper 16.x.x tag
+				#RC=1
+                # Don't break here - we want to test all servers, not just stop on the first failure
+				#break
+			fi
+			rm -f $LOCSUDO $REMSUDO
+			IFS=,
+		done < $TMPF
+	fi
+
+    rm -f $TMPF
+    return $RC
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+
+    return 0
+
+}

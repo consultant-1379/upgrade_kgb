@@ -1,0 +1,1535 @@
+#
+# Function to install DMR packages on both nodes of cluster
+#
+DMR_install_pkg () {
+	local l_dmr_pkgfilename=ERICdmr.pkg
+	local l_dmr_pkgname=${l_dmr_pkgfilename%.pkg}
+	local l_dmr_pkg_adm=package.adm
+	local l_local_pkg_adm_path=${AT_ROOT}/build_scripts/infrastructure/etc/$l_dmr_pkg_adm
+
+	get_server_details $CI_ADMIN2_HOSTNAME || {
+		echo "Error - failed to get admin2 server details"
+		return 1
+	}
+	local l_admin2_pass=${_SERVER_DETAILS[8]}
+	
+
+	mkdir -p /tmp/dmr$$ || {
+		echo "Error - failed to create temporary mount point"
+		return 1
+	}
+	mount $CI_MWS_HOSTNAME:/export /tmp/dmr$$ || {
+		echo "Error - failed to mount MWS /export fs"
+		return 1
+	}
+	local l_mws_dmr_pkg_path=/tmp/dmr$$/jumpstart/teams/$CI_TEAM/OSSRC_${CI_FQ_SHIPMENT}/test_packages/ossrc_base_sw/common/$l_dmr_pkgfilename
+        echo "Error = $HOSTNAME "; ls -lart /tmp/dmr$$
+	if [ ! -s $l_mws_dmr_pkg_path ]; then
+		echo "Error - unable to locate new DMR package  $l_mws_dmr_pkg_path"
+		umount /tmp/dmr$$
+		/bin/rm -rf /tmp/dmr$$
+		return 1
+	fi
+
+	echo "** Checking DMR package on $( hostname ) **"
+	if /bin/pkginfo | grep -w $l_dmr_pkgname > /dev/null ; then
+		existing_version=$( /usr/bin/pkgparam $l_dmr_pkgname VERSION ) 
+	fi
+	new_version=$( /usr/bin/pkgparam -d $l_mws_dmr_pkg_path $l_dmr_pkgname VERSION )
+
+	if [ "$new_version" = "$existing_version" ]; then
+		echo "Not upgrading $l_dmr_pkgname on $(hostname) since existing version is same as new version on MWS - $existing_version"
+	else 
+		/bin/pkginfo | grep -w $l_dmr_pkgname > /dev/null && {
+			echo "Removing existing DMR package $l_dmr_pkgname on $(hostname)"
+			/usr/sbin/pkgrm -n -a $l_local_pkg_adm_path $l_dmr_pkgname > /dev/null || {
+				echo "Error - failed to remove l_dmr_pkgname on $(hostname)"
+				umount /tmp/dmr$$
+				/bin/rm -rf /tmp/dmr$$
+				return 1
+			}
+		}
+		# add new package
+		echo "Installing new package version $new_version on $(hostname)"
+		/usr/sbin/pkgadd -n -a $l_local_pkg_adm_path -d $l_mws_dmr_pkg_path all > /dev/null || {
+			echo "Failed to install new package"
+			umount /tmp/dmr$$
+			/bin/rm -rf /tmp/dmr$$
+			return 1
+		}
+	fi
+
+	# admin 2 - we just upgrade package
+	echo "** Checking DMR package on $CI_ADMIN2_HOSTNAME **"
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /bin/pkginfo $l_dmr_pkgname" $l_admin2_pass > /dev/null &&
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /bin/rm -f /tmp/dmr_pkg_version" $l_admin2_pass > /dev/null &&
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /usr/bin/pkgparam $l_dmr_pkgname VERSION > /tmp/dmr_pkg_version" $l_admin2_pass > /dev/null &&
+	$EXPECT $AT_BIN/ssh_setup2.sh scp "root@${CI_ADMIN2_HOSTNAME}:/tmp/dmr_pkg_version  /tmp" $l_admin2_pass > /dev/null &&
+	if [ -s /tmp/dmr_pkg_version ]; then
+		existing_admin2_version=$( cat /tmp/dmr_pkg_version )
+	else
+		existing_admin2_version=
+	fi
+	if [ "$new_version" = "$existing_admin2_version" ]; then
+		echo "Not upgrading $l_dmr_pkgname on $CI_ADMIN2_HOSTNAME since existing version is same as new version on MWS - $existing_admin2_version"
+	else 
+		$EXPECT $AT_BIN/ssh_setup2.sh scp "$l_local_pkg_adm_path $l_mws_dmr_pkg_path root@${CI_ADMIN2_HOSTNAME}:/var/tmp" $l_admin2_pass > /dev/null || {
+			echo "Error - failed to copy DMR package to admin2"
+			umount /tmp/dmr$$
+			/bin/rm -rf /tmp/dmr$$
+			return 1
+		}
+		$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /bin/pkginfo | grep -w $l_dmr_pkgname" $l_admin2_pass > /dev/null && {
+			echo "Removing existing DMR package $l_dmr_pkgname"
+			$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /usr/sbin/pkgrm -n -a /var/tmp/$l_dmr_pkg_adm $l_dmr_pkgname" $l_admin2_pass > /dev/null || {
+				echo "Error - failed to remove l_dmr_pkgname on $CI_ADMIN2_HOSTNAME"
+				umount /tmp/dmr$$
+				/bin/rm -rf /tmp/dmr$$
+				return 1
+			}
+		}
+		# add new package
+		echo "Installing new package version $new_version on $CI_ADMIN2_HOSTNAME"
+		$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /usr/sbin/pkgadd -n -a /var/tmp/$l_dmr_pkg_adm -d /var/tmp/$l_dmr_pkgfilename all" $l_admin2_pass > /dev/null || {
+			echo "Failed to install new package on $CI_ADMIN2_HOSTNAME"
+			return 1
+		}
+	fi
+	
+	umount /tmp/dmr$$
+	/bin/rm -rf /tmp/dmr$$
+	return 0
+	
+
+
+}
+
+
+#
+# Function to check version of DMR is same on both nodes
+#
+
+DMR_check_pkg_both_nodes() {
+	get_server_details $CI_ADMIN2_HOSTNAME || {
+		echo "Error - failed to get admin2 server details"
+		return 1
+	}
+	local l_admin2_pass=${_SERVER_DETAILS[8]}
+	local l_dmr_pkgfilename=ERICdmr.pkg
+	local l_dmr_pkgname=${l_dmr_pkgfilename%.pkg}
+	echo "** Checking DMR package on $( hostname ) **"
+	if /bin/pkginfo | grep -w $l_dmr_pkgname > /dev/null ; then
+		existing_version=$( /usr/bin/pkgparam $l_dmr_pkgname VERSION ) 
+	else
+		echo "$l_dmr_pkgname is not installed on $( hostname )"
+		return 1
+	fi
+	echo "** Checking DMR package on $CI_ADMIN2_HOSTNAME **"
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /bin/pkginfo $l_dmr_pkgname" $l_admin2_pass > /dev/null &&
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /bin/rm -f /tmp/dmr_pkg_version" $l_admin2_pass > /dev/null &&
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@${CI_ADMIN2_HOSTNAME} /usr/bin/pkgparam $l_dmr_pkgname VERSION > /tmp/dmr_pkg_version" $l_admin2_pass > /dev/null &&
+	$EXPECT $AT_BIN/ssh_setup2.sh scp "root@${CI_ADMIN2_HOSTNAME}:/tmp/dmr_pkg_version  /tmp" $l_admin2_pass > /dev/null &&
+	if [ -s /tmp/dmr_pkg_version ]; then
+		existing_admin2_version=$( cat /tmp/dmr_pkg_version )
+	else
+		echo "Error - $l_dmr_pkgname is not installed on $CI_ADMIN2_HOSTNAME"
+		return 1
+	fi
+	if [ "$existing_version" = "$existing_admin2_version" ]; then
+		echo  "Hurrah - version of $l_dmr_pkgname on admin1 and admin2 ($existing_version) match"
+		return 0
+	else
+		echo "Error - version of $l_dmr_pkgname on admin1 and admin2 differ"
+		echo "Error - admin1: $existing_version admin2: $existing_admin2_version"
+		return 1
+	fi
+}
+
+#
+# Function to check DMR is installed
+#
+DMR_local_check_pkg_installed() {
+	local l_dmr_pkgfilename=ERICdmr.pkg
+	local l_dmr_pkgname=${l_dmr_pkgfilename%.pkg}
+	echo "Checking $l_dmr_pkgname is installed"
+	/bin/pkginfo $l_dmr_pkgname > /dev/null || return 1
+	return 0
+}	
+
+#
+# Function to call DMR prepare_backup operation
+#
+
+DMR_local_prepare_backup() {
+        infile=$1
+        outfile=$2
+        if [ ! -s "$infile" ]; then
+                echo "$FUNCNAME: DMR prepare backup input file \"$infile\" missing or empty"
+                return 1
+        fi
+        echo "Performing DMR prepare_backup operation using $infile"
+        if [ "${outfile}" != "" ]; then
+                /ericsson/dmr/bin/dmtool -s prepare_backup $(pwd)/$infile $(pwd)/$outfile || {
+                        echo "Error - DMR prepare_backup operation failed"
+                        return 1
+                }
+        else
+                /ericsson/dmr/bin/dmtool -s prepare_backup $(pwd)/$infile || {
+                        echo "Error - DMR prepare_backup operation failed"
+                        return 1
+                }
+        fi
+        return 0
+}
+
+#
+# Function to call DMR prepare_backup operation in background
+#
+
+DMR_local_prepare_backup_bg() {
+	infile=$1
+        outfile=$2
+	DMR_PREP_PID=
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR prepare backup input file \"$infile\" missing or empty"
+		return 1
+	fi
+	echo "Performing DMR prepare_backup operation using $infile"
+        if [ "${outfile}" != "" ]; then
+                /ericsson/dmr/bin/dmtool -s prepare_backup $(pwd)/$infile $(pwd)/$outfile &
+        else
+	        /ericsson/dmr/bin/dmtool -s prepare_backup $(pwd)/$infile &
+        fi
+	DMR_PREP_PID=$!
+	return 0
+}
+
+#
+# Start interfactive dmr session in background
+#
+DMR_local_interactive_dmr_bg() {
+	timeout=$1
+	if [ -z "$timeout" ]; then
+		echo "$FUNCNAME: timeout no specified"
+		return 1
+	fi
+	echo "Starting interactive dmr session"
+	DMR_INTER_PID=
+	$EXPECT << EOF &
+        set stty_init "rows 100"
+        spawn /ericsson/dmr/bin/dmtool 
+        set timeout $timeout 
+	expect "Non-existing prompt"
+	send "q\r"  
+	expect "Enter selection:"
+	send "q\r"  
+        exit 0
+EOF
+	DMR_INTER_PID=$!
+	return 0
+}
+
+#
+# Start interfactive dmr session when OMBS prep session already exists
+# The function assumes the prep session has already been created   
+# returns 0 if warning seen
+# returns 1 if expect times out i.e. warning not seen in timeout period
+#
+DMR_local_interactive_dmr_prep_existing() {
+	timeout=$1
+	if [ -z "$timeout" ]; then
+		echo "$FUNCNAME: timeout no specified"
+		return 1
+	fi
+	echo "Starting interactive dmr session"
+	DMR_INTER_PID=
+	$EXPECT << EOF
+        set stty_init "rows 100"
+        spawn /ericsson/dmr/bin/dmtool 
+        set timeout $timeout 
+	expect {
+                        "Do you want to continue (not recommended) (y/n)?" {
+				send "\r"
+			}
+                        eof {   
+                                exit 1
+			}
+                        timeout {
+                                puts "timed out - dmtool warning not seen!"
+                                exit 1
+			}
+        }       
+        exit 0
+EOF
+	return $?
+}
+
+#
+# Start interfactive dmr session when another interactive session is running
+# The function assumes the other interactive session has been started   
+# returns 0 if warning seen
+# returns 1 if expect times out i.e. warning not seen in timeout period
+#
+DMR_local_interactive_dmr_interactive_running() {
+	timeout=$1
+	if [ -z "$timeout" ]; then
+		echo "$FUNCNAME: timeout no specified"
+		return 1
+	fi
+	echo "Starting interactive dmr session"
+	DMR_INTER_PID=
+	$EXPECT << EOF
+        set stty_init "rows 100"
+        spawn /ericsson/dmr/bin/dmtool 
+        set timeout $timeout 
+	expect {
+                        "Do you really want to continue (y/n)?" {
+				send "\r"
+			}
+                        eof {   
+                                exit 1
+			}
+                        timeout {
+                                puts "timed out - dmtool warning not seen!"
+                                exit 1
+			}
+        }       
+        exit 0
+EOF
+	return $?
+}
+
+#
+# Function to call DMR cleanup operation
+#
+
+DMR_local_clean_backup() {
+	infile=$1
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR cleanup input file \"$infile\" missing or empty"
+		return 1
+	fi
+	echo "Performing DMR cleanup operation using $infile"
+	/ericsson/dmr/bin/dmtool -s clean_backup $(pwd)/$infile || {
+		echo "Error - DMR clean_backup operation failed"
+		return 1
+	}  
+
+	return 0
+}
+
+#
+# Function to call DMR cleanup operation
+#
+
+DMR_local_clean_backup_bg() {
+	DMR_CLEAN_PID=
+	infile=$1
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR cleanup input file \"$infile\" missing or empty"
+		return 1
+	fi
+	echo "Performing DMR cleanup operation using $infile"
+	/ericsson/dmr/bin/dmtool -s clean_backup $(pwd)/$infile & 
+	DMR_CLEAN_PID=$!
+	return 0
+}
+
+#
+# Function to remove the OMBS_MNT directory
+#
+
+DMR_local_remove_ombs_mnt() {
+	infile=$1
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR cleanup input file \"$infile\" missing or empty"
+		return 1
+	fi
+	. $infile
+	if [ -z "$OMBS_MNT" ]; then
+		echo "Error OMBS_MNT parameter is not set in infile \"$infile\""
+		return 1
+	fi
+	if [ "$OMBS_MNT" = "/" ]; then
+		echo "Error - OMBS_MNT set to dangerous value - / "
+		return 1
+	fi
+	for mnt in $( mount | egrep "^$OMBS_MNT/" | awk '{ print $1 }' ) ; do
+		fuser -k $mnt > /dev/null 2>&1
+		umount -f $mnt > /dev/null 2>&1
+	done
+	if [ -d $OMBS_MNT/metadata ]; then
+		echo "copying $OMBS_MNT/metadata to /tmp before $OMBS_MNT is removed..."
+		cp -rp $OMBS_MNT/metadata* /tmp || {
+			echo "Warning - failed to copy metadata directory to /tmp"
+		}	
+	fi
+	/bin/rm -rf $OMBS_MNT || {
+		echo "Error -  failed to remove dir $OMBS_MNT"
+		return 1
+	}
+	DMR_remove_oldtmpfiles || return 1
+}
+
+#
+# Check if tmp fs already mounted under OMBS_MNT
+#
+
+DMR_local_check_tmp_fs_mounted() {
+	infile=$1
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR input file \"$infile\" missing or empty"
+		return 1
+	fi
+	context=$2
+	[ -z "$context" ] && context=Error
+	. $infile
+	echo "Checking for tmp file systems already mounted"
+	mount | egrep "^$OMBS_MNT" && {
+		echo "$context - Tmp FS mounted"
+		if [ "$context" = Error ]; then
+			return 1
+		else
+			return 0
+		fi
+	}
+	return 0
+}
+
+#
+# Check DMR snap created required metadata
+#
+
+DMR_local_check_metadata() {
+	echo "Checking DMR snap metadata"
+	infile=$1
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR input file \"$infile\" missing or empty"
+		return 1
+	fi
+	. $infile
+	dirname=$( echo $SESSION_TYPE | awk -F_ '{ print $1 }' )
+	metadir=$OMBS_MNT/metadata/$dirname/etc
+	if [ ! -s $metadir/sysinfo ]; then
+		echo "Error - $metadir/sysinfo does not exist"
+		return 1
+	fi
+	for fs in $VOL_LIST; do
+		if [ $( dirname $fs ) = nas ]; then	
+			continue
+		fi
+		fs_name=$( basename $fs ) 
+		if [ ! -s $metadir/fs_${fs_name}.info ]; then
+			echo "Error - meta file $metadir/fs_${fs_name}.info does not exist"
+			return 1
+		fi
+	done
+	if echo $VOL_LIST | grep nas > /dev/null; then
+		if [ ! -s $metadir/nas_shares.list ]; then
+			echo "Error - meta file nas_shares.list does not exist"
+			return 1
+		fi
+	fi
+		
+		
+		
+}
+
+#
+# Check DMR fs has been snapped and check tmp fs named correctly 
+#
+
+DMR_local_check_fs_split() {
+	fs=$1
+	if [ -z "$fs" ]; then
+		echo "Error - no file system specified"
+		return 1
+	fi
+	ombs_tag=$2
+	if [ -z "$ombs_tag" ]; then
+		echo "Error - ombs tag not specified"
+		return 1
+	fi
+	split_type=$3
+	if [ -z "$split_type" ]; then
+		echo "Error - split type not specified"
+		return 1
+	fi
+	if [ "$split_type" = snap ]; then
+		postfix=${ombs_tag}_cache
+	else
+		postfix=${ombs_tag}
+	fi
+	echo "Checking FS \"$fs\" has been successfully snapped/detached"
+	if ! echo $fs | grep "nas/" > /dev/null; then
+		split_device=/dev/vx/dsk/${fs}_$postfix
+		if [ ! -b $split_device ]; then
+			echo "Error - device $split_device does not exist or is not block device"
+			return 1
+		fi
+	fi
+	return 0
+			
+}
+
+#
+# Function to compare list of mounted tmp FS vs the expected list in VOL_LIST
+#
+
+DMR_local_check_tmpfs_not_in_vollist() {
+	infile=$1
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR input file \"$infile\" missing or empty"
+		return 1
+	fi
+	. $infile
+	split_type=$2
+	if [ -z "$split_type" ]; then
+		echo "Error - split type not specified"
+		return 1
+	fi
+	echo "Checking for fs not in VOL_LIST being snapped/detached"
+	expected_dmrmountedtmpfs=
+	for fs in $VOL_LIST; do
+		expected_dmrmountedtmpfs="$expected_dmrmountedtmpfs $OMBS_MNT/$fs"
+	done
+	dmrmountedtmpfs=$( mount | egrep "^${OMBS_MNT}" | awk '{ print $1 }' )
+	for fs in $dmrmountedtmpfs; do
+		echo $expected_dmrmountedtmpfs | /usr/xpg4/bin/egrep "[[:space:]]*$fs[[:space:]]*" > /dev/null || {
+			echo "Error - unexpected mounted tmp fs $fs"
+			return 1
+		} 
+	done
+	return 0
+}
+
+#
+# Check DMR tmp fs has been mounted in req place and can be listed
+#
+
+DMR_local_check_tmpfs_mounted() {
+	fs=$1
+	if [ -z "$fs" ]; then
+		echo "Error - no file system specified"
+		return 1
+	fi
+	ombs_tag=$2
+	if [ -z "$ombs_tag" ]; then
+		echo "Error - ombs tag not specified"
+		return 1
+	fi
+	split_type=$3
+	if [ -z "$split_type" ]; then
+		echo "Error - split type not specified"
+		return 1
+	fi
+	if [ "$split_type" = snap ]; then
+		postfix=${ombs_tag}_cache
+	else
+		postfix=${ombs_tag}
+	fi
+	echo "Checking tmp FS \"$fs\" has been mounted"
+	if ! echo $fs | grep "nas/" > /dev/null; then
+		mount | egrep "^${OMBS_MNT}/${fs} on /dev/vx/dsk/${fs}_${ombs_tag}" > /dev/null || {
+			echo "Error - tmpfs for $fs is either not mounted or not mounted in correct location"
+			return 1
+		}
+	else
+		mount | egrep "^${OMBS_MNT}/${fs} on nas[0-9]+:.*$( basename $fs )-${DMRDEFAULTNASOMBSTAG}"  > /dev/null || {
+			echo "Error - tmpfs for $fs is either not mounted or not mounted in correct location"
+			return 1
+		}
+		
+	fi
+
+
+}
+
+#
+# DMR positive case detach post checks
+#
+DMR_local_postchecks() {
+	infile=$1
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR input file \"$infile\" missing or empty"
+		return 1
+	fi
+	two_stream_one_host=$2
+	[ -z "$two_stream_one_host" ] && two_stream_one_host=FALSE
+	echo "Performing DMR prepare_backup post checks on host $( hostname )"
+	. $infile
+	if [ -z "$OMBS_TAG" ]; then
+		ombs_vnx_tag=$DMRDEFAULTVNXOMBSTAG
+	else
+		ombs_vnx_tag=$OMBS_TAG
+	fi
+	DMR_local_check_metadata $infile || return 1
+	for fs in $VOL_LIST; do
+		DMR_local_check_fs_split $fs $ombs_vnx_tag $SPLIT_TYPE || return 1
+		DMR_local_check_tmpfs_mounted $fs $ombs_vnx_tag $SPLIT_TYPE || return 1
+		DMR_local_check_tmpfs_mount_health $OMBS_MNT/$fs || return 1
+	done
+	if [ "$two_stream_one_host" = FALSE ]; then
+		DMR_local_check_tmpfs_not_in_vollist $infile $SPLIT_TYPE || return 1 
+	fi
+		
+		
+}
+
+#
+# DMR tmpfs mount health checks
+#
+
+DMR_local_check_tmpfs_mount_health() {
+	local mnt_pt=$1
+	if [ -z "$mnt_pt" ]; then
+		echo "Error - no mount point specified"
+		return 1
+	fi
+	echo "Checking mounted tmp FS on \"$mnt_pt\" is healthy"
+	local l_maxtries=60
+	if [ ! -d "$mnt_pt" ]; then
+		echo "Error - mount point $mnt_pt does not exist"
+		return 1
+	fi
+	ls $mnt_pt > /dev/null 2>&1 &
+	local l_ls_pid=$!
+	local l_retry_count=0
+	while true; do
+		if [ $l_retry_count -gt $l_maxtries  ]; then
+			echo "Error: unable to view files on after $l_maxtries seconds."
+			kill -9 $l_ls_pid > /dev/null 2>&1
+                	return 1
+		fi
+		kill -0 $l_ls_pid 2>/dev/null
+		if [ $? -ne 0 ]; then
+			return 0
+        	fi
+        	let l_retry_count+=1
+        	$SLEEP 1
+        done
+
+
+}
+
+#
+# Pre check for old DMR state files
+#
+DMR_remove_oldtmpfiles() {
+	echo "Cleaning up old DMR tmp files"
+	ls /tmp/dmr_dump_state.* > /dev/null 2>&1 && {
+		echo "Removing old handshake state files"
+		/bin/rm -f /tmp/dmr_dump_state.*
+	}
+	return 0
+}
+
+#
+# check current DMR screen log for string
+#
+DMRWaitUntilLogContains() {
+	local count=1
+	logfile=$1
+	if [ -z "$logfile" ]; then
+		echo "$FUNCNAME: logfile not specified"
+		return 1
+	fi
+	shift
+	timeout=$1
+	if [ -z "$timeout" ]; then
+		echo "Error - $FUNCNAME: timeout not specified"
+		return 1
+	fi
+	shift
+	index=$1
+	if [ -z "$index" ]; then
+		echo "Error - $FUNCNAME: index not specified"
+		return 1
+	fi
+	shift
+	LOG_MARK_STATUS $logfile $index || return 1
+	while [ $count -le $timeout ]; do
+		LOG_SEARCH_FROM_MARK $logfile "$@" 0 && {
+			return 0 
+		}
+		let count+=1
+		sleep 1
+	done
+	return 1
+
+	
+}
+
+#
+# Function to call DMR function on remote server
+#
+DMR_remote_call() {
+	local_funcname=$( echo ${FUNCNAME[1]} | sed 's/_remote/_local/' )
+	# don't want to call the _bg version of the function - backgrounding 
+	# will be handled by wrapper function
+	local_funcname=${local_funcname%_bg}
+	host=$1
+	if [ -z "$host" ]; then
+		echo "Error - host param not given"
+		return 1
+	fi
+	get_server_details $host  || {
+		echo "Error - failed to get \"$host\" server details"
+		return 1
+	}
+	shift
+	remaining_args=$@
+	# write tmp script
+	cat << EOF > /tmp/$local_funcname.bsh
+#!/bin/bash
+AT_BIN=/tmp/bin
+AT_LIB=/tmp/lib
+. \$AT_LIB/atnfd.lib
+. \$AT_LIB/tst_DI_DMR.lib
+. /tmp/$(basename $ENVFILE)
+WDATE=$WDATE
+CI_TYPE=other
+handleArgs_func > /dev/null || exit 1
+$local_funcname $remaining_args || exit 1
+EOF
+	HARN_ROOT=$(dirname ${AT_BIN})
+	pushd . > /dev/null
+	cd $HARN_ROOT
+	tar cf /tmp/harness.tar . > /dev/null 2>&1 || {
+		echo "Error - fail to create harness tar file"		
+		return 1
+	}
+	popd > /dev/null
+	chmod +x /tmp/$local_funcname.bsh
+	tc_filelist=$( find . -type f | tr '\n' ' ' )
+	$EXPECT $AT_BIN/ssh_setup2.sh scp "/tmp/$local_funcname.bsh $ENVFILE $tc_filelist /tmp/harness.tar root@$host:/tmp" ${_SERVER_DETAILS[8]} > /dev/null || {
+		echo "Error - failed to copy required files to $host"
+		return 1 
+	}
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@$host cd /tmp && tar xf /tmp/harness.tar " ${_SERVER_DETAILS[8]} > /dev/null 2>&1 || {
+		echo "Error - failed to unpack harness tar file on remote host $host"
+		return 1
+	}
+	$EXPECT $AT_BIN/ssh_setup2.sh ssh "root@$host cd /tmp && /tmp/$local_funcname.bsh" ${_SERVER_DETAILS[8]}
+	return $?
+	
+
+
+}
+
+#
+# Function to check DMR is installed on remote host
+#
+DMR_remote_check_pkg_installed() {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+#
+# Check if tmp fs already mounted under OMBS_MNT - remote
+#
+DMR_remote_check_tmp_fs_mounted() {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+#
+# Function to call DMR prepare_backup operation - remote
+#
+DMR_remote_prepare_backup() {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+DMR_remote_prepare_backup_bg() {
+	DMR_remote_call $@  &
+        return 0
+}
+
+#
+# DMR postitive case post checks - remote
+#
+DMR_remote_postchecks() {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+
+DMR_remote_clean_backup () {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+
+DMR_remote_remove_ombs_mnt () {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+DMR_remote_clean_backup_bg () {
+	DMR_remote_call $@ & 
+        return 0
+}
+
+#
+# Function to check @ least 2 mirrors are defined
+#
+DMR_local_check_2_mirrors_min () {
+	echo "Checking for at least 2 mirrors"
+	ncols=$( /ericsson/dmr/bin/dmtool s m 2> /dev/null | grep "Diskgroup/Volume" | awk '{ print NF }' )
+	if [[ $? -eq 0 && $ncols -ge 4 ]]; then
+		echo "Appears to be at least 2 mirrors defined"
+		return 0
+	else
+		echo "Appears to be fewer than 2 mirrors defined"
+		return 1
+	fi
+
+
+}
+
+DMR_remote_check_2_mirrors_min () {
+        DMR_remote_call $@ || return 1
+        return 0
+}
+
+
+
+DMR_local_check_2_good_mirrors() {
+	echo "Checking for 2 good mirrors"
+	/ericsson/dmr/bin/dmtool c m > /dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		echo "Found two good mirrors"
+		return 1
+	else
+		echo "Failed to find 2 good mirrors"
+		return 1
+	fi
+}
+
+#
+# Function to re-sync mirrors M1->M2
+#
+
+DMR_local_sync_mirrors() {
+	echo "Syncing mirrors..."
+        $AT_LIB/exp_files/dmr_config.bsh
+        return $?
+
+}
+
+DMR_remote_sync_mirrors () {
+        DMR_remote_call $@ || return 1
+        return 0
+}
+
+
+
+
+#
+# function to copy metadata aside
+#
+
+
+DMR_local_copy_metadata_for_restore() {
+	local l_metadir=$1
+	
+	if [ ! -d $l_metadir ]; then
+                echo "Error $FUNCNAME: - unable to find $l_metadir"
+                return 1
+        fi
+        mkdir -p $DMRBACKUPMETADATADIR &&
+        /bin/cp -rp $l_metadir $DMRBACKUPMETADATADIR || {
+		echo "Error - $FUNCNAME - failed to copy metadata"
+		return 1
+	} 
+	return 0
+
+}
+
+#
+# function to check for metadata
+#
+DMR_local_check_metadata_for_restore() {
+	echo "Checking for valid metadata in $DMRBACKUPMETADATADIR"
+	find $DMRBACKUPMETADATADIR -type f | grep sysinfo > /dev/null 
+	if [[ $? -eq 0 && $numfiles -gt 0 ]]; then
+		return 0
+	else
+		return 1
+	fi
+
+}
+
+#
+# Function to remove metadata
+#
+DMR_local_remove_metadata_for_restore() {
+	/bin/rm -rf $DMRBACKUPMETADATADIR || {
+		echo "Error - failed to remove dir $DMRBACKUPMETADATADIR"
+		return 1
+	}
+}
+
+DMR_remote_remove_metadata_for_restore () {
+	DMR_remote_call $@ || return 1 
+        return 0
+}
+
+#
+# Prepare the prepare_restore expect infile
+#
+DMR_local_prep_prep_restore_exp_infile() {
+	infile_template=prepare_restore.in.template
+	infile=${infile_template%.template}
+	sed "s,###DMRBACKUPMETADATADIR###,$DMRBACKUPMETADATADIR,g" $infile_template > $infile || {
+		echo "Error - failed to create $infile"
+		return 1
+	}
+	return 0
+}
+
+#
+# Check if restore prep fs already mounted under Restore mount pt
+#
+
+DMR_local_check_restore_clean () {
+	echo "Checking for fs mounted under $DMRRESTOREMOUNTPT" 
+	mount | grep "^$DMRRESTOREMOUNTPT" > /dev/null && {
+		echo "some file systems appear to be mounted under $DMRRESTOREMOUNTPT"
+		return 1
+	}
+	echo "No file systems mounted under $DMRRESTOREMOUNTPT"
+	return 0
+}
+
+DMR_remote_check_restore_clean () {
+	DMR_remote_call $@ || return 1
+        return 0
+}
+
+#
+# check for temporary DGs
+#
+
+DMR_local_check_tmp_dgs_exist() {
+	retcode=0
+	echo "Checking for temp oss and sybase disk groups"
+	for dg in ossdg_temp sybasedg_temp; do
+		vxdg list | grep -w $dg > /dev/null && {
+		 	echo "DG $eg exists"
+			retcode=1
+		} 
+	done
+	if [ $retcode -eq 0 ]; then
+		echo "No tmp DGs exist"
+	fi
+	return $retcode
+
+
+}
+
+DMR_remote_check_tmp_dgs_exist () {
+	DMR_remote_call $@ || return 1
+        return 0
+}
+
+
+#
+# Function to remove the /Restore directory and mount pts
+#
+
+DMR_local_remove_ombs_restore_mnt() {
+	for mnt in $( mount | egrep "^$DMRRESTOREMOUNTPT/" | awk '{ print $1 }' ) ; do
+		fuser -k $mnt > /dev/null 2>&1
+		umount -f $mnt > /dev/null 2>&1
+	done
+	/bin/rm -rf $DMRRESTOREMOUNTPT || {
+		echo "Error - failed to remove dir $DMRRESTOREMOUNTPT"
+		return 1
+	}
+	return 0
+}
+
+DMR_remote_remove_ombs_restore_mnt () {
+	DMR_remote_call $@ || return 1
+        return 0
+}
+
+#
+# Function to remove the temporary dgs created by prep_restore
+#
+
+DMR_local_remove_temp_dgs() {
+	local retcode=0
+	DMR_local_remove_ombs_restore_mnt
+	for dg in ossdg_temp sybasedg_temp; do
+		vxdg list | grep -w $dg > /dev/null && {
+			vxdg destroy $dg || {
+				echo "Error - failed to destroy $dg"
+				retcode=1
+			}
+			
+		}
+		
+	done
+	return $retcode
+
+
+}
+DMR_remote_remove_temp_dgs() {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+#
+# Function to perform prepare_restore 
+# on "clean" system i.e. no /Restore mnts
+# or tmp DGs exist
+#
+
+DMR_local_prepare_restore_clean () {
+	local l_timeout=40
+	echo "Starting DMR prepare_restore session"
+	$EXPECT << EOF
+	spawn /ericsson/dmr/bin/dmtool prepare_restore
+	set timeout $l_timeout
+	expect "Enter Restore Type 'bm' (bare metal) or 'mi' (on a mirror)" {
+                send "mi\r"
+        }
+        expect "Enter full path to Metadata directory" {
+                send "$DMRBACKUPMETADATADIR\r"
+        }
+        expect "Ok to proceed with these Metadata (y/n)?" {
+                send "y\r"
+        }
+	expect "Change list (y/n)" {
+                send "n\r"
+        }
+	expect "Do you want to change the size of the volumes (y/n)" {
+                send "n\r"
+        }
+	expect {
+		 "Are the above disks OK to use (y/n)" {
+                	send "y\r"
+		}
+		timeout {}
+		eof { exit 0 }
+        }
+	expect  {
+		"Use all data disks (y/n)" {
+                	send "y\r"
+		}
+		timeout {}
+		eof { exit 0 }
+        }
+	expect  {
+	 	"Enter selections (q=quit):" {
+                	send "1\r"
+		}
+		timeout {}
+		eof { exit 0 }
+        }
+	expect  {
+	 	"Enter selections (q=quit):" {
+                	send "1\r"
+		}
+		timeout {}
+		eof { exit 0 }
+        }
+	set timeout 300
+	expect {
+    		EOF {}
+    		timeout { exit 99 }
+	}
+
+EOF
+	return $?
+}
+
+DMR_remote_prepare_restore_clean() {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+#
+# Function to perform prepare_restore 
+# on "unclean" system i.e. /Restore mnts
+# and tmp DGs exist
+#
+DMR_local_prepare_restore_unclean () {
+	local l_timeout=40
+	echo "Starting DMR prepare_restore session"
+	$EXPECT << EOF
+	spawn /ericsson/dmr/bin/dmtool prepare_restore
+	set timeout $l_timeout
+	expect "Enter Restore Type 'bm' (bare metal) or 'mi' (on a mirror)" {
+                send "mi\r"
+        }
+        expect "Enter full path to Metadata directory" {
+                send "$DMRBACKUPMETADATADIR\r"
+        }
+        expect "Ok to proceed with these Metadata (y/n)?" {
+                send "y\r"
+        }
+	expect {
+		"Do you want to unmount these filesystems and start a new Preparation for Restore (y/n)" { 
+			send "y\r" 
+		}	
+		timeout {
+			puts "Did not see confirmation question to prep restore"
+			exit 1
+		}
+	}
+	expect {
+		"Clear disks first (re-create diskgroups) (y/n)" {
+			send "y\r" 
+		}	
+		timeout {
+			puts "Did not see confirmation question to re-create DGs"
+			exit 1
+		}
+	}
+	expect "Change list (y/n)" {
+                send "n\r"
+        }
+	expect "Do you want to change the size of the volumes (y/n)" {
+                send "n\r"
+        }
+	expect {
+		 "Are the above disks OK to use (y/n)" {
+                	send "y\r"
+		}
+		timeout {}
+		eof { exit 0 }
+        }
+	expect  {
+		"Use all data disks (y/n)" {
+                	send "y\r"
+		}
+		timeout {}
+		eof { exit 0 }
+        }
+	expect {
+	 	"Enter selections (q=quit):" {
+                	send "1\r"
+		}
+		timeout {}
+		eof { exit 0 }
+        }
+	expect  {
+	 	"Enter selections (q=quit):" {
+                	send "1\r"
+		}
+		timeout {}
+		eof { exit 0 }
+        }
+	expect {
+		"Ok to remove DG ossdg_temp (y/n)" {
+			send "y\r" 
+		}	
+		timeout {
+			puts "Did not see confirmation question to remove ossdg_temp"
+			exit 1
+		}
+		eof { exit 0 }
+	}
+	expect {
+		"Ok to remove DG sybasedg_temp (y/n)" {
+			send "y\r" 
+		}	
+		timeout {
+			puts "Did not see confirmation question to remove sybasedg_temp"
+			exit 1
+		}
+		eof { exit 0 }
+	}
+	set timeout 300
+	expect {
+    		EOF {}
+    		timeout { exit 99 }
+	}
+EOF
+	return $?
+}
+
+#
+# Function to perform clean_restore
+#
+DMR_local_clean_restore() {
+	echo "Starting DMR clean_restore session"
+	infile=$1
+	[ ! -s $infile ] && {
+		echo "Error - $FUNCNAME - unable to find input file \"$infile\" or file is empty"
+		return 1
+	}
+	exp_script=${infile%.in}.exp
+	cmd='/ericsson/dmr/bin/dmtool clean_restore'
+	${AT_BIN}/con_ex.bsh -d $infile -o $exp_script -c "${cmd}" || {
+		echo "Error - $FUNCNAME - failed to generate expect script"
+		exit 1
+	}
+	$EXPECT $exp_script || {
+		echo "Error - occured running $exp_script"
+		return 1
+	}
+	return 0
+
+}
+
+DMR_remote_clean_restore () {
+	DMR_remote_call $@ || return 1 
+        return 0
+}
+
+#
+# DMR restore post checks
+#
+DMR_local_restore_check_fs_prepped() {
+	infile=$1
+	if [ ! -s "$infile" ]; then
+		echo "$FUNCNAME: DMR input file \"$infile\" missing or empty"
+		return 1
+	fi
+	. $infile
+	echo "Checking expected file systems are prepped for restore"
+	for fs in $VOL_LIST; do
+		echo $fs | grep '^nas' > /dev/null && continue
+		dg=$( echo $fs | awk -F/ '{ print $1 }' )
+		fs_temp=$( echo $fs | sed "s,$dg,${dg}_temp,g" )
+		fs_dev=/dev/vx/dsk/$fs
+		if [ ! -b $fs_dev ]; then
+			echo "Error - device $fs_dev does not exist or is not block device"
+			return 1
+		fi
+		fs_temp_dev=/dev/vx/dsk/$fs_temp
+		if [ ! -b $fs_temp_dev ]; then
+			echo "Error - device $fs_temp_dev does not exist or is not block device"
+			return 1
+		fi
+		mount | egrep "^${DMRRESTOREMOUNTPT}/${fs} on /dev/vx/dsk/${fs_tmp}" > /dev/null || {
+			echo "Error - file system $fs does not appear to be mounted for restore"
+			return 1
+		}
+		echo "Checking mounted $fs is healthy"
+		DMR_local_check_tmpfs_mount_health ${DMRRESTOREMOUNTPT}/${fs} || return 1
+		echo "Checking filesystems prepared for restore are correct size"
+		DMR_local_check_tmpfs_size ${fs} ${fs_temp} || return 1
+		echo "Checking can write to mount point ${DMRRESTOREMOUNTPT}/${fs}"
+		DMR_local_check_canwritemount ${DMRRESTOREMOUNTPT}/${fs} || return 1
+	done
+
+
+}
+
+DMR_remote_restore_check_fs_prepped() {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+#
+# Check that we can write to mount pt
+#
+DMR_local_check_canwritemount() {
+	local l_mnt=$1
+	retcode=0
+	if [ ! -d "$l_mnt" ]; then
+		echo "Error - dir \"$l_mnt\" does not exist"
+		return 1
+	fi
+	mkfile 5m $l_mnt/testfile$$ || {
+		echo "Error - failed to write in mount point $l_mnt"
+		retcode=1
+	}
+	/bin/rm -f $l_mnt/testfile$$
+	return $retcode
+}
+
+#
+# check prepared filesystem sizes
+#
+DMR_local_check_tmpfs_size() {
+	local original_fs=$1
+	local prep_restore_fs=$2
+	local retcode=0
+	local tmp_mount=FALSE
+	local l_df_file=$DMRBACKUPMETADATADIR/df
+	if [ -z "$original_fs" ]; then
+		echo "Error - $FUNCNAME: original file system not specified"
+		return 1
+	fi
+	if [ -z "$prep_restore_fs" ]; then
+		echo "Error - $FUNCNAME: prep restore file system not specified"
+		return 1
+	fi
+	# check for df file which records original volume size on cluster where
+	# metadata was generated
+	if [ ! -s $l_df_file ]; then
+		echo "Error - unable to find df file in metadata"
+		return 1
+	fi
+	echo "Comparing size of original fs $original_fs vs prep restore fs $prep_restore_fs"
+	local original_fs_dev=/dev/vx/dsk/$original_fs
+	local prep_restore_fs_dev=/dev/vx/dsk/$prep_restore_fs
+	mount | grep "$original_fs_dev" > /dev/null || {
+		echo "Temporarily mounting $original_fs for size comparison"
+		mkdir /tmp/mnt$$ &&
+		mount -F vxfs /dev/vx/dsk/$original_fs /tmp/mnt$$ || {
+			echo "Error - failed to temporarily mount $original_fs - size comparison not possible"
+			return 1
+		}
+		tmp_mount=TRUE
+	}
+	orig_fs_size=$( cat $l_df_file | grep  "^$original_fs_dev " | awk '{print $2}' )
+	prep_fs_size=$( df -kh | grep  "^$prep_restore_fs_dev " | awk '{print $2}' )
+	if [ "$orig_fs_size" != "$prep_fs_size" ]; then
+		echo "Error - size mismatch between $original_fs ($orig_fs_size) and $prep_restore_fs ($prep_fs_size)"
+		retcode=1
+	fi
+	if [ "$tmp_mount" = TRUE ]; then
+		umount -f $original_fs_dev || {
+			echo "Error failed to umount temp mount $original_fs_dev"
+			retcode=1
+		}
+	fi
+	return $retcode
+}
+#
+# Check if dmtool session already running
+#
+
+DMR_local_check_if_session_running() {
+	pgrep -f '/bin/ksh /dmr/dmtool' || pgrep -f '/bin/ksh /ericsson/dmr/bin/dmtool' 
+}
+
+DMR_remote_check_if_session_running () {
+	DMR_remote_call $@ || return 1
+        return 0
+}
+
+#
+# Function to unpack DMR metadata tar file
+#
+
+DMR_local_unpackmetadata() {
+	local l_metadata_file=$1
+	if [ ! -s "$l_metadata_file" ]; then
+		echo "Error - metadata tar file is missing or empty"
+		return 1
+	fi
+	echo "*Unpacking metadata file $l_metadata_file*"
+	tar xvf $l_metadata_file > /dev/null 2>&1 || {
+		echo "Error - failed to unpack metadata file $l_metadata_file"
+		return 1
+	}
+	return 0   
+
+
+}
+
+DMR_remote_unpackmetadata() {
+	DMR_remote_call $@  || return 1
+        return 0
+}
+
+
+
+#
+# Function to deport the dgs before a dmtool bmr prepare_restore
+# [mv.DI_DMR]
+#
+
+DMR_local_check_and_deport_dgs() {
+        local retcode=0
+        for dg in ossdg sybasedg; do
+                _dg_status_=$(vxdg list | grep -w $dg | awk ' { print $2 } ')
+                if [[ ${_dg_status_} == "enabled" ]] ;
+                then
+                        vxdg list $dg
+                        vxdg deport $dg || {
+                               echo "ERROR:: failed to deport $dg"
+                               retcode=1
+                        }
+                else
+                        echo "INFO:: DG $dg not imported"
+                fi
+
+        done
+        return $retcode
+
+}
+
+
+# to perform prepare_restore
+# on "clean" system i.e. no /Restore mnts
+# or tmp DGs exist
+# [mv.DI_DMR]
+#
+
+DMR_bm_prepare_restore_clean () {
+
+        local tc_id=1211
+        local l_timeout=90
+	local l_dmdefine_=/ericsson/dmr/etc/dm_define
+	local l_sys_id=$(/bin/grep -i sys_id /ericsson/config/storage.ini | awk -F= ' { print $2 }')
+
+        echo "Starting DMR prepare_restore session"
+        $EXPECT << EOF
+        spawn /ericsson/dmr/bin/dmtool prepare_restore
+        set timeout $l_timeout
+        expect "Enter full path to Metadata directory" {
+                send "/var/tmp/meta_${tc_id}\r"
+        }
+        expect "Enter Restore Type 'bm' (bare metal) or 'mi' (on a mirror)" {
+                send "bm\r"
+        }
+	expect "Create volumes on '1' or '2' mirrors" {
+		send "2\r"
+	}
+        expect "Change list (y/n)" {
+                send "n\r"
+        }
+        expect "Do you want to change the size of the volumes (y/n)" {
+                send "n\r"
+        }
+	
+        expect "Add Admin-node" {
+                send "y\r"
+        }
+        expect "Re-Add all NAS clients/shares (y/n)" {
+                send "y\r"
+        }
+        expect "Use all data disks (y/n)" {
+                        send "y\r"
+        }
+        expect "Enter selections (q=quit)" { 
+                        send "1\r"
+                }
+	expect "Enter selections (q=quit)" {
+                        send "1\r"
+                }
+	expect {
+		"Ok to delete those old NAS ${l_sys_id}/FS (y/n)?" {
+		send "y\r"
+	}
+	timeout {
+                        puts "Did not see confirmation question to delete old NAS fs"
+                        exit 1
+                }
+                eof { exit 0 }
+	}
+        set timeout 600
+        expect {
+                EOF {}
+                timeout { exit 99 }
+        }
+
+EOF
+        return $?
+}
+
+#
+# Function to record which nas vols are mounted
+#
+DMR_local_record_nas_vols_mounted () {
+	local outfile=$1
+	df -kh | grep 'nas[0-9]:' | awk '{ print $1 }' > $outfile || {
+		echo "Error - $FUNCNAME: failed to write $outfile"
+		return 1
+	}
+	return 0
+	
+
+
+}
+
+#
+# Function to check that nas vols to not get offered to user
+# in prepare restore to mi scenario 
+#
+
+DMR_local_check_nas_prep_restore_mi() {
+	echo "Checking prep_restore to mi does not interfere with NAS mounted file systems" 
+	local l_backup_infile=$1
+	if [ ! -s "$l_backup_infile" ]; then
+		echo "Error - $FUNCNAME: unable to find backup infile" 
+		return 1
+	fi
+	CONSOLE_OUTPUT_CONTAINS "NAS file systems will be ignored when preparing an offline Mirror" || {
+		echo "Error - console o/p does not contain expected message regarding excluding NAS file systems"
+		return 1
+	}
+
+	# check that no NAS file systems have been unmounted by prep_restore
+	if [[ ! -s nas_vols_mounted_pre || ! -s nas_vols_mounted_post ]]; then
+		echo "Error - fault in TC - unable to NAS filesystems mounted comparison"
+		return 1
+	else
+		cmp -s nas_vols_mounted_pre nas_vols_mounted_post || {
+			echo "Error - set of NAS filesystems mounted has changed before and after test was run !"
+			return 1
+		}
+	fi
+	
+	return 0
+
+
+}
+
+
+
+# function verifies the shares for segment1 : rw for admin1/2 and ro for
+#additional client
+# IP address , fs name given as arguments
+# to be used for prepare_restore preparation
+# [mv.DI_DMR]
+
+DMR_verify_shares_fs_bmr_prep_restore()
+{
+   _ip_=$1
+   _fs_=$2
+   local_return=0
+   _sysid_=$(/bin/grep -i sys_id /ericsson/config/storage.ini | awk  -F= ' { print $2 }')
+   _storIPs_=$(grep storIPaddress /ericsson/config/cluster.ini | awk -F= ' { print $2 } ')
+   _tmp_file_=/tmp/list_shares.$$
+
+    /ericsson/storage/bin/nascli list_clients raw - | grep "${_sysid_}-${_fs_}" > ${_tmp_file_}
+    echo "INFO:: verifying sharing for this cluster specific clients"
+
+    for i in ${_storIPs_}; do
+             grep -w "$i/32" ${_tmp_file_}
+             if [ $? -ne 0 ] ; then
+             echo "ERROR:: ${_fs_} not shared to $i"
+             local_return=1
+             else
+             echo "INFO:: ${_fs_} shared to $i"
+             fi
+        _options_=$( grep -w "$i/32" ${_tmp_file_} | awk ' { print $3 } ')
+        if [ "${_options_}" != "(rw,no_root_squash)" ] ; then
+                echo "ERROR:: ${_fs_} not shared rw to $i"
+                local_return=1
+        else
+              echo "INFO:: ${_fs_} shared rw to $i"
+        fi
+	done
+        echo "INFO:: verifying sharing for an additional client ${_ip_}"
+        grep -w "${_ip_}/32" ${_tmp_file_}
+        if [ $? -ne 0 ] ; then
+                echo "ERROR: ${_fs_} not shared to ${_ip_}"
+                local_return=1
+                else
+                echo "INFO:: ${_fs_} shared to ${_ip_}"
+        fi
+        _options_=$(grep -w "${_ip_}/32" ${_tmp_file_} | awk '{ print $3 }')
+        if [ "${_options_}" != "(ro,no_root_squash)" ] ; then
+               echo "ERROR: ${_fs_} not shared ro to ${_ip_}"
+               local_return=1
+        echo "INFO:: ${_fs_} shared ro to ${_ip_}"
+        fi
+
+        /bin/rm -f $_tmp_file_
+
+        return $local_return
+
+}
+

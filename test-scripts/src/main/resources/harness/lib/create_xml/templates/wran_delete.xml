@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_0.dtd">
+<Model version="1" importVersion="6.0">
+<Delete>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=RNC,MeContext=RBS,ManagedElement=1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=RNC,MeContext=RNC,ManagedElement=1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,MeContext=RANAG,ManagedElement=1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=RNC,Group=RbsGrp"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,SubNetwork=RNC"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSSLAVE-WRAN-%slave%,FtpService=utran_swstore"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSSLAVE-WRAN-%slave%,FtpService=utran_lickeystore"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSSLAVE-WRAN-%slave%,FtpService=utran_backup"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSSLAVE-WRAN-%slave%,FtpService=utran_auto"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSSLAVE-WRAN-%slave%"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=WRAN_SITE1"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=WRAN_SITE2"/>
+</Delete>
+</Model>

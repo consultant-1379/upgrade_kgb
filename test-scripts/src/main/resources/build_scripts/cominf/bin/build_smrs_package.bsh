@@ -1,0 +1,97 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/08/2012    edavmax         First version
+
+usage() {
+cat << EOF
+
+Usage:  ${SCRIPTNAME} [-h]
+
+Build SMRS package in clearcase view and copies it to Jenkins server
+
+Assumes passwordless login setup for user Jenkins to Unix server hosting view
+
+EOF
+
+return 0
+
+}
+
+#MAIN
+
+G_INST_TYPE=cominf
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_ETCDIR=$( dirname $G_SCRIPTDIR )/etc
+G_SCRIPTNAME=$(/bin/basename $0)
+G_REMOTE_SCRIPT=build_smrs_package_remote.bsh
+G_BUILD_ROOTDIR=$( /usr/bin/dirname $( /usr/bin/dirname $G_SCRIPTDIR ))
+G_DELIVERED_SMRS_PKGNAME=ERICbismrsmc.pkg
+. $G_ETCDIR/ci.env
+
+[ -z "$WORKSPACE" ] && WORKSPACE=/var/lib/jenkins/workspace/Cominf_linux_software_build_14B
+
+
+#commands
+
+while getopts ":h" opt
+	do
+	case ${opt} in
+		h)      # Print help and exit OK
+			usage
+			exit 0
+		;;
+		*)      # Print usage and exit error
+			usage
+			exit 1
+		;;
+	esac
+done
+
+# determine G_CLEARCASE_HOST
+#G_CLEARCASE_HOST=$(${G_SCRIPTDIR}/select_hub_server.py)
+G_CLEARCASE_HOST=$G_DEFAULT_CLEARCASE_HOST
+
+# remove old package
+/bin/rm -f ${WORKSPACE}/${G_SMRS_PKGNAME} > /dev/null 2>&1
+
+# copy the script to clearcase server
+scp ${G_SCRIPTDIR}/${G_REMOTE_SCRIPT} ${G_CLEARCASE_USER}@${G_CLEARCASE_HOST}:/var/tmp > /dev/null 2>&1 || {
+	echo "Error -failed to copy $G_REMOTE_SCRIPT to clearcase server"
+	exit 1
+} 
+# call script on clearcase server
+ssh  ${G_CLEARCASE_USER}@${G_CLEARCASE_HOST} /var/tmp/${G_REMOTE_SCRIPT} $G_SMRS_CLEARCASE_VIEW $G_SMRS_VOB_LOC $G_SMRS_PKGNAME || {
+	echo "Error - error occured running ${G_REMOTE_SCRIPT} on ${G_CLEARCASE_HOST}"
+	exit 1
+}
+
+# copy newly built package from clearcase server
+scp ${G_CLEARCASE_USER}@${G_CLEARCASE_HOST}:/var/tmp/${G_SMRS_PKGNAME} ${WORKSPACE} || {
+	echo "Error failed to copy new smrs package from clearcase server"
+	exit 1
+}
+
+# copy newly built package to MWS
+scp ${WORKSPACE}/${G_SMRS_PKGNAME} root@$G_MWS_IP:/$G_OSSRC_MEDIA_CACHE_PATH/${G_DELIVERED_SMRS_PKGNAME} || {
+	echo "Error failed to copy new smrs package to MWS OSSRC cached location"
+	exit 1
+}
+
+
+
+	
+exit 0

@@ -1,0 +1,51 @@
+#!/ericsson/solaris/bin/expect --
+set force_conservative 1
+set timeout -1
+
+set ADMIN1 [lindex $argv 0]
+set release [lindex $argv 1]
+set shipment [lindex $argv 2]
+set mws [lindex $argv 3]
+set mws_rootpw [lindex $argv 4]
+
+set timeout 900 
+
+
+#main
+
+spawn ssh -ostricthostkeychecking=no root@${ADMIN1}.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+expect "#"
+send -- "bash\r" 
+expect "/#"
+send -- "umount /var/tmp/upgradeEU\r" 
+expect "/#"
+send -- "\[\[ ! -d /var/tmp/upgradeEU ]] && mkdir /var/tmp/upgradeEU\r"
+expect "/#"
+send -- "mount $mws:/export/jumpstart/OSSRC_${release}/${shipment}.daily/uploadedEU/ /var/tmp/upgradeEU\r"
+expect "/#"
+send -- "/opt/ericsson/sck/bin/ist_run -d /var/tmp/upgradeEU/ -pa -auto\r"
+expect "/#"
+send -- "cd /\r"
+expect "/#"
+send -- "umount /var/tmp/upgradeEU\r" 
+expect "/#"

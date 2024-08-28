@@ -1,0 +1,173 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# 07/07/14	xmcgama    Checks admin_offline_fth will report success if components already offline
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Offline any fth MCs
+    local mcToOffline=`su nmsadm -c "smtool -list" | grep fth | grep -v fth_controller | awk '$2 ~ /^started$/{print $1}'`
+    local RC=0
+    for mc in $mcToOffline
+    do
+        su nmsadm -c "smtool -offline $mc -reason=other -reasontext=testing" 
+        if [ $? -ne 0 ]
+        then
+            echo "Failed to offline MC $mc"
+            RC=1
+        fi
+        sleep 20
+    done
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	# Ensure all fth components in offline state
+    local numInvMC=`su nmsadm -c "smtool -list" | grep fth | grep -v fth_controller | awk '$2 !~ /^offline$/{print $1}' | wc -l`
+    if [ ${numInvMC} -ne 0 ]
+    then
+        echo "Found fth MCs NOT in offline state"
+        return 100
+    fi
+    # Ensure library is there
+    if [ ! -f /opt/ericsson/sck/lib/admin_common_functions.lib ]
+    then
+        echo "No admin common library"
+        return 102
+    fi
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+	source /opt/ericsson/sck/lib/admin_common_functions.lib
+    admin_offline_fth
+	return $?
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+    # Now check that the fth components are in offline state
+    local numInvMC=`su nmsadm -c "smtool -list" | grep fth | grep -v fth_controller | awk '$2 !~ /^offline$/{print $1}' | wc -l`
+    if [ ${numInvMC} -ne 0 ]
+    then
+        echo "Found fth MCs not in offline state"
+        return 100
+    fi
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	# Online any offline MCs
+    local mcToStart=`su nmsadm -c "smtool -list" | grep fth | grep -v fth_controller | awk '$2 !~ /^started$/{print $1}'`
+    local RC=0
+    for mc in $mcToStart
+    do
+        su nmsadm -c "smtool -online $mc" 
+        if [ $? -ne 0 ]
+        then
+            echo "Failed to online MC $mc"
+            RC=1
+        fi
+    done
+	return $RC
+
+}

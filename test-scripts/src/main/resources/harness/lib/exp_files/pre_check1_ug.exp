@@ -1,0 +1,52 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set MOUNT [lindex $argv 1]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+set timeout 300 
+#set timeout 600 
+send "/opt/ericsson/sck/bin/system_checks.bsh -a pre_sys_upgrade\r"
+expect {
+	"Pre System Upgrade Check Result" {}
+	timeout {puts "Warning: Timedout after $timeout seconds"
+		exit 1}
+	}
+send "/opt/ericsson/sck/bin/system_upgrade_utils.bsh -a un_ne\r"
+expect {
+	"Logs have been saved to" {}
+	timeout {puts "Warning: Timedout after $timeout seconds"
+		exit 1}
+	}
+sleep 30
+exit 0

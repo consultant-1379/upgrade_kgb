@@ -1,0 +1,352 @@
+#!/usr/local/bin/expect
+
+# This is the fully interactive run of setup_orcha_user.bsh.
+# It intentionally makes errors and checks that the modulre responds correctly.
+# If *any* of the messages put out by the module change, this test may break.
+
+set timeout 60
+
+spawn su - orcha -c "/ericsson/orchestrator/bin/setup_orcha_user.bsh"
+
+# The first section handles the Orcha user password
+# First have non-matching passwords
+expect {
+        "Enter password to be used for the orcha user:" {send_user "sending orcha password\n"; send "Orch@12A\r" }
+          eof {send_user "eof detected waiting for orcha password prompt\n"; exit 98}
+          timeout {send_user "timeout detected waiting for orcha password prompt\n"; exit 99}
+}
+expect {
+        "Re-enter orcha user Password:" {send_user "sending re-entry of orcha password\n";  send "Orch@12B\r" }
+         eof {send_user "eof detected waiting for orcha re-enter password prompt\n"; exit 98}
+         timeout {send_user "timeout detected waiting for orcha re-enter password promptp\n"; exit 99}
+}
+
+# Now have matching but invalid passwords
+expect {
+        "Enter password to be used for the orcha user:" {send_user "sending orcha password\n"; send "orcha12a\r" }
+          eof {send_user "eof detected waiting for orcha password prompt\n"; exit 98}
+          timeout {send_user "timeout detected waiting for orcha password prompt\n"; exit 99}
+}
+expect {
+        "Re-enter orcha user Password:" {send_user "sending re-entry of orcha password\n";  send "orcha12a\r" }
+         eof {send_user "eof detected waiting for orcha re-enter password prompt\n"; exit 98}
+         timeout {send_user "timeout detected waiting for orcha re-enter password promptp\n"; exit 99}
+}
+
+# Finally have valid and matching passwords
+expect {
+        "Enter password to be used for the orcha user:" {send_user "sending orcha password\n"; send "Orch@12A\r" }
+          eof {send_user "eof detected waiting for orcha password prompt\n"; exit 98}
+          timeout {send_user "timeout detected waiting for orcha password prompt\n"; exit 99}
+}
+expect {
+        "Re-enter orcha user Password:" {send_user "sending re-entry of orcha password\n";  send "Orch@12A\r" }
+         eof {send_user "eof detected waiting for orcha re-enter password prompt\n"; exit 98}
+         timeout {send_user "timeout detected waiting for orcha re-enter password promptp\n"; exit 99}
+}
+
+
+# Now process the host interactions
+# First handle the MWS, normally
+expect {
+        "Enter IP address for MWS host" {send_user "sending mws host\n"; send "mws\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending mws password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for MWS host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for MWS hosts - 1 entries" {send_user "got correct list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of MWS hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+# Next handle the OMSAS normally
+expect {
+        "Enter IP address for OMSAS host" {send_user "sending omsas host\n"; send "omsas\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending omsas password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for OMSAS host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for OMSAS hosts - 1 entries" {send_user "got correct list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of OMSAS hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+
+# Now 2 OM_SERVICES hosts.  Get password on 2nd wrong first time
+expect {
+        "Enter IP address for OM_SERVICES host" {send_user "sending omsrvm host\n"; send "omsrvm\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending omsrvm password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for OM_SERVICES host" {send_user "sending omsrvs host\n"; send "omsrvs\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+# For this test to work, omsrvs *must* require a password
+expect {
+        "Enter password for root user:" {send_user "sending BAD omsrvs password\n"; send "NOTroot\r" }
+        eof {send_user "eof detected waiting for root password prompt\n"; exit 98}
+        timeout {send_user "timeout for root password prompt: omsrvs MUST require a password for this test\n"; exit 99}
+}
+expect {
+# Hmm, shows previous host in error message....
+        "Could not log in to " {send_user "Got error message OK, resend host\n"; }
+        eof {send_user "eof detected waiting for error message\n"; exit 98}
+        timeout {send_user "timeout detected waiting for error message\n"; exit 99}
+}
+expect {
+        "Enter IP address for OM_SERVICES host" {send_user "sending omsrvs host\n"; send "omsrvs\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending omsrvs password\n"; send "shroot\r" }
+        eof {send_user "eof detected waiting for root password prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password prompt\n"; exit 99}
+}
+expect {
+        "Enter IP address for OM_SERVICES host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for OM_SERVICES hosts - 2 entries" {send_user "got correct list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of OM_SERVICES hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+# Now for normal NEDSS host
+expect {
+        "Enter IP address for NEDSS host" {send_user "sending nedss host\n"; send "nedss\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending nedss password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for NEDSS host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for NEDSS hosts - 1 entries" {send_user "got correct list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of NEDSS hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+# And a normal EBAS host
+expect {
+        "Enter IP address for EBAS host" {send_user "sending ebas host\n"; send "ebas\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending ebas password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for EBAS host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for EBAS hosts - 1 entries" {send_user "got correct list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of EBAS hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+# Now PEER host, but initially reject the list
+expect {
+        "Enter IP address for PEER host" {send_user "sending peer1 host\n"; send "peer1\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending peer1 password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for PEER host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for PEER hosts - 1 entries" {send_user "got correct list but will reject\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of PEER hosts correct" {send_user "reject the list\n"; send "n\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+expect {
+        "List of PEER hosts cleared" {send_user "got the error message\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Enter IP address for PEER host" {send_user "sending peer1 host\n"; send "peer1\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending peer1 password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for PEER host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for PEER hosts - 1 entries" {send_user "got correct list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of PEER hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+# For UAS, first enter the wrong type of host
+expect {
+        "Enter IP address for UAS host" {send_user "sending mws host (not a UAS host)\n"; send "mws\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending mws password\n"; send "shroot\r"; exp_continue }
+        "ERROR" {send_user "got the error message\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter IP address for UAS host" {send_user "sending uas1 host\n"; send "uas1\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending uas1 password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for UAS host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for UAS hosts - 1 entries" {send_user "got correct list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of UAS hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+# No OMBS hosts - first invalid host name, then no name
+# OMBS not currently supported in interactive mode, so don't try to do this.........
+#expect {
+#        "Enter IP address for OMBS host" {send_user "sending unknown ombs host\n"; send "notombs\r" }
+#        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+#        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+#}
+#expect {
+#        "ERROR" {send_user "sgot error message\n"; }
+#        eof {send_user "eof detected waiting for error message\n"; exit 98}
+#        timeout {send_user "timeout detected waiting for error message\n"; exit 99}
+#}
+#expect {
+#        "Enter IP address for OMBS host" {send_user "sending blank host\n"; send "\r" }
+#        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+#        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+#}
+#expect {
+#        "No IP addresses entered for OMBS hosts" {send_user "got correct list\n"; }
+#        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+#        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+#}
+#expect {
+#        "Is this list of OMBS hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+#        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+#        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+#}
+
+# And finally the ADMIN server
+expect {
+        "Enter IP address for ADMIN host" {send_user "sending ossmaster host\n"; send "ossmaster\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for host IP prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user:" {send_user "sending ossmaster password\n"; send "shroot\r"; exp_continue }
+        "Enter IP address for ADMIN host" {send_user "sending blank host\n"; send "\r" }
+        eof {send_user "eof detected waiting for host IP prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password/host IP prompt\n"; exit 99}
+}
+expect {
+        "List of IP addresses for ADMIN hosts - 1 entries" {send_user "got correct list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this list of ADMIN hosts correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+# Get the full list of servers and accept them
+expect {
+        "HOST_ARRAY contents - 9 entries" {send_user "got correct full host list\n"; }
+        eof {send_user "eof detected waiting for start of host list\n"; exit 98}
+        timeout {send_user "timeout detected waiting for start of host list\n"; exit 99}
+}
+expect {
+        "Is this host list correct" {send_user "sending list is OK\n"; send "y\r" }
+        eof {send_user "eof detected waiting for list acceptance prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for list acceptance prompt\n"; exit 99}
+}
+
+# No more prompts, so give it 10 minutes to set up users etc
+set timeout 600
+
+# No loop required - we are now waiting for the process to complete
+expect {
+        eof {send_user "eof detected as expected\n"}
+        timeout {send_user "timeout detected waiting for script to finish\n"; exit 99}
+}
+
+catch "wait -i $spawn_id" reason
+# return status code of spawned process
+set retstatus [ lindex $reason 3 ]
+send_user "returning status code of spawned process: $retstatus\n"
+exit [ lindex $reason 3 ]

@@ -1,0 +1,115 @@
+#
+# Functions for node hardening test cases
+#
+
+#
+# Function to install node hardening package from OM media location on MWS
+#
+
+NH_install_pkg () {
+	echo "Installing node hardening on server $(hostname)"
+	local l_jass_pkgfilename=JASScustm.pkg
+	local l_jass_pkgname=${l_jass_pkgfilename%.pkg}
+	local l_jass_pkg_adm=package.adm
+	local l_mws_jass_pkg_path=/export/SW_LOCATION/OM_MEDIA/OSSRC_$CI_OM_RELEASE/$CI_OM_SHIPMENT/om/security/$l_jass_pkgfilename
+	local l_local_pkg_path=/var/tmp/$l_jass_pkgfilename
+	local l_local_pkg_adm_path=${AT_ROOT}/build_scripts/infrastructure/etc/$l_jass_pkg_adm
+
+	echo "Copying $l_jass_pkgname from MWS"
+	if [ -f /net/${CI_MWS_HOSTNAME}/$l_mws_jass_pkg_path ]; then
+		/bin/cp -f /net/${CI_MWS_HOSTNAME}/$l_mws_jass_pkg_path $l_local_pkg_path ||  {
+			echo "Error failed to copy $l_jass_pkgname to local server"
+			return 1
+		}
+	else
+		$EXPECT $AT_BIN/ssh_setup2.sh scp "root@$CI_MWS_HOSTNAME:$l_mws_jass_pkg_path $l_local_pkg_path" $CI_MWS_ROOTPW || {
+			echo "Error failed to copy $l_jass_pkgname to local server"
+			return 1
+		}
+
+	fi
+	# remove old package if it exists
+	/bin/pkginfo | grep -w $l_jass_pkgname > /dev/null && {
+		echo "Removing existing JASS package $l_jass_pkgname"
+		/usr/sbin/pkgrm -n -a $l_local_pkg_adm_path $l_jass_pkgname
+	}
+	# add new package
+	echo "New package details.."
+	/bin/pkginfo -l -d $l_local_pkg_path
+	echo "Installing new package"
+	/usr/sbin/pkgadd -n -a $l_local_pkg_adm_path -d $l_local_pkg_path all || {
+		echo "Failed to install new package"
+		return 1
+	}
+	return 0
+	
+
+
+}
+
+#
+# Function to check node hardening package is installed on server
+#
+NH_check_pkg_installed() {
+	echo "Check node hardening package is installed on $(hostname)"
+	local l_jass_pkgfilename=JASScustm.pkg
+	local l_jass_pkgname=${l_jass_pkgfilename%.pkg}
+	/bin/pkginfo | grep -w $l_jass_pkgname > /dev/null 
+	retcode=$?
+	return $retcode
+}
+
+
+#
+# Function to apply node hardening on server
+#
+NH_apply_NH () {
+	local l_nh_apply_command=/opt/SUNWjass/bin/eric-hardening-apply.sh
+	echo "Apply node hardening on server $(hostname)"
+	/bin/yes | $l_nh_apply_command
+	retcode=$?
+	return $retcode
+}
+
+#
+# Function to check for warnings/errors in latest logs
+#
+NH_check_latest_log() {
+	echo "Checking install logs for errors|warnings  on server $(hostname)"
+	local l_log_dir=/var/opt/SUNWjass/run
+	local l_jass_logfilename=jass-install-log.txt
+	local l_latest_jass_log_dir=$( ls -lt $l_log_dir | awk '/^d/ {print $9}' | head -1  )
+	local l_jass_logfilepath=$l_log_dir/$l_latest_jass_log_dir/$l_jass_logfilename
+	if [ -s "$l_jass_logfilepath" ]; then
+		numerrorwarns=$(egrep -i '(error|warning)' $l_jass_logfilepath | egrep -v '(There were  Errors|There were  Warnings)' | wc -l)
+		if [ $numerrorwarns -gt 0 ]; then
+			echo "Error - log file $l_jass_logfilepath= contains unexpected errors or warnings"
+			return 1
+		fi
+	else
+		echo "Error - unable to find install logfile \"$l_jass_logfilepath=\""
+		return 1
+	fi
+	return 0
+
+}
+
+#
+# Function to check coreadm settings post-hardening
+#
+
+NH_check_coreadm_posthard() {
+	echo "Checking coreadm settings after hardening on server $(hostname)"
+	get_inst_type || return 1
+	local l_postcorefile=${AT_ROOT}/build_scripts/infrastructure/etc/hardening/coreadm.${CI_INST_TYPE}.posthard
+	[ ! -s $l_postcorefile ] && {
+		echo "Error - cannot find comparision coreadm file"
+		return 1
+	}
+	/bin/coreadm > /tmp/coreadm.$$ 
+	cmp -s /tmp/coreadm.$$ $l_postcorefile  || {
+		echo "Error - coreadm settings are not as expected on $( hostname )"
+		return 1
+	}
+	return 0
+}

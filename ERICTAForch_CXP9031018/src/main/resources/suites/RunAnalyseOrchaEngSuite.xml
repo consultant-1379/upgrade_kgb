@@ -1,0 +1,10 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="RunAnalyseOrchaEngineSuite">
+    <test name="RunAnalyseOrchaEngineSuite">
+        <classes>
+            <class name="com.ericsson.oss.orchestrator.test.cases.GenericOrchaEngineInvokeScenario" />
+            <class name="com.ericsson.oss.orchestrator.test.cases.AnalyseWorkflowResultsTest" />
+        </classes>
+    </test>
+</suite>
+

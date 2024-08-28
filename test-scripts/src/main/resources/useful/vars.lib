@@ -1,0 +1,2 @@
+alias atcominf='/var/tmp/platform_taf/harness/bin/atcominf.bsh'
+ENV="/var/tmp/platform_taf/build_scripts/infrastructure/etc/env"

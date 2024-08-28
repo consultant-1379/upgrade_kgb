@@ -1,0 +1,210 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/04/2012    edavmax         First version
+
+usage() {
+cat << EOF
+
+Usage:  ${SCRIPTNAME} [-h] -c <configtype> -i <insttype>
+
+This script is called by the script ci_job.bsh script. It performs the following actions:
+
+-Installs test harness software on specified server 
+
+
+EOF
+
+return 0
+
+}
+# Check that variables are set
+errorCheck() {
+	if [ ! -s $G_RPACKAGE_TGZFILE ]; then
+		echo "${G_SCRIPTNAME}: ${LINENO}:Error - failed to find file $G_RPACKAGE_TGZFILE or file empty"
+		return 1
+	fi
+	# not using G_CONFIGTYPE yet
+	if [ -z "$G_CONFIGTYPE" ]; then
+		echo "${G_SCRIPTNAME}: ${LINENO}:Error config type of server not specified"
+		return 1
+	fi
+	# not using G_INST_TYPE yet
+	if [ -z "$G_INST_TYPE" ]; then
+		echo "${G_SCRIPTNAME}: ${LINENO}:Error inst type of server not specified"
+		return 1
+	fi
+	if [ ! -d "$G_REMOTE_TAF_LOCATION" ]; then
+		echo "${G_SCRIPTNAME}: ${LINENO}:Error - $G_REMOTE_TAF_LOCATION does not exist"
+		return 1
+	fi
+
+} 
+
+prepSshSetupScript() {
+
+	# awkward way to get this script working on solaris. i.e. 'expect' has different path
+	sed -e 's/\/app\/expect\/5\.43\/bin\/expect/\/usr\/local\/bin\/expect/g' $G_SSH_SETUPSCRIPT > ${G_SSH_SETUPSCRIPT}_tmp && mv ${G_SSH_SETUPSCRIPT}_tmp $G_SSH_SETUPSCRIPT
+	if [ $? -ne 0 ]; then
+		echo ${G_SCRIPTNAME}: ${LINENO}:Error - failed to update $G_SSH_SETUPSCRIPT
+		return 1
+	fi
+	chmod +x $G_SSH_SETUPSCRIPT
+	if [ ! -f /usr/local/bin/expect ]; then
+		echo "Error - /usr/local/bin/expect does not exist"
+		return 1
+	fi
+	return 0
+}
+getPreinirateFile() {
+
+	# copy preinirate_ and addcluster_ files to server
+	# replaced by scp as it doesnt work for x86 cp /net/159.107.220.55/JUMP/MWS_add_client_files/preinirate_${HOSTNAME} ${G_REMOTE_TAF_LOCATION}/preinirate_${HOSTNAME}_tmp
+	$G_SSH_SETUPSCRIPT scp "root@${G_MWS_IP}:$G_MWS_PREINIRATE_DIR/preinirate_${HOSTNAME} ${G_REMOTE_TAF_LOCATION}/preinirate_${HOSTNAME}_tmp" $G_MWS_PW > /dev/null 2>&1 
+        if [ $? -ne 0 ]; then
+		echo "${G_SCRIPTNAME}: ${LINENO}:Warning - failed to copy preinirate_${HOSTNAME} to $( hostname )"
+		return 0 
+	fi
+	# replace ; with # and also replace ^[ with #. e.g. [preinirate] to #preinirate  so that we can source this file..
+	sed -e 's/[\^;\^[]/#/g' $G_REMOTE_TAF_LOCATION/preinirate_${HOSTNAME}_tmp > $G_REMOTE_TAF_LOCATION/preinirate_${HOSTNAME} && rm  $G_REMOTE_TAF_LOCATION/preinirate_${HOSTNAME}_tmp
+	return 0
+
+}
+getAddClusterNodeFile() {
+	# if cluster then get config file to add second node
+	 #which hastatus | grep -v "no hastatus in" #RB chaged cmd to below line
+	ls /opt/VRTS/bin/hastatus > /dev/null 2>&1
+	if [ $? -ne 0 ]; then 
+	 	echo -e "No hastatus command found."
+		echo "Path: $PATH"
+	fi
+		# this is a HA Cluster so copy addcluster_$admin2 file
+		# First determine hostname of admin2.
+		echo -e "Attempting to collect add_cluster_node_to_${HOSTNAME} file"
+		$G_SSH_SETUPSCRIPT scp "root@${G_MWS_IP}:$G_MWS_PREINIRATE_DIR/add_cluster_node_to_${HOSTNAME} ${G_REMOTE_TAF_LOCATION}/add_cluster_node_to_${HOSTNAME}" $G_MWS_PW #> /dev/null 2>&1 
+		if [ $? -ne 0 ]; then
+                	echo "${G_SCRIPTNAME}: ${LINENO}:Warning - failed to copy add_cluster_node_to_${HOSTNAME} to $( hostname ) possibly due to non HA cluster target."
+                	return 0
+        	fi
+		return 0
+	return 0
+}
+getArneXmlFiles() {
+        # copy arne xml files and addcluster_ files to server
+        # replaced by scp as it doesnt work for x86 cp /net/159.107.220.55/JUMP/MWS_add_client_files/preinirate_${HOSTNAME} ${G_REMOTE_TAF_LOCATION}/preinirate_${HOSTNAME}_tmp
+        $G_SSH_SETUPSCRIPT scp "root@${G_MWS_IP}:$G_MWS_PREINIRATE_DIR/*${HOSTNAME}_*.xml ${G_REMOTE_TAF_LOCATION}/" $G_MWS_PW > /dev/null 2>&1
+        if [ $? -ne 0 ]; then
+                echo "${G_SCRIPTNAME}: ${LINENO}:Warning - failed to copy arne files for $( hostname )"
+                return 0 #not currently going to fail CI JOB if arne files don't exist
+        fi
+	return 0
+
+}
+
+# 
+unpackTestHarness() {
+	# unpack platform test harness 
+	cd $G_REMOTE_TAF_LOCATION
+	echo "${G_SCRIPTNAME}: ${LINENO}:Unpacking platform test harness tarball on $( hostname )"
+	#	gzip -cd $G_COMINF_SOFTWARE_LOCATION/$G_COMINF_TEST_HARNESS_TGZ | /usr/sfw/bin/gtar xvf - > /dev/null  
+	#gzip -cd $G_RPACKAGE_TGZFILE | tar xvf - > /dev/null  
+	# eoLikil 13/05 if OS is Solaris we need to use GTAR instead of tar
+        OS=`uname`
+        if [ "${OS}" = "SunOS" ] ; then
+           OS=Solaris
+           TAR_COMMAND="/usr/sfw/bin/gtar xvf - "
+        else
+           TAR_COMMAND="tar xvf - "
+        fi
+        gzip -cd $G_RPACKAGE_TGZFILE | $TAR_COMMAND > /dev/null
+
+           
+	if [ $? -ne 0 ]; then
+		echo "${G_SCRIPTNAME}: ${LINENO}:Error - failed to unpack $G_RPACKAGE_TGZFILE on $( hostname )"
+		return 1
+	fi
+	return 0
+}
+#MAIN
+G_PACKAGE_TGZFILENAME=platform_test_harness.tar.gz
+G_SCRIPTNAME=$(/bin/basename $0)
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_TMP_DIR=/var/tmp
+G_MWS_IP=159.107.220.55
+G_MWS_PW=beepbeep
+G_MWS_PREINIRATE_DIR=/JUMP/MWS_add_client_files
+G_REMOTE_TAF_LOCATION=$G_TMP_DIR/platform_taf
+G_RPACKAGE_TGZFILE=$G_REMOTE_TAF_LOCATION/$G_PACKAGE_TGZFILENAME
+G_PLATFORM=$( uname -a )
+IST_RUN=/opt/ericsson/sck/bin/ist_run
+G_SSH_SETUPSCRIPT=${G_REMOTE_TAF_LOCATION}/test_ssh_setup.exp
+
+
+while getopts "h:c:i:" opt; do
+
+	case $opt in
+		h)
+			usage
+			exit 0
+		;;
+		c)
+			G_CONFIGTYPE="$OPTARG"
+		;;
+		i)
+			G_INST_TYPE="$OPTARG"
+		;;
+		?)      # Print usage and exit error
+			printf "${SCRIPTNAME}: ERROR: Invalid option: '${OPTARG}'.\n"
+			usage
+			exit 1
+		;;
+
+	esac
+done
+
+errorCheck || {
+                echo "${G_SCRIPTNAME} ${LINENO}: Error "
+                exit 1
+        }
+
+unpackTestHarness || {
+                echo "${G_SCRIPTNAME} ${LINENO}: Error "
+                exit 1
+        }
+prepSshSetupScript|| {
+                echo "${G_SCRIPTNAME} ${LINENO}: Error "
+                exit 1
+        }
+
+getPreinirateFile || {
+                echo "${G_SCRIPTNAME} ${LINENO}: Error "
+                exit 1
+        }
+getAddClusterNodeFile || {
+                echo "${G_SCRIPTNAME} ${LINENO}: Error "
+                exit 1
+        }
+
+getArneXmlFiles || {
+                echo "${G_SCRIPTNAME} ${LINENO}: Error "
+                exit 1
+        }
+		
+exit 0
+
+
+
+

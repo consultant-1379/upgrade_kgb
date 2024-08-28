@@ -1,0 +1,1650 @@
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+#
+#
+#   Provides a set of library functions related to LVM for SMRS tests
+#   Functions provided:
+#      CHECK_LVG_EXISTS <group>
+#      CHECK_LV_EXISTS <group> <volume>
+#      CHECK_NUM_LV <group> <no>
+#      CHECK_MOUNT_EXISTS <mountname>
+#      CHECK_REMOTE_MOUNT_EXISTS <remoteserv> <mountname>
+#      CHECK_REMOTE_LV_EXISTS <remoteserv> <lvname>
+#      REMOVE_SMRS_USER
+#	   SMRS_USER_EXISTS
+#      CLEANUP_SMRS
+#	   CLEANUP_NEDSS
+#	   CLEANUP_SMRS_SLAVE
+#     	   CLEANUP_SMRS_OFFLINE
+#      TEST_SOLARIS
+#	   SERVICE_ENABLED
+#      PREPARE_SMRS
+#      CHECK_DIRECTORY
+#      CHECK_GRAN_FILESYSTEM
+#      CHECK_LRAN_FILESYSTEM
+#      CHECK_WRAN_FILESYSTEM
+#      CHECK_CORE_FILESYSTEM
+#	   CHECK_LRAN_USERS
+#	   CHECK_WRAN_USERS
+#	   CHECK_NO_WRAN_USERS
+#	   CHECK_NO_LRAN_USERS
+# 	   CHECK_SMO_FTP_SERVICE_MASTER
+#      CHECK_SLAVE_USERS
+#      CHECK_SLAVE_XML_FILES
+#      CHECK_SFTP
+#      CHECK_SFTP_AIF
+#      DELETE_AIF
+#      SMLOG_MARK_STATUS
+#      SMLOG_SEARCH_FROM_MARK
+#	   CHECK_AIF
+#      CHECK_SLAVE_EXISTS
+#      GET_SLAVE_SUBENTRY <slave_name> <type>
+
+# Revision History
+# 06/07/2012	v1.0	xbahzam	 Initial version
+# 10/07/2012	v1.1	xamamcg	 Check for mounted filesystems
+
+# GLOBAL VARIABLES
+G_SMRS_CFG_OSS_MASTER=/etc/opt/ericsson/nms_bismrs_mc/smrs_config
+
+
+
+
+
+
+### Function: CHECK_LVG_EXISTS ###
+#
+# check that A given LVG (Logical Volume Group) exists
+#
+# Arguments:
+#    gname group name
+#
+# Return Values:
+
+# 0 if the LVG exists, non-zero if LVG does not exist
+
+function CHECK_LVG_EXISTS(){
+	lvm vgdisplay| awk '/VG Name/ {if ($3 ~ /^'${1}'$/) {exit 0} else {exit 1}}'
+	return $?
+
+}
+
+### Function: CHECK_LV_EXISTS ###
+#
+# check that A given LV (Logical Volume ) in a VGexists
+#
+# Arguments:
+#    gname  - group name
+#    lvname - logical volume name
+#
+# Return Values:
+
+# 0 if the LV exists
+# 1 if the LVG does not exist
+# 2 if the LV does not exist in the LVG
+
+function CHECK_LV_EXISTS(){
+	CHECK_LVG_EXISTS $1 || return 1
+	# TODO - ow do we check LVs?
+	lvm lvdisplay| awk '/LV Name/ {print $3}'|grep $2 >/dev/null
+	return $?
+
+}
+
+### Function: CHECK_NUM_LV ###
+#
+# check if given number of VG exists
+#
+# Arguments:
+#    1 name of VG
+#    2 expected number of LVs in VG
+#
+# Return Values:
+
+# 0 if number of given LVs found, non-zero if not found
+# TODO - decide whether this is talking about VGs, or LVs within those VGs
+
+function CHECK_NUM_LV(){
+	CHECK_LVG_EXISTS $1 || return 1
+	NUM_LV=$(lvm vgdisplay $1| grep -c 'LV Name')
+	[ "$NUM_LV" -eq "$2" ] || { echo Expected number of LVs "(${2})" were not found in VG ${1}. Number of LVs found was ${NUM_LV}; return 1; }
+
+	return 0
+}
+
+#variables
+#declare NUM_VG
+
+### Function: CHECK_MOUNT_EXISTS ###
+#
+# check that A given mount exists
+#
+# Arguments:
+#    $1 Filesystem
+#
+# Return Values:
+# 0 if the filesystem is mounted, non-zero if its not
+function CHECK_MOUNT_EXISTS(){
+	mount | grep "^$1 "&>/dev/null
+	return $?
+
+}
+
+### Function: CHECK_REMOTE_MOUNT_EXISTS ###
+#
+# check that A given mount exists on remote box
+#
+# Arguments:
+#	 $1 Remote box (assume passwordless ssh set up)
+#	      preceed with an "=" to ssh to smrs_master first
+#    $2 Filesystem
+#
+# Return Values:
+# 0 if the filesystem is mounted, non-zero if its not
+function CHECK_REMOTE_MOUNT_EXISTS(){
+	# ssh to smrs_master first, to smrs_slave if hostname is preceeded
+	# with an "="
+	if [ "${1:0:1}" = = ]; then
+		ssh smrs_master "ssh ${1:1} mount|grep \" $2 \""&>/dev/null
+	else
+		ssh $1 mount|grep " $2 "&>/dev/null
+	fi
+	return $?
+
+}
+
+### Function: CHECK_REMOTE_LV_EXISTS ###
+#
+# check that A given LV exists on remote box
+#
+# Arguments:
+#	 $1 Remote box (assume passwordless ssh set up)
+#    $2 lvname
+#
+# Return Values:
+# 0 if the filesystem is mounted, non-zero if its not
+function CHECK_REMOTE_LV_EXISTS(){
+	ssh $1 lvs|grep "$2  *smrs_vg" || { echo "LV $2 can't be found $?"; return 1; }
+ 
+}
+
+### Function: REMOVE_SMRS_USER ###
+#
+# Remove SMRS account on OSS Master and O&M primary
+#
+# Arguments:
+#	$1 Account to delete
+#	$2 O&M primary to use
+#
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+# 1 if parameters invalid (must be 2 of them)
+# 2 if local user not deleted
+# 3 if remote user not deleted
+# 4 if neither deleted
+
+function REMOVE_SMRS_USER(){
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+
+	retval=0
+	
+	# Delete the SMRS accounts on the OSS master (local)
+	POSIX_REMOVE_USER $1 || { echo "Failed to delete $1 locally: $?"; retval=2; }
+
+	# Delete the SMRS accounts on the OM Primary (remote)
+	POSIX_REMOVE_USER $1 $2 || { echo "Failed to delete $2 remotely: $?"; ((retval=3+retval/2)); }
+	# only works if retval is 0 if local user deleted, or 2 if not
+
+	return $retval
+}
+
+
+### Function: CLEANUP_SMRS_OFFLINE ###
+#
+# Cleans up offline SMRS master server
+#
+# Arguments:
+#	$1 offline SMRS master server's IP to use
+#	$2 online SMRS smaster erver's IP to use
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+
+function CLEANUP_SMRS_OFFLINE(){
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME $#"; return 1; }
+
+	echo -e "\n\n Cleaning up OFFLINE SMRS MASTER $1 \n\n"
+
+	echo "Removing SMRS users ..."
+	ssh $1  "grep -v 'smo\|smrs\|bsim\|ldapadm' /etc/passwd >/tmp/passwd.tmp"
+	ssh $1 "cat /tmp/passwd.tmp >/etc/passwd; rm -f /tmp/passwd.tmp"
+
+	echo "Removing cron jobs on offline smrs master..."
+	ssh $1 'crontab -r'
+
+	echo "Unmounting SMRS mounts..."
+
+	# Remove nas mounts if BLADE	
+	ssh $1 '/opt/ericsson/smrs/bin/configure_mounts.sh -a umount'
+
+	#Remove VG if NON BLADE
+	ssh $1 '>| /etc/exports'
+	ssh $1 'exportfs -r'
+	ssh $1 'umount /export/GRAN'
+	ssh $1 'umount /export/CORE'
+	ssh $1 'umount /export/LRAN'
+	ssh $1 'umount /export/WRAN'
+	ssh $1 'vgremove -f smrs_vg'
+	
+	# Unmount filesystems on the OSS master, disable SMRS_NFS service
+	svcadm disable smrs_nfs 
+	
+	echo "Delete filesystems in /etc/fstab"
+	ssh $1 'grep -vw "/export/CORE" /etc/fstab > ./fstab.tmp'
+	ssh $1 'grep -vw "/export/LRAN" ./fstab.tmp > ./fstab.tmp2'
+	ssh $1 'grep -vw "/export/GRAN" ./fstab.tmp2 > ./fstab.tmp'
+	ssh $1 'grep -vw "/export/WRAN" ./fstab.tmp > ./fstab.tmp2'
+	# Use cat to preseve selinux permissions
+	ssh $1 'cat ./fstab.tmp2 > /etc/fstab'
+	
+
+
+	echo "Removing VIP on online smrs master ..."
+	ssh $2 'rm -f /etc/sysconfig/network-scripts/ifcfg-eth0:1; service network restart'
+
+
+	echo "Cleaning up /etc/hosts file on offline SMRS master..."
+	ssh $1 "grep -v \"nas1\|$(hostname)\" /etc/hosts" >/tmp/hosts.tmp
+	sed s/smrs_master// /tmp/hosts.tmp |awk 'NF > 1'| ssh $1 "cat >/etc/hosts"
+	rm -f /tmp/hosts.tmp
+
+	echo "Removing OSS Master ssh authorized key on offline smrs master ..."
+	ssh $1 'grep -vw "root@'`hostname`'" /root/.ssh/authorized_keys > ./authorized.tmp'
+	ssh $1 'cat ./authorized.tmp > /root/.ssh/authorized_keys; rm -f ./authorized.tmp'
+
+	return 0
+
+}
+
+
+### Function: CLEANUP_SMRS ###
+#
+# Cleans up SMRS on OSS Master and O&M primary
+#
+# Arguments:
+#	$1 O&M primary to use
+#   $2 OSS alias that was used
+#   $3 WRAN enabled (y/n)
+#   $4 LRAN enabled (y/n)
+#   $5 GRAN enabled (y/n)
+#   $6 CORE enabled (y/n)
+#
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+
+function CLEANUP_SMRS(){
+	[ $# -ne 6 ] && { echo "Invalid parameters to $FUNCNAME $#"; return 1; }
+	retval=0
+	
+	# Delete the LRAN SMRS accounts on the OSS master and OM primary
+	if [ "$4" == "y" ]; then
+		REMOVE_SMRS_USER l-smoconfig-$2 $1 || { echo "Failed to delete l-smoconfig: $?"; retval=2; }
+		REMOVE_SMRS_USER l-smoswstore-$2 $1 || { echo "Failed to delete l-smoswstore: $?"; retval=3; }
+		REMOVE_SMRS_USER l-smokeystore-$2 $1 || { echo "Failed to delete l-smokeystore: $?"; retval=4; }
+		REMOVE_SMRS_USER l-smobackup-$2 $1 || { echo "Failed to delete l-smobackup: $?"; retval=5; }
+	fi
+	# Delete the WRAN SMRS accounts on the OSS master and OM primary
+	if [ "$3" == "y" ]; then
+		REMOVE_SMRS_USER smo-config-$2 $1 || { echo "Failed to delete smo-config: $?"; retval=6; }
+		REMOVE_SMRS_USER smo-keystore-$2 $1 || { echo "Failed to delete smo-keystore: $?"; retval=7; }
+		REMOVE_SMRS_USER smo-backup-$2 $1 || { echo "Failed to delete smo-backup: $?"; retval=8; }
+		REMOVE_SMRS_USER smo-swstore-$2 $1 || { echo "Failed to delete smo-swstore: $?"; retval=9; }
+	fi
+	# Delete smrsuser user on OM Primary and its home directory
+	ssh $1 "userdel -r smrsuser" || { echo "Failed to delete smrsuser: $?"; retval=10; }
+
+	# Delete gransmo user on OSS master and OM Primary
+	if [ "$5" == "y" ]; then
+		REMOVE_SMRS_USER gransmo $1 || { echo "Failed to delete gransmo user: $?"; retval=11; }
+	fi
+	# Delete coresmo user on OSS master and OM Primary
+	if [ "$6" == "y" ]; then
+		REMOVE_SMRS_USER coresmo $1 || { echo "Failed to delete coresmo user: $?"; retval=12; }
+	fi
+	
+	echo "$FUNCNAME: Unmount filesystems on the OM Primary"
+	ssh $1 '/opt/ericsson/smrs/bin/configure_mounts.sh -a umount' || { echo "Failed to unmount on O&M primary: $?"; retval=13; }
+
+	# Remove VG if OM primary is NON BLADE
+	ssh $1 '>| /etc/exports'
+	ssh $1 'exportfs -r'
+	ssh $1 'umount /export/GRAN'
+	ssh $1 'umount /export/CORE'
+	ssh $1 'umount /export/LRAN'
+	ssh $1 'umount /export/WRAN'
+	ssh $1 'vgremove -f smrs_vg'
+	
+	# Unmount filesystems on the OSS master, disable SMRS_NFS service
+	svcadm disable smrs_nfs || { echo "Failed to unmount on OSS master: $?"; retval=14; }
+	
+	# Delete filesystems in /etc/fstab
+	ssh $1 'grep -vw "/export/CORE" /etc/fstab > ./fstab.tmp'
+	ssh $1 'grep -vw "/export/LRAN" ./fstab.tmp > ./fstab.tmp2'
+	ssh $1 'grep -vw "/export/GRAN" ./fstab.tmp2 > ./fstab.tmp'
+	ssh $1 'grep -vw "/export/WRAN" ./fstab.tmp > ./fstab.tmp2'
+	# Use cat to preseve selinux permissions
+	ssh $1 'cat ./fstab.tmp2 > /etc/fstab'
+	
+
+	# Delete smrs_config on OM primary
+	ssh $1 'rm -f /opt/ericsson/smrs/etc/smrs_config' || { echo "Failed to delete smrs_config: $?"; retval=15; }
+
+	# Remove XML files for FTPServices
+	rm -f /var/opt/ericsson/arne/FTPServices/*
+
+	# Put /etc/inet/hosts back
+	if [ -r /etc/inet/hosts.prepare ]; then
+		echo "Restoring /etc/hosts to "
+		cat /etc/inet/hosts.prepare
+		cp /etc/inet/hosts /etc/inet/hosts.precleanup
+		# use cat to preserve selinux permissions
+		cat /etc/inet/hosts.prepare > /etc/inet/hosts
+		rm -f /etc/inet/hosts.prepare
+	fi
+	# Second double check to get rid of smrs_master if in there
+	grep -w "smrs_master" /etc/inet/hosts
+	if [ $? -eq 0 ]; then
+		echo "Deleting smrs_master entry in /etc/inet/hosts"
+		grep -vw "smrs_master" /etc/inet/hosts > ./ihosts.tmp
+		# Use cat to preseve selinux permissions
+		cat ./ihosts.tmp > /etc/inet/hosts
+		rm -f ./ihosts.tmp
+	fi
+
+	# Remove nas1 and nedss1 entries in /etc/hosts on OM Primary if they exist
+	ssh $1 'grep -w "nas1$" /etc/hosts'
+	if [ $? -eq 0 ]; then
+		echo "Deleting nas1 entry in /etc/hosts on $1"
+		ssh $1 'grep -vw "nas1$" /etc/hosts > ./hosts.tmp'
+		# Use cat to preseve selinux permissions
+		ssh $1 'cat ./hosts.tmp > /etc/hosts'
+		ssh $1 'rm -f ./hosts.tmp'
+	fi
+	ssh $1 'grep -w "nedss1$" /etc/hosts'
+	if [ $? -eq 0 ]; then
+		echo "Deleting nedss1 entry in /etc/hosts on $1"
+		ssh $1 'grep -vw "nedss1$" /etc/hosts > ./hosts.tmp'
+		ssh $1 'cat ./hosts.tmp > /etc/hosts'
+		ssh $1 'rm -f ./hosts.tmp'
+	fi
+
+	# Remove the entry for oss hostname in the /root/.ssh/authorized_keys file on OM Primary
+	# Entry I think is the value given for OSS_MASTERSERVICE_IP in the config.ini
+	ssh $1 'grep -w "root@'`hostname`'" /root/.ssh/authorized_keys'
+	if [ $? -eq 0 ]; then
+		echo "Deleting OSS master's authorized entry on OM Primary"
+		ssh $1 'grep -vw "root@'`hostname`'" /root/.ssh/authorized_keys > ./authorized.tmp'
+		ssh $1 'cat ./authorized.tmp > /root/.ssh/authorized_keys; rm -f ./authorized.tmp'
+	fi
+
+	return $retval
+
+}
+
+### Function TEST_SOLARIS
+#
+# Tests that Solaris is installed
+#
+# Arguments:
+# None
+#
+# Return Values:
+# 1     OS Not Solaris
+# 0     All OK
+#
+TEST_SOLARIS()
+{
+	#Check operating system type
+	osversion=`uname -s`
+	if [ "$osversion" != "SunOS" ]; then
+		echo "OS not SunOS $osversion"
+		return 1
+	fi
+	return 0
+}
+
+### Function SERVICE_ENABLED
+#
+# Tests that particular service is installed
+#
+# Arguments:
+# $1 Service to test if enabled
+#
+# Return Values:
+# 255     Other error
+# 3     Not Solaris
+# 2     Disabled
+# 1     Offline
+# 0     Onlne
+#
+SERVICE_ENABLED()
+{
+	#Check operating system type
+	TEST_SOLARIS >/dev/null && {
+		sname=$1
+		state=$(svcs $sname|awk "/${sname}/{print \$1}")
+		case $state in
+		online)		return 0;;
+		offline)	return 1;;
+		disabled)	return 2;;
+		*)			return 255;;
+		esac
+	}
+	return 3
+}
+
+### Function: SMRS_USER_EXISTS ###
+#
+# Create SMRS account on OSS Master and O&M primary
+#
+# Arguments:
+#	$1 Account expected
+#	$2 O&M primary to use
+#
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+# 1 if parameters invalid (must be 2 of them)
+# 2 if local user does not exist
+# 3 if remote user does not exist
+# 4 if neither exists
+
+function SMRS_USER_EXISTS(){
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+
+	retval=0
+	
+	# Check the SMRS accounts on the OSS master (local)
+	POSIX_USER_EXISTS $1 || { echo "Failed to check $1 locally: $?"; retval=2; }
+
+	# Check the SMRS accounts on the OSS master (local)
+	POSIX_REMOTE_USER_EXISTS $1 $2 || { echo "Failed to check $1 remotely: $?"; ((retval=3+retval/2)); }
+	# only works if retval is 0 if local user deleted, or 2 if not
+
+	return $retval
+}
+
+### Function: PREPARE_SMRS ###
+#
+#  Prepares environment before running SMRS tests, cleans up the ONRM
+#
+# Arguments:
+# 	 None
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+
+function PREPARE_SMRS(){
+
+	# offline arne
+	#/opt/ericsson/nms_cif_sm/bin/smtool -offline ARNEServer MAF ONRM_CS -reason=other -reasontext="reason"
+	#tmpret=$?
+	#[ $tmpret -ne 0 ] && { echo "Failed to offline ARNE $tmpret"; return 1; }
+	#echo "Successfully offlined arne"
+
+	# clean out database
+	#/opt/ericsson/fwSysConf/bin/removeDb.sh
+	#tmpret=$?
+	#Failing to remove might be because its not there, so continue if fail
+	#if [ $tmpret -ne 0 ]; then
+	#	echo "Failed to remove db $tmpret"
+	#else
+	#	echo "Successfuly deleted ONRM database"
+	#fi
+	
+	# re-create database
+	#/opt/ericsson/fwSysConf/bin/createDb.sh
+	#tmpret=$?
+	#[ $tmpret -ne 0 ] && { echo "Failed to create db $tmpret"; return 3; }
+	#echo "Successfully re-created db"
+
+	# Remove smrs ftpservice from ONRM
+	CSTEST=/opt/ericsson/nms_cif_cs/etc/unsupported/bin/cstest
+	smrs_ftpservices=$($CSTEST -s ONRM_CS lt FtpService | grep SMRS)
+	[ -n "$smrs_ftpservices" ] && {
+		for ftpservice in $smrs_ftpservices; do
+			echo "deleting SMRS Ftpservice $ftpservice"
+			$CSTEST -s ONRM_CS dm $ftpservice || {
+				echo "Error failed to delete service $ftpservice retval $?"
+			}
+		done
+	}
+
+	# online arne
+	#/opt/ericsson/nms_cif_sm/bin/smtool -online ARNEServer MAF ONRM_CS
+	#tmpret=$?
+	#[ $tmpret -ne 0 ] && { echo "Failed to online ARNE $tmpret"; return 4; }
+	#echo "Successfully onlined arne"
+
+	# Take copy of /etc/hosts and /etc/inet/hosts
+	cp /etc/inet/hosts /etc/inet/hosts.prepare
+	echo "Stored /etc/inet/hosts"
+	cat /etc/inet/hosts.prepare
+
+	return 0
+}
+
+### Function: CHECK_DIRECTORY ###
+#
+# Check directory exists on OM Primary with desired owner and ownership
+#
+# Arguments:
+#	$1 Directory to check
+#	$2 Expected owner
+#	$3 Expected group
+#   $4 Expected permissions
+#   $5 Remote box
+#
+# Return Values:
+# 0 if match found, 1 otherwise
+# 1 if not two parameters
+# 2 if canonot stat remote file
+# 3 if permissions of file do not match expected values
+
+function CHECK_DIRECTORY(){
+	[ $# -ne 5 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+	retval=0
+	
+	cmd="stat -c '%a,%U,%G' $1"
+	result=$(ssh $5 $cmd)
+	[ $? -ne 0 ] && { echo "Failed to stat $1 on $5"; return 2; }
+	[ "$result" != "$4,$2,$3" ] && { echo "Wrong owner/permissions got $result"; return 3; }
+	return 0
+}
+
+### Function: CHECK_GRAN_FILESYSTEM ###
+#
+# Check GRAN filesystem exists with expected directories
+#
+# Arguments:
+#   $1 Remote box
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+# 20 for auto mounts incorrect
+# 21-29 if unexpected directory settings
+
+
+function CHECK_GRAN_FILESYSTEM(){
+	[ $# -ne 1 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+	ssh $1 'grep ^/GRAN /etc/auto.smrs | grep /export/GRAN' || { echo "No auto.smrs entry for GRAN"; return 20; }
+	ssh $1 'grep auto.smrs /etc/auto.master' || { echo "No auto.smrs entry in auto.master"; return 20; }
+	CHECK_DIRECTORY /export/GRAN/AIF root nms 775 $1 || { echo "Invalid GRAN/AIF"; return 21; }
+	CHECK_DIRECTORY /export/GRAN/CommonPersistent root nms 775 $1 || { echo "Invalid GRAN/CommonPersistent"; return 22; }
+	#CHECK_DIRECTORY /export/GRAN/CommonPersistent/autobind root aif 770 $1 ||  { echo "Invalid GRAN autobind"; return 23; }
+	# Do not exit for now on autobind ownership as it is not known
+	# CR is raised on this query, see COMLIN-522
+	CHECK_DIRECTORY /export/GRAN/CommonPersistent/autobind root aif 770 $1 ||  { echo "Invalid GRAN autobind";  }
+
+	CHECK_DIRECTORY /export/GRAN/CommonPersistent/BackupCM root nms 775 $1 || { echo "Invalid GRAN BackupCM"; return 24; }
+	CHECK_DIRECTORY /export/GRAN/CommonPersistent/LICENSE root nms 775 $1 || { echo "Invalid GRAN LICENSE"; return 25; }
+	CHECK_DIRECTORY /export/GRAN/CommonPersistent/Software root nms 775 $1 || { echo "Invalid GRAN Software"; return 26; }
+	CHECK_DIRECTORY /export/GRAN/CommonPersistent/Software/STN root aif 770 $1 ||  { echo "Invalid GRAN STN"; return 27; }
+	CHECK_DIRECTORY /export/GRAN/tftp root nms 775 $1 || { echo "Invalid GRAN tftp"; return 28; }
+	CHECK_DIRECTORY /export/GRAN/syslog root nms 775 $1 || { echo "Invalid GRAN syslog"; return 29; }
+	return 0
+}
+
+### Function: CHECK_WRAN_FILESYSTEM ###
+#
+# Check WRAN filesystem exists with expected directories
+#
+# Arguments:
+#   $1 Remote box
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+# 30 invalid auto mounts
+# 31-48 if unexpected directory settings
+
+
+function CHECK_WRAN_FILESYSTEM(){
+	[ $# -ne 1 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+	ssh $1 'grep ^/WRAN /etc/auto.smrs | grep /export/WRAN' || { echo "No auto.smrs entry for WRAN"; return 30; }
+	ssh $1 'grep auto.smrs /etc/auto.master' || { echo "No auto.smrs entry in auto.master"; return 30; }
+	CHECK_DIRECTORY /export/WRAN/AIF root nms 775 $1 || { echo "Invalid WRAN/AIF"; return 30; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent root nms 775 $1 || { echo "Invalid WRAN/CommonPersistent"; return 31; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/configuration root nms 775 $1 || { echo "Invalid WRAN configuration"; return 32; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/Software root nms 775 $1 || { echo "Invalid WRAN software"; return 34; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/Software/RNC root nms 775 $1 || { echo "Invalid WRAN Software RNC"; return 35; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/Software/RNC/Up root nms 775 $1 || { echo "Invalid WRAN Software RNC Up"; return 36; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/Software/RANAG root nms 775 $1 || { echo "Invalid WRAN Software RANAG"; return 37; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/Software/RANAG/Up root nms 775 $1 || { echo "Invalid WRAN Software RANAG Up"; return 38; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/Software/RBS root nms 775 $1 || { echo "Invalid WRAN Software Software RBS"; return 39; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/Software/RBS/Up root nms 775 $1 || { echo "Invalid WRAN Software RBS Up"; return 40; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/LICENSE root nms 775 $1 || { echo "Invalid WRAN LICENSE"; return 41; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/BACKUP root nms 775 $1 || { echo "Invalid WRAN BACKUP"; return 42; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/LICENSE/RNC root nms 775 $1 ||  { echo "Invalid WRAN LICENSE RNC"; return 43; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/BACKUP/RNC root nms 775 $1 ||  { echo "Invalid WRAN BACKUP RNC"; return 44; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/LICENSE/RBS root nms 775 $1 ||  { echo "Invalid WRAN LICENSE RBS"; return 45; }
+	CHECK_DIRECTORY /export/WRAN/CommonPersistent/BACKUP/RBS root nms 775 $1 ||  { echo "Invalid WRAN BACKUP RBS"; return 46; }
+	CHECK_DIRECTORY /export/WRAN/smrs_master root nms 775 $1 || { echo "Invalid WRAN smrs_master"; return 47; }
+	CHECK_DIRECTORY /export/WRAN/smrs_master/AIF root nms 775 $1 || { echo "Invalid WRAN smrs_master AIF"; return 48; }
+	return 0
+}
+
+### Function: CHECK_LRAN_FILESYSTEM ###
+#
+# Check LRAN filesystem exists with expected directories
+#
+# Arguments:
+#   $1 Remote box
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+# 50 for invalid auto mounts
+# 51-68 if unexpected directory settings
+
+
+function CHECK_LRAN_FILESYSTEM(){
+	[ $# -ne 1 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+	ssh $1 'grep ^/LRAN /etc/auto.smrs | grep /export/LRAN' || { echo "No auto.smrs entry for LRAN"; return 50; }
+	ssh $1 'grep auto.smrs /etc/auto.master' || { echo "No auto.smrs entry in auto.master"; return 50; }
+	CHECK_DIRECTORY /export/LRAN/AIF root nms 775 $1 || { echo "Invalid LRAN/AIF"; return 51; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent root nms 775 $1 || { echo "Invalid LRAN/CommonPersistent"; return 52; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/configuration root nms 775 $1 || { echo "Invalid LRAN configuration"; return 53; }
+	#CHECK_DIRECTORY /export/LRAN/CommonPersistent/autobind root aif 770 $1 ||  { echo "Invalid LRAN autobind"; return 54; }
+	# Do not exit for now on autobind ownership as it is not known
+	# CR is raised on this query, see COMLIN-522
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/autobind root aif 770 $1 ||  { echo "Invalid LRAN autobind"; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/Software root nms 775 $1 || { echo "Invalid LRAN Software"; return 55; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/Software/ERBS root nms 775 $1 || { echo "Invalid LRAN Software ERBS"; return 56; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/Software/ERBS/Up root nms 775 $1 || { echo "Invalid LRAN Software ERBS Up"; return 57; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/LICENSE root nms 775 $1 || { echo "Invalid LRAN LICENSE"; return 58; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/BACKUP root nms 775 $1 || { echo "Invalid LRAN BACKUP"; return 59; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/LICENSE/ERBS root nms 775 $1 ||  { echo "Invalid LRAN LICENSE ERBS"; return 60; }
+	CHECK_DIRECTORY /export/LRAN/CommonPersistent/BACKUP/ERBS root nms 775 $1 ||  { echo "Invalid LRAN BACKUP ERBS"; return 61; }
+	CHECK_DIRECTORY /export/LRAN/smrs_master root nms 775 $1 || { echo "Invalid LRAN smrs_master"; return 62; }
+	CHECK_DIRECTORY /export/LRAN/smrs_master/AIF root nms 775 $1 || { echo "Invalid LRAN smrs_master AIF"; return 63; }
+	return 0
+}
+
+### Function: CHECK_LRAN_USERS ###
+#
+# Check LRAN users exists with expected properties
+#
+# Arguments:
+#   $1 Remote box
+#   $2 oss alias
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+
+
+function CHECK_LRAN_USERS() {
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME: $1 $2"; return 1; }
+	#Check users on smrs_master
+	POSIX_CHECK_USER l-smoconfig-$2 "2.*" 205 "A ftp account" "/LRAN/CommonPersistent" "/bin/bash" $1 || {
+		echo "Failed to check l-smoconfig: $?"; return 2
+	}
+	POSIX_CHECK_USER l-smoswstore-$2 "2.*" 205 "A ftp account" "/LRAN/CommonPersistent" "/bin/bash" $1 || {
+		echo "Failed to check l-smoswstore: $?"; return 3
+	}
+	POSIX_CHECK_USER l-smokeystore-$2 "2.*" 205 "A ftp account" "/LRAN/CommonPersistent" "/bin/bash" $1 || {
+		echo "Failed to check l-smokeystore: $?"; return 4
+	}
+	POSIX_CHECK_USER l-smobackup-$2 "2.*" 205 "A ftp account" "/LRAN/CommonPersistent" "/bin/bash" $1 || {
+		echo "Failed to check l-smobackup: $?"; return 5
+	}
+	#Check users on OSS master
+	POSIX_CHECK_USER l-smoconfig-$2 "2.*" 205 "A ftp account" "/var/opt/ericsson/smrsstore//LRAN/CommonPersistent" "/bin/bash" || {
+		echo "Failed to check l-smoconfig: $?"; return 6
+	}
+	POSIX_CHECK_USER l-smoswstore-$2 "2.*" 205 "A ftp account" "/var/opt/ericsson/smrsstore//LRAN/CommonPersistent" "/bin/bash" || {
+		echo "Failed to check l-smoswstore: $?"; return 7
+	}
+	POSIX_CHECK_USER l-smokeystore-$2 "2.*" 205 "A ftp account" "/var/opt/ericsson/smrsstore//LRAN/CommonPersistent" "/bin/bash" || {
+		echo "Failed to check l-smokeystore: $?"; return 8
+	}
+	POSIX_CHECK_USER l-smobackup-$2 "2.*" 205 "A ftp account" "/var/opt/ericsson/smrsstore//LRAN/CommonPersistent" "/bin/bash" || {
+		echo "Failed to check l-smobackup: $?"; return 9
+	}
+	return 0
+}
+
+### Function: CHECK_CORE_FILESYSTEM ###
+#
+# Check CORE filesystem exists with expected directories
+#
+# Arguments:
+#   $1 Remote box
+#   $2 oss alias
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+# 70 for invalid auto mounts
+
+
+function CHECK_CORE_FILESYSTEM(){
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+	ssh $1 'grep ^/LRAN /etc/auto.smrs | grep /export/LRAN' || { echo "No auto.smrs entry for LRAN"; return 70; }
+	ssh $1 'grep auto.smrs /etc/auto.master' || { echo "No auto.smrs entry in auto.master"; return 70; }
+}
+
+### Function: CHECK_WRAN_USERS ###
+#
+# Check WRAN users exists with expected properties
+#
+# Arguments:
+#   $1 Remote box
+#   $2 oss alias
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+
+
+function CHECK_WRAN_USERS() {
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME: $1 $2"; return 1; }
+	#Check users on smrs_master
+	POSIX_CHECK_USER smo-config-$2 "2.*" 205 "A ftp account" "/WRAN/CommonPersistent" "/bin/bash" $1 || {
+	   echo "Failed to check smo-config: $?"; return 2
+	}
+	POSIX_CHECK_USER smo-swstore-$2 "2.*" 205 "A ftp account" "/WRAN/CommonPersistent" "/bin/bash" $1 || {
+	   echo "Failed to check smo-swstore: $?"; return 3
+	}
+	POSIX_CHECK_USER smo-keystore-$2 "2.*" 205 "A ftp account" "/WRAN/CommonPersistent" "/bin/bash" $1 || {
+	   echo "Failed to check smo-keystore: $?"; return 4
+	}
+	POSIX_CHECK_USER smo-backup-$2 "2.*" 205 "A ftp account" "/WRAN/CommonPersistent" "/bin/bash" $1 || {
+	   echo "Failed to check smo-backup: $?"; return 5
+    }
+	#Check users on OSS master
+	POSIX_CHECK_USER smo-config-$2 "2.*" 205 "A ftp account" "/var/opt/ericsson/smrsstore//WRAN/CommonPersistent" "/bin/bash" || {
+		echo "Failed to check smo-config: $?"; return 6
+	}
+	POSIX_CHECK_USER smo-swstore-$2 "2.*" 205 "A ftp account" "/var/opt/ericsson/smrsstore//WRAN/CommonPersistent" "/bin/bash" || {
+		echo "Failed to check smo-swstore: $?"; return 7
+	}
+	POSIX_CHECK_USER smo-keystore-$2 "2.*" 205 "A ftp account" "/var/opt/ericsson/smrsstore//WRAN/CommonPersistent" "/bin/bash" || {
+		echo "Failed to check smo-keystore: $?"; return 8
+	}
+	POSIX_CHECK_USER smo-backup-$2 "2.*" 205 "A ftp account" "/var/opt/ericsson/smrsstore//WRAN/CommonPersistent" "/bin/bash" || {
+		echo "Failed to check smo-backup: $?"; return 9
+	}
+	return 0
+}
+
+### Function: CHECK_NO_WRAN_USERS ###
+#
+# Check no WRAN users exists
+#
+# Arguments:
+#   $1 Remote box
+#   $2 oss alias
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+
+
+function CHECK_NO_WRAN_USERS() {
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME: $1 $2"; return 1; }
+	#Check users on OSS master
+	POSIX_USER_EXISTS smo-config-$2 && { echo "smo-config exists: $?"; return 6; }
+	POSIX_USER_EXISTS smo-swstore-$2 && { echo "smo-swstore exists: $?"; return 7; }
+	POSIX_USER_EXISTS smo-keystore-$2 && { echo "smo-keystore exists: $?"; return 8; }
+	POSIX_USER_EXISTS smo-backup-$2 && { echo "smo-backup exists: $?"; return 9; }
+	# Check that users do not exist on OM Primary
+	POSIX_USER_EXISTS smo-config-$2 $1 && { echo "smo-config exists: $?"; return 10; }
+	POSIX_USER_EXISTS smo-swstore-$2 $1 && { echo "smo-swstore exists: $?"; return 11; }
+	POSIX_USER_EXISTS smo-keystore-$2 $1 && { echo "smo-keystore exists: $?"; return 12; }
+	POSIX_USER_EXISTS smo-backup-$2 $1 && { echo "smo-backup exists: $?"; return 13; }
+	return 0
+}
+
+### Function: CHECK_NO_LRAN_USERS ###
+#
+# Check no LRAN users exists
+#
+# Arguments:
+#   $1 Remote box
+#   $2 oss alias
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+
+
+function CHECK_NO_LRAN_USERS() {
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME: $1 $2"; return 1; }
+	#Check users on OSS master
+	POSIX_USER_EXISTS l-smoconfig-$2 && { echo "l-smoconfig exists: $?"; return 6; }
+	POSIX_USER_EXISTS l-smoswstore-$2 && { echo "l-smoswstore exists: $?"; return 7; }
+	POSIX_USER_EXISTS l-smokeystore-$2 && { echo "l-smokeystore exists: $?"; return 8; }
+	POSIX_USER_EXISTS l-smobackup-$2 && { echo "l-smobackup exists: $?"; return 9; }
+	# Check that users do not exist on OM Primary
+	POSIX_USER_EXISTS l-smoconfig-$2 $1 && { echo "l-smoconfig exists: $?"; return 11; }
+	POSIX_USER_EXISTS l-smoswstore-$2 $1 && { echo "l-smoswstore exists: $?"; return 11; }
+	POSIX_USER_EXISTS l-smokeystore-$2 $1 && { echo "l-smokeystore exists: $?"; return 12; }
+	POSIX_USER_EXISTS l-smobackup-$2 $1 && { echo "l-smobackup exists: $?"; return 13; }
+	return 0
+}
+
+### Function: CHECK_SMO_FTP_SERVICE_MASTER ###
+#
+# Check SmoFtp Service exists, NB creates temporary files xml_tmp and cs_test_tmp that will need to be deleted
+#
+# Arguments:
+#   $1 oss alias
+#   $2 LRAN required (y/n)
+#   $3 WRAN required (y/n)
+#   $4 GRAN required (y/n)
+#   $5 CORE required (y/n)
+#   $6 XML only (optional defaults to n, if set to y then expect no entries in
+#      ONRM, just XML files)
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+# 80- invalid result from cstest
+
+
+function CHECK_SMO_FTP_SERVICE_MASTER() {
+	[ $# -lt 5 -o $# -gt 6 ] && { echo "Invalid parameters to $FUNCNAME: $1 $2 $3 $4 $5 $6"; return 1; }
+
+	rm -f cs_test_tmp xml_tmp
+
+	xml_only=0
+	[ "$6" == n ] && xml_only=1
+
+	/opt/ericsson/nms_cif_cs/etc/unsupported/bin/cstest -s ONRM_CS -ns masterservice lt FtpService > cs_test_tmp ||  { echo "cstest FtpService failed $?"; return 80; }
+	if [ "$2" == y -a $xml_only -eq 0 ]; then
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERLRAN-$1,FtpService=l-smobackup-$1" cs_test_tmp || { echo "FTP Service l-smobackup-$1 not found"; return 81; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERLRAN-$1,FtpService=l-smoconfig-$1" cs_test_tmp || { echo "FTP Service l-smoconfig-$1 not found"; return 82; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERLRAN-$1,FtpService=l-smokeystore-$1" cs_test_tmp || { echo "FTP Service l-smokeystore-$1 not found"; return 83; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERLRAN-$1,FtpService=l-smoswstore-$1" cs_test_tmp || { echo "FTP Service l-smoswstore-$1 not found"; return 84; }
+	else
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERLRAN-$1,FtpService=l-smobackup-$1" cs_test_tmp && { echo "FTP Service l-smobackup-$1 found"; return 81; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERLRAN-$1,FtpService=l-smoconfig-$1" cs_test_tmp && { echo "FTP Service l-smoconfig-$1 found"; return 82; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERLRAN-$1,FtpService=l-smokeystore-$1" cs_test_tmp && { echo "FTP Service l-smokeystore-$1 found"; return 83; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERLRAN-$1,FtpService=l-smoswstore-$1" cs_test_tmp && { echo "FTP Service l-smoswstore-$1 found"; return 84; }
+	fi
+	if [ "$3" == y -a $xml_only -eq 0 ]; then
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERWRAN-$1,FtpService=smo-backup-$1" cs_test_tmp || { echo "FTP Service smo-backup-$1 not found"; return 85; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERWRAN-$1,FtpService=smo-config-$1" cs_test_tmp || { echo "FTP Service smo-config-$1 not found"; return 86; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERWRAN-$1,FtpService=smo-keystore-$1" cs_test_tmp || { echo "FTP Service smo-keystore-$1 not found"; return 87; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERWRAN-$1,FtpService=smo-swstore-$1" cs_test_tmp || { echo "FTP Service smo-swstore-$1 not found"; return 88; }
+	else
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERWRAN-$1,FtpService=smo-backup-$1" cs_test_tmp && { echo "FTP Service smo-backup-$1 found"; return 85; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERWRAN-$1,FtpService=smo-config-$1" cs_test_tmp && { echo "FTP Service smo-config-$1 found"; return 86; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERWRAN-$1,FtpService=smo-keystore-$1" cs_test_tmp && { echo "FTP Service smo-keystore-$1 found"; return 87; }
+		grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSMASTERWRAN-$1,FtpService=smo-swstore-$1" cs_test_tmp && { echo "FTP Service smo-swstore-$1 found"; return 88; }
+	fi
+	grep "SLAVE" cs_test_tmp && { echo "FTP SLAVE Services found"; return 89; }
+	
+	# Now check xml files
+	ls /var/opt/ericsson/arne/FTPServices > xml_tmp || { echo "ls of FTPServices failed"; return 90; }
+	# Check GRAN files created or not as expected
+	CHECK_SMOXML_FILE oss1 GRAN $4 xml_tmp || return $?
+	# Check WRAN files created or not as expected
+	CHECK_SMOXML_FILE oss1 WRAN $3 xml_tmp || return $?
+	# Check LRAN files created or not as expected
+	CHECK_SMOXML_FILE oss1 LRAN $2 xml_tmp || return $?
+	# Check CORE files created or not as expected
+	CHECK_SMOXML_FILE oss1 CORE $5 xml_tmp || return $?
+
+	
+}
+### Function: CHECK_SMOXML_FILE ###
+#
+#  Check SMO XML files are created as expected
+# Arguments:
+#   $1 oss alias
+#   $2 network type e.g. WRAN, LRAN, CORE, GRAN
+#   $3 expected (y if expected, n if should be absent)
+#   $4 xml listing to check
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+# 91 invalid XML for oss alias 
+function CHECK_SMOXML_FILE() {
+	[ $# -ne 4 ] && { echo "Invalid parameters to $FUNCNAME: $1 $2 $3 $4"; return 1; }
+	# Check network files created or not as expected
+	if [ "$3" == y ]; then
+		grep "SMO_FTPService$2_$1.xml" xml_tmp || { echo "$2 FTP Service XML not found"; return 91; }
+	else
+		grep "SMO_FTPService$2_$1.xml" xml_tmp && { echo "$2 FTP Service XML found"; return 91; }
+	fi
+	return 0
+	
+}
+
+### Function: CLEANUP_NEDSS ###
+#
+# Cleans up NEDSS
+#
+# Arguments:
+#	$1 O&M primary to use
+#   $2 NEDSS IP
+#   $3 NEDSS Secondary IP (optional)
+#
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+function CLEANUP_NEDSS(){
+	[ $# -lt 2 -o $# -gt 3 ] && { echo "Invalid parameters to $FUNCNAME $#"; return 1; }
+	retval=0
+	
+	# Delete smrsuser user on  NEDSS
+	ssh $1 ssh $2 "userdel -r smrsuser" || { echo "Failed to delete smrsuser: $?"; retval=10; }
+
+	echo "$FUNCNAME: Unmounting filesystems on the NEDSS"
+	ssh $1 ssh $2 '/opt/ericsson/smrs/bin/configure_mounts.sh -a umount' || { echo "Failed to unmount on O&M primary: $?"; retval=13; }
+
+	if [ $# -eq 3 ]
+	then
+	echo " Restore /etc/hosts on secondary NEDSS"
+	ssh $1 ssh $3 << EOF
+grep -vw $1 /etc/hosts > /tmp/hosts.org
+cat /tmp/hosts.org > /etc/hosts
+rm -f /tmp/hosts.org
+EOF
+
+	# Restore /etc/hosts on SMRS Master
+	echo " Restore /etc/hosts on SMRS Master"
+	ssh $1 << EOF
+grep -vw $3 /etc/hosts > /tmp/hosts.org
+cat /tmp/hosts.org > /etc/hosts
+rm -f /tmp/hosts.org
+EOF
+
+		#  TFTP Cleanup
+   		ssh $1 ssh $3 '/sbin/chkconfig tftp off'
+
+		#  NTP Clean-up
+		ssh $1 ssh $3 <<EOF
+grep -vw "server" /etc/ntp.conf > /tmp/ntp.org.conf
+cat /tmp/ntp.org.conf > /etc/ntp.conf
+rm -f /tmp/ntp.org.conf
+service ntpd restart
+EOF
+		#  rsyslog clean-up
+		ssh $1 ssh $3<<EOF
+grep -vw "local7.*" /etc/rsyslog.conf >>/tmp/rsyslog.conf.xbahzam
+cat /tmp/rsyslog.conf.xbahzam > /etc/rsyslog.conf
+rm -f /tmp/rsyslog.conf.xbahzam
+service rsyslog restart
+EOF
+	fi
+
+	# Restore /etc/hosts on NEDSS
+	echo " Restore /etc/hosts on SMRS Master"
+	ssh $1 << EOF
+grep -vw $2 /etc/hosts > /tmp/hosts.org
+cat /tmp/hosts.org > /etc/hosts
+rm -f /tmp/hosts.org
+EOF
+	# Restore /etc/hosts on NEDSS
+	echo " Restore /etc/hosts on NEDSS"
+	ssh $1 ssh $2 << EOF
+grep -vw $1 /etc/hosts > /tmp/hosts.org
+cat /tmp/hosts.org > /etc/hosts
+rm -f /tmp/hosts.org
+EOF
+
+	#  TFTP Cleanup
+	ssh $1 ssh $2 '/sbin/chkconfig tftp off'
+
+	#  NTP Clean-up
+	ssh $1 ssh $2 <<EOF
+grep -vw "server" /etc/ntp.conf >> /tmp/ntp.org.conf
+cat /tmp/ntp.org.conf > /etc/ntp.conf
+rm -f /tmp/ntp.org.conf
+service ntpd restart
+EOF
+	#  rsyslog clean-up
+	ssh $1 ssh $2 <<EOF
+grep -vw "local7.info" /etc/rsyslog.conf >>/tmp/rsyslog.conf.xbahzam
+cat /tmp/rsyslog.conf.xbahzam > /etc/rsyslog.conf
+rm -f /tmp/rsyslog.conf.xbahzam
+service rsyslog restart
+EOF
+	# Delete filesystems in /etc/fstab
+	ssh $1 ssh $2 <<EOF
+grep -vw "/export/CORE" /etc/fstab > ./fstab.tmp
+grep -vw "/export/LRAN" ./fstab.tmp > ./fstab.tmp2
+grep -vw "/export/GRAN" ./fstab.tmp2 > ./fstab.tmp
+grep -vw "/export/WRAN" ./fstab.tmp > ./fstab.tmp2
+cat ./fstab.tmp2 > /etc/fstab
+EOF
+	# Delete smrs_config on NEDSS
+	ssh $1 ssh $2 'rm -f /opt/ericsson/smrs/etc/smrs_config' || { echo "Failed to delete smrs_config: $?"; retval=15; }
+
+	# Remove the entry for omprimary in the /root/.ssh/authorized_keys file on NEDSS
+	# find hostname of OM Primary
+	PRIMNAME=$(ssh $1 'hostname')
+	ssh $1 ssh $2 'grep -w "root@'$PRIMNAME'" /root/.ssh/authorized_keys'
+	if [ $? -eq 0 ]; then
+		ssh $1 ssh $2 "\"grep -vw root@$PRIMNAME /root/.ssh/authorized_keys > ./authorized.tmp\""
+		echo "Deleting OMPrimary's authorized entry on NEDSS"
+		ssh $1 ssh $2 "\"cat ./authorized.tmp > /root/.ssh/authorized_keys; rm -f ./authorized.tmp\""
+	fi
+	return $retval
+
+}
+
+
+### Function: CLEANUP_SMRS_SLAVE ###
+#
+# Cleans up SMRS_SLAVE
+#
+# Arguments:
+#	$1 O&M primary to use
+#   $2 NEDSS IP
+#   $3 SMRS_SLAVE name
+#   $4 NEDSS Secondary IP (optional)
+#
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+function CLEANUP_SMRS_SLAVE(){
+	[ $# -lt 2 -o $# -gt 4 ] && { echo "Invalid parameters to $FUNCNAME $#"; return 1; }
+	retval=0
+
+	# cleaning up all smrs slave users on OSS Master
+	userdel  backup-$3 # || { echo "Failed to delete backup-$3 on OSS Master" ; retval=10; }
+	userdel  cmdown-$3 # || { echo "Failed to delete cmdown-$3 on OSS Master" ; retval=10; }
+	userdel  cmup-$3 # || { echo "Failed to delete cmup-$3 on OSS Master" ; retval=10; }
+	userdel  pmup-$3 # || { echo "Failed to delete pmup-$3 on OSS Master" ; retval=10; }
+	userdel  swstore-$3 # || { echo "Failed to delete swstore-$3 on OSS Master" ; retval=10; }
+	userdel  keystore-$3 # || { echo "Failed to delete keystore-$3 on OSS Master" ; retval=10; }
+	userdel  corepmu-$3 # || { echo "Failed to delete corepmu-$3 on OSS Master" ; retval=10; }
+	userdel  l-sws-$3 # || { echo "Failed to delete l-sws-$3 on OSS Master" ; retval=10; }
+	userdel  l-key-$3 # || { echo "Failed to delete l-key-$3 on OSS Master" ; retval=10; }
+	userdel  l-back-$3 # || { echo "Failed to delete l-back-$3 on OSS Master" ; retval=10; }
+	userdel  w-sws-$3 # || { echo "Failed to delete w-sws-$3 on OSS Master" ; retval=10; }
+	userdel  w-key-$3 # || { echo "Failed to delete w-key-$3 on OSS Master" ; retval=10; }
+	userdel  w-back-$3 # || { echo "Failed to delete w-back-$3 on OSS Master" ; retval=10; }
+
+
+	# cleaning up all smrs slave users on  OM Primary
+	ssh $1 <<EOF
+userdel  backup-$3 # || { echo "Failed to delete backup-$3 on OSS Master" ; exit 10; }
+userdel cmdown-$3 # || { echo "Failed to delete cmdown-$3 on OSS Master" ; exit 10; }
+userdel cmup-$3 # || { echo "Failed to delete cmup-$3 on OSS Master" ; exit 10; }
+userdel pmup-$3 # || { echo "Failed to delete pmup-$3 on OSS Master" ; exit 10; }
+userdel swstore-$3 # || { echo "Failed to delete swstore-$3 on OSS Master" ; exit 10; }
+userdel keystore-$3 # || { echo "Failed to delete keystore-$3 on OSS Master" ; exit 10; }
+userdel corepmu-$3 # || { echo "Failed to delete corepmu-$3 on OSS Master" ; exit 10; }
+userdel l-sws-$3 # || { echo "Failed to delete l-sws-$3 on OSS Master" ; exit 10; }
+userdel l-key-$3 # || { echo "Failed to delete l-key-$3 on OSS Master" ; exit 10; }
+userdel l-back-$3 # || { echo "Failed to delete l-back-$3 on OSS Master" ; exit 10; }
+userdel w-sws-$3 # || { echo "Failed to delete w-sws-$3 on OSS Master" ; exit 10; }
+userdel w-key-$3 # || { echo "Failed to delete w-key-$3 on OSS Master" ; exit 10; }
+userdel w-back-$3 # || { echo "Failed to delete w-back-$3 on OSS Master" ; exit 10; }
+EOF
+	retval=$?
+	
+	# cleaning up all smrs slave users on  NEDSS
+	ssh $1 ssh $2 <<EOF
+userdel  backup-$3 # || { echo "Failed to delete backup-$3 on OSS Master" ; exit 10; }
+userdel cmdown-$3 # || { echo "Failed to delete cmdown-$3 on OSS Master" ; exit 10; }
+userdel cmup-$3 # || { echo "Failed to delete cmup-$3 on OSS Master" ; exit 10; }
+userdel pmup-$3 # || { echo "Failed to delete pmup-$3 on OSS Master" ; exit 10; }
+userdel swstore-$3 # || { echo "Failed to delete swstore-$3 on OSS Master" ; exit 10; }
+userdel keystore-$3 # || { echo "Failed to delete keystore-$3 on OSS Master" ; exit 10; }
+userdel corepmu-$3 # || { echo "Failed to delete corepmu-$3 on OSS Master" ; exit 10; }
+userdel l-sws-$3 # || { echo "Failed to delete l-sws-$3 on OSS Master" ; exit 10; }
+userdel l-key-$3 # || { echo "Failed to delete l-key-$3 on OSS Master" ; exit 10; }
+userdel l-back-$3 # || { echo "Failed to delete l-back-$3 on OSS Master" ; exit 10; }
+userdel w-sws-$3 # || { echo "Failed to delete w-sws-$3 on OSS Master" ; exit 10; }
+userdel w-key-$3 # || { echo "Failed to delete w-key-$3 on OSS Master" ; exit 10; }
+userdel w-back-$3 # || { echo "Failed to delete w-back-$3 on OSS Master" ; exit 10; }
+EOF
+
+	retval=$?
+
+	# Cleanup for non-blade
+	ssh $1 grep -vw "/export/CORE/${3}" /etc/exports > ./exports.tmp
+	grep -vw "/export/LRAN/$3" ./exports.tmp > ./exports2.tmp
+	grep -vw /export/GRAN/$3 ./exports2.tmp > ./exports.tmp
+	grep -vw "/export/WRAN/$3" ./exports.tmp > ./exports2.tmp
+	# Use cat to preseve selinux permissions
+	ssh $1 'cat > /etc/exports' < ./exports2.tmp
+	
+	ssh $1 'exportfs -r'
+
+	ssh $1  "umount /export/GRAN/$3"
+	ssh $1  "umount /export/CORE/$3"
+	ssh $1  "umount /export/LRAN/$3"
+	ssh $1  "umount /export/WRAN/$3"
+	
+	ssh $1  "lvremove /dev/smrs_vg/lran_$3 -f"
+	ssh $1  "lvremove /dev/smrs_vg/wran_$3 -f"
+	ssh $1  "lvremove /dev/smrs_vg/gran_$3 -f"
+	ssh $1  "lvremove /dev/smrs_vg/core_$3 -f"
+
+	# Delete filesystems in /etc/fstab
+	ssh $1 grep -vw "/export/CORE/$3" /etc/fstab > ./fstab.tmp
+	grep -vw "/export/LRAN/$3" ./fstab.tmp > ./fstab2.tmp
+	grep -vw "/export/GRAN/$3" ./fstab2.tmp > ./fstab.tmp
+	grep -vw "/export/WRAN/$3" ./fstab.tmp > ./fstab2.tmp
+
+	# Use cat to preseve selinux permissions
+	ssh $1 'cat > /etc/fstab ' < ./fstab2.tmp
+
+
+	# cleanup on Secondary NEDSS
+	if [ $# -eq 4 ]
+	then
+	:
+	fi
+
+	rm -f *.tmp
+	return $retval
+
+}
+
+
+
+
+
+
+### Function: CHECK_SLAVE_USERS ###
+#
+# Checks that the correct users associated with creation of slave service
+# are created
+#
+# Arguments:
+#	$1 Service name
+#   $2 Comma-separated list of FS types to use for search
+#   $3 Machine name to check (optional)
+#
+# Return Values:
+# 0 if all users exist
+# 1 invalid number of parameters supplied
+# 2-14 depending on which user is found to be missing
+CHECK_SLAVE_USERS() {
+	# Check the GRAN/CORE/WRAN/LRAN FTPSERVICES users
+	# $1 Slave service name, e.g. 4SlaveM1
+	# $2 Optional machine name
+
+	[ $# -ne 2 -a $# -ne 3 ] && {
+		echo "Wrong number of parameters to $FUNCNAME: expected 2 or 3, got $#"
+		return 1
+	}
+	# Check users on OSS master
+	# swstore-<Slave service name> e.g. swstore-4SlaveM1
+	# GRAN_FTPSERVICES swstore pmup cmup cmdown backup keystore
+	# CORE_FTPSERVICES corepmu
+	# WRAN_FTPSERVICES w-sws w-key w-back
+	# LRAN_FTPSERVICES l-sws l-key l-back
+	GRAN="swstore pmup cmup cmdown backup keystore"
+	CORE="corepmu"
+	WRAN="w-sws w-key w-back"
+	LRAN="l-sws l-key l-back"
+	i=2
+	for fs in ${2//,/ }; do
+		for user in ${!fs}; do
+			POSIX_USER_EXISTS $user-$1 $3 || {
+				if [ -n "$3" ]; then
+					echo "$user-$1 user not found on $3"
+				else
+					echo "$user-$1 user not found on OSS master"
+				fi
+				return $i
+			}
+			let i=i+1
+		done
+	done
+
+	return 0
+
+}
+
+### Function: CHECK_SLAVE_XML_FILES ###
+#
+#  Check SMO XML files are created as expected for the smrs slave
+# Arguments:
+#   $1 oss alias
+#   $2 network type e.g. WRAN, LRAN, CORE, GRAN
+#
+# Return Values:
+# 0 if  ok
+# 1 if invalid parameters
+# 91 invalid XML for oss alias
+CHECK_SLAVE_XML_FILES() {
+	[ $# -ne 2 ] && {
+		echo "Invalid parameters to $FUNCNAME: expected 2, got $#."
+		return 1
+	}
+	# Check XML files have been created
+	ls -d /var/opt/ericsson/arne/FTPServices || {
+		echo "FTPServices directory not found."
+		return 2
+	}
+	# FIXME correct file name
+	ls /var/opt/ericsson/arne/FTPServices/SMO_FTPService$2_$1.xml || {
+		echo "$2 FTP Service XML not found."
+		return 3
+	}
+
+	return 0
+
+}
+
+### Function: CHECK_SFTP ###
+#
+#  Check SFTP connection to a given machine
+# Arguments:
+#	$1	Machine name/IP address
+#	$2	Comma-separated FS types of user to test e.g. WRAN will include w-back user
+#	$3	Password for users
+#	$4	Slave service name
+#
+# Return Values:
+# 0 if  OK
+# 1 if invalid parameters
+# 2-14 SFTP connection not made or requires password, depends on user
+CHECK_SFTP() {
+	[ $# -ne 4 ] && {
+		echo "Invalid parameters to $FUNCNAME: expected 3, got $#."
+		return 1
+	}
+	# Write 'in' file
+	echo "password:
+$3
+sftp>
+pwd
+Remote working directory
+bye">/var/tmp/expect.in
+
+	GRAN="swstore pmup cmup cmdown backup keystore"
+	CORE="corepmu"
+	WRAN="w-sws w-key w-back"
+	LRAN="l-sws l-key l-back"
+	i=2
+	for fs in ${2//,/ }; do
+		for user in ${!fs}; do
+			# Generate expect file using con_ex.bsh
+			${AT_BIN}/con_ex.bsh -d /var/tmp/expect.in -o /var/tmp/expect.exp -c "sftp $user-$4@$1" -r
+			/usr/local/bin/expect /var/tmp/expect.exp  || {
+				rm -f /var/tmp/expect.in
+				rm -f /var/tmp/expect.exp
+				return $i
+			}
+			let i=i+1
+		done
+	done
+
+	rm -f /var/tmp/expect.in
+	rm -f /var/tmp/expect.exp
+	return 0
+
+}
+	
+### Function: CHECK_SFTP_AIF ###
+#
+#  Check SFTP connection for an AIF user to a given machine
+# Arguments:
+#	$1	Machine name/IP address
+#	$2	AIF User Name
+#	$3	Password for user
+#   $4  NEDSS name (optional - not required if slave was on smrs_master)
+#
+# Return Values:
+# 0 if  OK
+# 1 if invalid parameters
+# 2 if SFTP connection not made to SMRS Master
+# 3 if SFTP connection not made to NEDSS
+# Sets SFTP_AIF_ERR to error string
+CHECK_SFTP_AIF() {
+	# Check parameters
+	[ $# -lt 3 -o $# -gt 4 ] && { SFTP_AIF_ERR="Invalid parameters to $FUNCNAME - expected 3 or 4, got $#"; return 1; }
+
+	# Write 'in' file
+	cat >/var/tmp/expect.in <<EOF
+password:
+$3
+sftp>
+pwd
+Remote working directory
+bye
+EOF
+
+	SFTP_AIF_ERR=""
+
+	# First try connecting to SMRS Master
+	[ $# -eq 3 ] && {
+		cmd="sftp $2@$1"
+		echo "Checking connection with $cmd"
+		${AT_BIN}/con_ex.bsh -d /var/tmp/expect.in -o /var/tmp/expect.exp -c "${cmd}" -r
+		/usr/local/bin/expect /var/tmp/expect.exp  || {
+			SFTP_AIF_ERR="Error $? connecting to Node $1 as user $2"
+			rm -f /var/tmp/expect.in
+			rm -f /var/tmp/expect.exp
+			return 2
+		}
+	}
+
+	[ -z "$4" ] || {
+		# Now try connecting to NEDSS (if it wasn't on SMRS Master)
+		cmd="ssh $1 sftp $2@$4"
+		echo "Checking NEDSS connection wth $cmd"
+		${AT_BIN}/con_ex.bsh -d /var/tmp/expect.in -o /var/tmp/expect.exp -c "${cmd}" -r
+		/usr/local/bin/expect /var/tmp/expect.exp  || {
+			SFTP_AIF_ERR="Error $? connecting to Node $4 via $1 as user $2"
+			rm -f /var/tmp/expect.in
+			rm -f /var/tmp/expect.exp
+			return 3
+		}
+	}
+
+	rm -f /var/tmp/expect.in
+	rm -f /var/tmp/expect.exp
+	return 0
+
+}
+
+### Function: DELETE_AIF  ###
+#
+# Delete AIF user
+#
+# Arguments:
+#   $1 Name of aif user
+#   $2 Slave name
+#   $3 NEDSS name (optional - not required if slave was on smrs_master)
+#
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+
+function DELETE_AIF(){
+	[ $# -lt 2 -o $# -gt 3 ] && { echo "Invalid parameters to $FUNCNAME $#"; return 1; }
+
+	retval=0
+	# delete the user account on smrs_master and NEDSS in cleanup 
+	ssh smrs_master "userdel $1" || { echo "Failed to delete $1 on smrs_master"; }
+	if [ $# -eq 3 ]; then
+		ssh smrs_master ssh $3 "userdel $1" || { echo "Failed to delete $1 on NEDSS"; }
+	fi
+
+	return 0
+}
+	
+### Function SMLOG_MARK_STATUS
+#
+# Sets global variables so know where up to in smlog. To be used only within
+# a single function, because it keeps information in variables, so the mark
+# and search must be in same callback.
+#
+# Arguments:
+# None
+#
+# Return Values:
+# 0     if log file found
+# 1     if not found log file
+# 2     wrong number of parameters
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# SMLOG_LINENO
+function SMLOG_MARK_STATUS()
+{
+    SMLOG_LINENO=$(/opt/ericsson/bin/smlog -type system | wc -l)
+	#Assign back to ourselves to remove spaces
+    SMLOG_LINENO=$(echo ${SMLOG_LINENO})
+
+	return 0
+}
+
+### Function SMLOG_SEARCH_FROM_MARK
+#
+# Searches smlog output for searchstring since log file was last marked by
+# SMLOG_MARK_STATUS. To be used only in
+# tc_test as it declares variables so the mark and search must be in same
+# callback
+#
+# Arguments:
+# $1 String to search log file for
+#
+# Return Values:
+# 0     if search string found in log file
+# 1     if search string not in log file
+# 2     wrong number of parameters
+# 3     if searching before marked
+#
+# Input globals accessed by this function
+# SMLOG_LINENO
+#
+# Output globals set by this function
+# none
+# 
+# NB. If there are . in basefilename these are replaced by _
+#
+function SMLOG_SEARCH_FROM_MARK()
+{
+    [ -z "$1" ] && return 2
+    [ "${SMLOG_LINENO:-notset}" = "notset" ] && return 3
+    /opt/ericsson/bin/smlog -type system > ./smlog.tmp
+	NEWLEN=$(cat ./smlog.tmp | wc -l)
+    NEWLEN=$(echo ${NEWLEN})
+	# SMLog has newest entries at front so need to delete last entries
+	let LENREQ=$NEWLEN-${SMLOG_LINENO}
+	# Next three lines are to aid debugging
+	echo "HEAD $LENREQ, New len $NEWLEN, $Old ${SMLOG_LINENO}"
+	head -$LENREQ ./smlog.tmp
+	echo "Now search for $1"
+	head -$LENREQ ./smlog.tmp | grep -i -- "$1"
+    return $?
+
+}
+
+
+### Function: CHECK_AIF  ###
+#
+# Check AIF user
+#
+# Arguments:
+#   $1 Name of aif user
+#   $2 network type
+#   $3 NEDSS name (optional - not required if slave was on smrs_master)
+#
+# Return Values:
+# 0 if cleanup successful, non-zero if its not
+
+function CHECK_AIF(){
+	[ $# -lt 2 -o $# -gt 3 ] && { echo "Invalid parameters to $FUNCNAME $#"; return 1; }
+
+	retval=0
+	line="$1:x:[0-9]*:200:RBS aif user $1:/$2:/bin/bash"
+	ssh smrs_master "grep \"$line\" /etc/passwd" || { echo "Failed to find $1 on smrs_master"; }
+	if [ $# -eq 3 ]; then
+		ssh smrs_master ssh $3 grep \\\"$line\\\" /etc/passwd || { echo "Failed to find $1 on NEDSS"; }
+	fi
+}
+
+### Function: CHECK_SLAVE_EXISTS  ###
+#
+# Check Slave exists in smrs_config
+#
+# Arguments:
+#   $1 Name of slave
+#
+# Return Values:
+# 0 if found slave, non-zero if not
+
+function CHECK_SLAVE_EXISTS(){
+	[ $# -ne 1 ] && { echo "Invalid parameters to $FUNCNAME $#"; return 1; }
+	grep "SMRS_SLAVE_SERVICE_NAME.*=${1}$" /etc/opt/ericsson/nms_bismrs_mc/smrs_config
+	return $?
+}
+
+### Function: CHECK_AIF_FTP_SERVICE ###
+#
+#	Check whether FtpService exists for AIF user
+# Arguments:
+#   $1 AIF username
+#   $2 Network type
+#   $3 Slave name
+#
+# Return Values:
+# 0 if  exists
+# 1 if invalid parameters
+# 2 if doesn't exist
+# 80- invalid result from cstest
+function CHECK_AIF_FTP_SERVICE() {
+	[ $# -ne 3 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+
+	rm -f cs_test_tmp 
+
+	/opt/ericsson/nms_cif_cs/etc/unsupported/bin/cstest -s ONRM_CS -ns masterservice lt FtpService > cs_test_tmp ||  { echo "cstest FtpService failed $?"; return 80; }
+	grep "SubNetwork=ONRM_ROOT_MO,FtpServer=SMRSSLAVE-$2-$3,FtpService=$1" cs_test_tmp || { echo "FTP Service $1 not found"; return 2; }
+	return 0
+}
+
+### Function: GET_SLAVE_SUBENTRY ###
+#
+#   Get an IP address for a particulsr slave.
+# Argumants:
+#   $1 Slave Name
+#   $2 the sub-type
+# The sub-type can be any entry starting SMRS_SLAVE_SERVICE_ - normally one of NEDSS_IP NEDSS_IPV6 NESS_IP NESS_IPV6
+# 
+# Return Values:
+# 0 if address found (address printed to stdout)
+# 1 if parameters invalid (wrong number, or are empty)
+# 2 if smrs_config file not found
+# 3 if slave name not found
+# 4 if type is not valid
+# Note that even if config entry is found, the address might be empty - rc=0, with empty string returned to stdout
+function GET_SLAVE_SUBENTRY() {
+
+	local smrs_config=/etc/opt/ericsson/nms_bismrs_mc/smrs_config
+	local slave_name=""
+	local slave_type=""
+	local slave_entry=""
+	local slave_number=0
+	local slave_subentry=""
+
+	[ $# -ne 2 ] && { echo "Invalid parameters to $FUNCNAME"; return 1; }
+	[ "${1:-unset}" = "unset" ] && { echo "Empty slave name parameter for $FUNCNAME"; return 1; }
+	[ "${2:-unset}" = "unset" ] && { echo "Empty IP address type parameter for $FUNCNAME"; return 1; }
+
+	[ -r $smrs_config ] || { echo "Cannot read config file $smrs_config"; return 2; }
+
+	slave_name="$1"
+	slave_type="$2"
+
+	slave_entry=$(CHECK_SLAVE_EXISTS "$1")
+	[ $? -eq 0 ] || { echo "Slave $slave_name not found, error $slave_entry"; return 3; }
+
+	# Extract the slave number from the name entry
+	slave_number=$(echo "$slave_entry" | sed -e 's/^[^[]*[[]\([0-9]*\).*/\1/')
+	[ "$slave_number:-unset}" = unset ] && { echo "Slave number not found in entry $slave_entry"; return 3; }
+
+	# Now find the requested entry for this slave - just append the requested type to the name "SMRS_SLAVE_SERVICE_"
+	slave_subentry=$(grep "^SMRS_SLAVE_SERVICE_${slave_type}\[${slave_number}\]=" $smrs_config)
+	[ $? -eq 0 ] || { echo "Type SMRS_SLAVE_SERVICE_${slave_type} for slave $slave_name not found in $smrs_config"; return 4; }
+
+	# Print the discovered value (may be the empty string if the tag is there, but the value empty)
+	echo "$slave_subentry" | cut -d= -f2-
+	return 0
+}
+
+
+function HA_MASTER_HOSTNAME() {
+	set -o pipefail
+	local index=$(grep SMRS_HA_PURPOSE $G_SMRS_CFG_OSS_MASTER | grep $1 | cut -d[ -f 2- | cut -d] -f 1)
+	grep "SMRS_HA_PURPOSE_HOST\[$index\]" $G_SMRS_CFG_OSS_MASTER | cut -d= -f 2-
+	ret=$?
+	set +o pipefail
+	return $ret
+}
+
+function HA_ONLINE_MASTER_HOSTNAME() {
+	HA_MASTER_HOSTNAME online_master
+}
+
+function HA_OFFLINE_MASTER_HOSTNAME() {
+	HA_MASTER_HOSTNAME offline_master
+}
+
+function IP_FROM_SMRS_CONFIG() {
+	set -o pipefail
+	grep ^$1 $G_SMRS_CFG_OSS_MASTER 2>/dev/null| cut -d= -f 2-
+	local ret=$?
+	set +o pipefail
+	return $ret
+}
+
+function OFFLINE_MASTER_MAINT_IP() {
+	IP_FROM_SMRS_CONFIG OFFLINE_SMRS_MASTER_MAINT_IP 
+}
+
+function SMRS_MASTER_MAINT_IP() {
+	IP_FROM_SMRS_CONFIG SMRS_MASTER_TRAFFIC_PIP 
+}
+
+function OFFLINE_MASTER_TRAFFIC_IP() {
+	IP_FROM_SMRS_CONFIG OFFLINE_SMRS_MASTER_TRAFFIC_PIP 
+}
+
+function SMRS_MASTER_TRAFFIC_IP() {
+	IP_FROM_SMRS_CONFIG SMRS_MASTER_TRAFFIC_PIP 
+}
+
+function SMRS_MASTER_IP() {
+	IP_FROM_SMRS_CONFIG SMRS_MASTER_IP 
+}
+
+
+function OFFLINE_MASTER_IS_INSTALLED() {
+	set -o pipefail
+	grep SMRS_HA_PURPOSE $G_SMRS_CFG_OSS_MASTER 2>/dev/null | grep offline_master >/dev/null 2>&1
+	local ret=$?
+	set +o pipefail
+	return $ret
+}
+
+function SMRS_MASTER_IS_INSTALLED() {
+	set -o pipefail
+	grep 'SMRS_MASTER_IP=[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}'  $G_SMRS_CFG_OSS_MASTER > /dev/null 2>&1
+	return $?
+}
+
+function VIP_ON_ONLINE_MASTER() {
+	local ip=$(ssh smrs_master hostname -i 2>/dev/null)
+	local online_ip=$(SMRS_MASTER_TRAFFIC_IP)
+	[ "$ip" = "$online_ip" ]
+}
+
+function VIP_ON_OFFLINE_MASTER() {
+	local ip=$(ssh smrs_master hostname -i 2>/dev/null)
+	local offline_ip=$(OFFLINE_MASTER_TRAFFIC_IP)
+	[ "$ip" = "$offline_ip" ]
+}
+
+
+# SMRS config values
+#tmpf=/tmp/tmpgcs.$$
+#GET_CONFIG_SECTION $G_CONFIG_INI_FILE service TYPE SMRS >$tmpf
+#rc=$?
+#[ $rc -ne 0 ] && {
+#	echo "Error $rc running GET_CONFIG_SECTION to get SMRS section"
+#}
+SMRS_MASTER_ROOTPW=shroot #$(grep '^SMRS_MASTER_ROOTPW=' $tmpf | sed 's/^[^=]*=//')

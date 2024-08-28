@@ -1,0 +1,259 @@
+#!/bin/bash
+# ********************************************************************
+# Ericsson Radio Systems AB                                     SCRIPT
+# ********************************************************************
+#
+#
+# (c) Ericsson Radio Systems AB 2014 - All rights reserved.
+#
+# The copyright to the computer program(s) herein is the property
+# of Ericsson Radio Systems AB, Sweden. The programs may be used
+# and/or copied only with the written permission from Ericsson Radio
+# Systems AB or in accordance with the terms and conditions stipulated
+# in the agreement/contract under which the program(s) have been
+# supplied.
+#
+#
+# ********************************************************************
+# Name    : makepod.bsh
+# Date    : 05/05/2014
+# Revision: 1.0
+# Purpose : make man pages for Orchestrator modules
+#
+
+SCRIPTNAME=$1
+
+NUM_FIXED_ARGS=$#
+
+if [ "$NUM_FIXED_ARGS" -ne "1" ]
+then
+  echo "ERROR: Invalid input missing input file"
+  sleep 2
+  clear
+  echo "Usage: makepod.bsh [ input file ]"
+  exit
+fi
+
+echo ""  
+echo "making man page "${SCRIPTNAME%.bsh}".8"
+echo ""
+echo "auto remove any existing local "${SCRIPTNAME%.bsh}".8 file"
+echo ""
+
+test -e "${SCRIPTNAME%.bsh}".8 && rm -f "${SCRIPTNAME%.bsh}".8
+
+# pod2man is located here on Solaris /usr/perl5/5.8.4/bin/pod2man
+# 
+# Usage:
+#     pod2man [--section=*manext*] [--release=*version*] [--center=*string*]
+#     [--date=*string*] [--fixed=*font*] [--fixedbold=*font*]
+#     [--fixeditalic=*font*] [--fixedbolditalic=*font*] [--name=*name*]
+#     [--official] [--lax] [--quotes=*quotes*] [--verbose] [*input* [*output*]
+#     ...]
+
+$(/usr/perl5/5.8.4/bin/pod2man -s "8" -c "OSS-RC Orchestrator" -r "0.1" -n "${SCRIPTNAME%.bsh}" "${SCRIPTNAME}" > "${SCRIPTNAME%.bsh}".8)
+
+echo "auto remove any existing /usr/man/man8/"${SCRIPTNAME%.bsh}".8 file"
+
+test -e /usr/man/man8/"${SCRIPTNAME%.bsh}".8 && rm -f /usr/man/man8/"${SCRIPTNAME%.bsh}".8
+
+echo ""  
+echo "moving local "${SCRIPTNAME%.bsh}".8 file to /usr/man/man8"
+mv "${SCRIPTNAME%.bsh}".8 /usr/man/man8
+chmod 544 /usr/man/man8/"${SCRIPTNAME%.bsh}".8
+echo ""  
+
+# POD2MAN(1)             Perl Programmers Reference Guide             POD2MAN(1)
+
+# NAME
+# pod2man - Convert POD data to formatted *roff input
+
+# SYNOPSIS
+# pod2man [--center=string] [--date=string] [--errors=style]
+# [--fixed=font] [--fixedbold=font] [--fixeditalic=font]
+# [--fixedbolditalic=font] [--name=name] [--nourls]
+# [--official] [--quotes=quotes] [--release[=version]]
+# [--section=manext] [--stderr] [--utf8] [--verbose]
+# [input [output] ...]
+
+# DESCRIPTION
+# pod2man is a front-end for Pod::Man, using it to generate *roff input
+# from POD source.  The resulting *roff code is suitable for display on a
+# terminal using nroff(1), normally via man(1), or printing using
+# troff(1).
+
+# input is the file to read for POD source (the POD can be embedded in
+# code).  If input isn't given, it defaults to "STDIN".  output, if
+# given, is the file to which to write the formatted output.  If output
+# isn't given, the formatted output is written to "STDOUT".  Several POD
+# files can be processed in the same pod2man invocation (saving module
+# load and compile times) by providing multiple pairs of input and output
+# files on the command line.
+
+# --section, --release, --center, --date, and --official can be used to
+# set the headers and footers to use; if not given, Pod::Man will assume
+# various defaults.  See below or Pod::Man for details.
+
+# pod2man assumes that your *roff formatters have a fixed-width font
+# named "CW".  If yours is called something else (like "CR"), use --fixed
+# to specify it.  This generally only matters for troff output for
+# printing.  Similarly, you can set the fonts used for bold, italic, and
+# bold italic fixed-width output.
+
+# Besides the obvious pod conversions, Pod::Man, and therefore pod2man
+# also takes care of formatting func(), func(n), and simple variable
+# references like $foo or @bar so you don't have to use code escapes for
+# them; complex expressions like $fred{'stuff'} will still need to be
+# escaped, though.  It also translates dashes that aren't used as hyphens
+# into en dashes, makes long dashes--like this--into proper em dashes,
+# fixes "paired quotes," and takes care of several other troff-specific
+# tweaks.  See Pod::Man for complete information.
+
+# OPTIONS
+# -c string, --center=string
+# Sets the centered page header to string.  The default is "User
+# Contributed Perl Documentation", but also see --official below.
+
+# -d string, --date=string
+# Set the left-hand footer string to this value.  By default, the
+# modification date of the input file will be used, or the current
+# date if input comes from "STDIN".
+
+# -errors=style
+# Set the error handling style.  "die" says to throw an exception on
+# any POD formatting error.  "stderr" says to report errors on
+# standard error, but not to throw an exception.  "pod" says to
+# include a POD ERRORS section in the resulting documentation
+# summarizing the errors.  "none" ignores POD errors entirely, as
+# much as possible.
+
+# The default is "die".
+
+# --fixed=font
+# The fixed-width font to use for verbatim text and code.  Defaults
+# to "CW".  Some systems may want "CR" instead.  Only matters for
+# troff(1) output.
+
+# --fixedbold=font
+# Bold version of the fixed-width font.  Defaults to "CB".  Only
+# matters for troff(1) output.
+
+# --fixeditalic=font
+# Italic version of the fixed-width font (actually, something of a
+# misnomer, since most fixed-width fonts only have an oblique
+# version, not an italic version).  Defaults to "CI".  Only matters
+# for troff(1) output.
+
+# --fixedbolditalic=font
+# Bold italic (probably actually oblique) version of the fixed-width
+# font.  Pod::Man doesn't assume you have this, and defaults to "CB".
+# Some systems (such as Solaris) have this font available as "CX".
+# Only matters for troff(1) output.
+
+# -h, --help
+# Print out usage information.
+
+# -l, --lax
+# No longer used.  pod2man used to check its input for validity as a
+# manual page, but this should now be done by podchecker(1) instead.
+# Accepted for backward compatibility; this option no longer does
+# anything.
+
+# -n name, --name=name
+# Set the name of the manual page to name.  Without this option, the
+# manual name is set to the uppercased base name of the file being
+# converted unless the manual section is 3, in which case the path is
+# parsed to see if it is a Perl module path.  If it is, a path like
+# ".../lib/Pod/Man.pm" is converted into a name like "Pod::Man".
+# This option, if given, overrides any automatic determination of the
+# name.
+
+# Note that this option is probably not useful when converting
+# multiple POD files at once.  The convention for Unix man pages for
+# commands is for the man page title to be in all-uppercase even if
+# the command isn't.
+
+# --nourls
+# Normally, L<> formatting codes with a URL but anchor text are
+# formatted to show both the anchor text and the URL.  In other
+# words:
+
+   # L<foo|http://example.com/>
+   # is formatted as:
+   # foo <http://example.com/>
+
+# This flag, if given, suppresses the URL when anchor text is given,
+# so this example would be formatted as just "foo".  This can produce
+# less cluttered output in cases where the URLs are not particularly
+# important.
+
+# -o, --official
+# Set the default header to indicate that this page is part of the
+# standard Perl release, if --center is not also given.
+
+# -q quotes, --quotes=quotes
+# Sets the quote marks used to surround C<> text to quotes.  If
+# quotes is a single character, it is used as both the left and right
+# quote; if quotes is two characters, the first character is used as
+# the left quote and the second as the right quoted; and if quotes is
+# four characters, the first two are used as the left quote and the
+# second two as the right quote.
+
+# quotes may also be set to the special value "none", in which case
+# no quote marks are added around C<> text (but the font is still
+# changed for troff output).
+
+# -r, --release
+# Set the centered footer.  By default, this is the version of Perl
+# you run pod2man under.  Note that some system an macro sets assume
+# that the centered footer will be a modification date and will
+# prepend something like "Last modified: "; if this is the case, you
+# may want to set --release to the last modified date and --date to
+# the version number.
+
+# -s, --section
+# Set the section for the ".TH" macro.  The standard section
+# numbering convention is to use 1 for user commands, 2 for system
+# calls, 3 for functions, 4 for devices, 5 for file formats, 6 for
+# games, 7 for miscellaneous information, and 8 for administrator
+# commands.  There is a lot of variation here, however; some systems
+# (like Solaris) use 4 for file formats, 5 for miscellaneous
+# information, and 7 for devices.  Still others use 1m instead of 8,
+# or some mix of both.  About the only section numbers that are
+# reliably consistent are 1, 2, and 3.
+
+# By default, section 1 will be used unless the file ends in ".pm",
+# in which case section 3 will be selected.
+
+# --stderr
+# By default, pod2man dies if any errors are detected in the POD
+# input.  If --stderr is given and no --errors flag is present,
+# errors are sent to standard error, but pod2man does not abort.
+# This is equivalent to "--errors=stderr" and is supported for
+# backward compatibility.
+
+# -u, --utf8
+# By default, pod2man produces the most conservative possible *roff
+# output to try to ensure that it will work with as many different
+# *roff implementations as possible.  Many *roff implementations
+# cannot handle non-ASCII characters, so this means all non-ASCII
+# characters are converted either to a *roff escape sequence that
+# tries to create a properly accented character (at least for troff
+# output) or to "X".
+
+# This option says to instead output literal UTF-8 characters.  If
+# your *roff implementation can handle it, this is the best output
+# format to use and avoids corruption of documents containing non-
+# ASCII characters.  However, be warned that *roff source with
+# literal UTF-8 characters is not supported by many implementations
+# and may even result in segfaults and other bad behavior.
+
+# Be aware that, when using this option, the input encoding of your
+# POD source must be properly declared unless it is US-ASCII or
+# Latin-1.  POD input without an "=encoding" command will be assumed
+# to be in Latin-1, and if it's actually in UTF-8, the output will be
+# double-encoded.  See perlpod(1) for more information on the
+# "=encoding" command.
+
+# -v, --verbose
+# Print out the name of each output file as it is being generated.

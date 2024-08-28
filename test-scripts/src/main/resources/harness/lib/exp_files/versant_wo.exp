@@ -1,0 +1,97 @@
+#!./expect -- 
+
+set timeout 120 
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set HASTOP [lindex $argv 2]
+
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${ADMIN1}.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+expect "#"
+expect_after timeout exit
+if {$ADMIN2 != "NO"} {
+	send "ssh ${ADMIN2}-priv\r"
+	expect "${ADMIN2}\{root\} #"
+}
+
+
+if {$HASTOP == "YES"} {
+	send "hastop -all\r"
+                expect "#"
+                sleep 1300 
+                set timeout 120 
+                set count 0
+                while {$count < 15} {
+                        send "hastatus -sum\r"
+
+                        expect {
+                                "VCS ERROR V-16-1-10600 Cannot connect to VCS engine" {
+                                expect "#"
+                                sleep 5
+                                break}
+
+                        timeout {
+                                puts "timeout"
+                                set count [expr $count+1]}
+                                }
+                }
+                if {$count == "15"} {
+                    exit 1
+                }
+}
+
+send -- "svcadm disable svc:/network/oscssd/tcp:default\r"
+sleep 10
+expect "#"
+send -- "svcadm clear svc:/ericsson/eric_3pp/versant:default\r"
+sleep 10
+expect "#"	
+sleep 180 
+if {$HASTOP == "YES"} {
+   	send "hastart\r"
+        expect "#"
+	set timeout 120
+	set count 0
+	while {$count < 15} {
+                send "hastatus -sum | grep \"Oss \"| grep ${ADMIN2} | grep -v \"W_\"\r"
+
+                expect {
+                        " ONLINE" {
+                        expect "#"
+                        sleep 5
+                        break}
+
+                timeout {
+                        puts "timeout"
+                        set count [expr $count+1]}
+                }
+	}
+ 	if {$count == "15"} {
+                    exit 1
+        }
+}
+exit 0

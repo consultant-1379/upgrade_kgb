@@ -1,0 +1,59 @@
+#!./expect -- 
+
+# return 1 on error
+# return 2 if admin 2 exited
+# return 3 if admin 2 running
+# return 4 if admin 2 unknown
+# return 5 if admin 1 not reachable, may be cutover 
+set timeout 120 
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$ADMIN1.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 5}
+ 		timeout {
+			puts "warning: timed out"
+			exit 5}
+		}
+	}
+expect "#"
+send "hasys -state ${ADMIN2}\r"
+while 1 {
+        expect {
+                "EXITED" {
+                        exit 2}
+                "RUNNING" {
+                        exit 3}
+                "UNKNOWN" {
+                        exit 4}
+                "FAULTED" {
+                        exit 4}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+expect "#"
+exit 0

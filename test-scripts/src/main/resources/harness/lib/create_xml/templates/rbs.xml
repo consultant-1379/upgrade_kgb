@@ -1,0 +1,67 @@
+         <ManagedElement sourceType="CELLO">
+            <ManagedElementId string="%nename%"/>
+            <primaryType type="RBS"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=%site%"/>
+            <nodeVersion string=""/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Ericsson"/>
+            <userDefinedState string=""/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <neMIMVersion string="K.2.3"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://%ip%:80/em/index.html"/>
+                  <ipAddress ip_v4="%ip%"/>
+                  <hostname string=""/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="CORBA"/>
+                     <port int="0"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string="http://%ip%:80/cello/ior_files/nameroot.ior"/>
+                     <namingPort int="0"/>
+                     <notificationIRPAgentVersion string="3.2"/>
+                     <alarmIRPAgentVersion string="3.2"/>
+                     <notificationIRPNamingContext context="NOTIFICATION_IRP_VERSION_1_1"/>
+                     <alarmIRPNamingContext context="ALARM_IRP_VERSION_1_1"/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="%nename%"/>
+                  <Type string="NORMAL"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+               <Entry>
+                  <System string="%nename%"/>
+                  <Type string="SECURE"/>
+                  <User string="1"/>
+                  <Password string="1"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-%slave%,FtpService=w-back-%slave%" AssociationType="ManagedElement_to_ftpBackupStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-%slave%,FtpService=w-key-%slave%" AssociationType="ManagedElement_to_ftpLicenseKeyStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-%slave%,FtpService=w-sws-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-WRAN-%slave%,FtpService=%autoIntegrationFtpService%" AssociationType="ManagedElement_to_autoIntegration"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+               <AssociableNode TO_FDN="SubNetwork=%rncname%,Group=RbsGrp1" AssociationType="Group_to_MeContext"/>
+            </Relationship>
+	</ManagedElement>

@@ -1,0 +1,47 @@
+set force_conservative 1
+set ADMIN1 [lindex $argv 0]
+set UGBUIP [lindex $argv 1]
+set MWS_HOSTNAME [lindex $argv 2]
+set MWS_ROOTPW [lindex $argv 3]
+set timeout 54
+
+spawn ssh  -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$MWS_HOSTNAME
+while 1 {
+expect {
+ "Are you sure you want to continue connecting" {send "yes\r"}
+ "assword" {
+                send "$MWS_ROOTPW\r"
+                break }
+ timeout        {exit 1}
+ }
+}
+
+expect "#"
+send "ssh ${UGBUIP}\r"
+while 1 {
+expect {
+ "Are you sure you want to continue connecting" {send "yes\r"}
+ "assword" {
+                send "shroot\r"
+                break }
+ timeout        {exit 1}
+ }
+}
+expect "#"
+puts "connecting to admin1"
+ send "ssh ${ADMIN1}-priv\r"
+while 1 {
+        expect {
+                "${ADMIN1}\{root\} #" {
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+set timeout  3600
+send "/opt/ericsson/sck/bin/split_cluster isolate_system\r"
+expect " #"
+send "/opt/ericsson/sck/bin/split_cluster rmip_backup\r"
+expect " #"
+sleep 10

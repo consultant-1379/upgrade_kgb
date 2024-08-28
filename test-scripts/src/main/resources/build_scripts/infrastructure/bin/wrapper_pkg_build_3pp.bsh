@@ -1,0 +1,165 @@
+#! /bin/bash  
+
+# usage function
+usage () {
+cat << EOF
+
+Synchronises one or more OSSRC shipments from Delivery Management server.
+
+-p = individual packagenames to check the need for rebuild. For multiple packages supply list enclosed in ""
+     e.g -p "ERICvrsnt EXTRvrsnt"
+     If 2 packages exist with the Same name,  both packages wil be built in accordance with the Manifest. 
+       
+-a = Check all packages in manifest on the need for rebuild 
+
+Example:
+
+
+EOF
+    return 0
+}
+
+
+function check_all ()
+{
+
+echo "Processing file: $MANIFESTFILE"
+
+read_pkg_info $MANIFESTFILE
+
+l_count=0
+while [[ $l_count -lt ${#PKGINFO_NAME[@]} ]]; do
+        export CI_FILENAME=${PKGINFO_NAME[$l_count]}
+        export CI_PKGNAME=${PKGINFO_FILENAME[$l_count]}
+        export CI_PKGVERSION=${PKGINFO_RSTATE[$l_count]}
+        export CI_CONFIGSPECFILE=${PKGINFO_CONFIG_SPEC[$l_count]}
+        export CI_CLEARCASEVIEW=${PKGINFO_CLEARCASEVIEW[$l_count]}
+        export CI_PKG_ARCH=${PKGINFO_ARCH[$l_count]}
+        export CI_PROTODIR=${PKGINFO_PROTODIR[$l_count]}
+        export CI_BUILD_SCRIPT=${PKGINFO_BUILD_SCRIPT[$l_count]}
+        export CI_SOURCE_DIR=${PKGINFO_PACKAGE_SOURCE[$l_count]}
+        export CI_PACKAGE_DEST_DIR=${PKGINFO_PACKAGE_DEST_DIR[$l_count]}
+        export CI_BUILD=${PKGINFO_BUILD[$l_count]}
+ 	echo " +++++++ Call jenkins Job here +++++++ " 
+        $G_SCRIPTDIR/pkg_build_3pp.bsh $CI_FILENAME $CI_PKGNAME $CI_PKGVERSION $CI_CONFIGSPECFILE $CI_CLEARCASEVIEW $CI_ARCH $CI_PROTODIR $CI_PROTODIR $CI_SOURCE_DIR $CI_PACKAGE_DEST_DIR $CI_BUILD
+        echo "$G_SCRIPTDIR/pkg_build_3pp.bsh $CI_FILENAME $CI_PKGNAME $CI_PKGVERSION $CI_CONFIGSPECFILE $CI_CLEARCASEVIEW $CI_ARCH $CI_PROTODIR $CI_PROTODIR $CI_SOURCE_DIR $CI_PACKAGE_DEST_DIR $CI_BUILD" 
+	let l_count+=1
+done
+
+
+}
+##############################################
+
+function check_one ()
+{
+packagelist="$1"
+read_pkg_info $MANIFESTFILE
+for package in $packagelist; do  
+        found=FALSE
+        echo "Processing $package against manifest file: $MANIFESTFILE"
+	l_count=0
+	while [[ $l_count -lt ${#PKGINFO_NAME[@]} ]]; do
+      		if [[ "$package" ==  "${PKGINFO_NAME[$l_count]}" ]]; then
+       	 	   	echo "Found $package"
+                        found=TRUE
+                        export CI_FILENAME=${PKGINFO_NAME[$l_count]}
+                        export CI_PKGNAME=${PKGINFO_FILENAME[$l_count]}
+        		export CI_PKGVERSION=${PKGINFO_RSTATE[$l_count]}
+        		export CI_CONFIGSPECFILE=${PKGINFO_CONFIG_SPEC[$l_count]}
+        		export CI_CLEARCASEVIEW=${PKGINFO_CLEARCASEVIEW[$l_count]}
+        		export CI_PKG_ARCH=${PKGINFO_ARCH[$l_count]}
+        		export CI_PROTODIR=${PKGINFO_PROTODIR[$l_count]}
+                        export CI_BUILD_SCRIPT=${PKGINFO_BUILD_SCRIPT[$l_count]}
+        		export CI_SOURCE_DIR=${PKGINFO_PACKAGE_SOURCE[$l_count]}
+        		export CI_PACKAGE_DEST_DIR=${PKGINFO_PACKAGE_DEST_DIR[$l_count]}
+                        export CI_BUILD=${PKGINFO_BUILD[$l_count]}
+
+                        ci_proplist="$CI_FILENAME $CI_PKGNAME $CI_PKGVERSION $CI_CONFIGSPECFILE $CI_CLEARCASEVIEW $CI_PKG_ARCH $CI_PROTODIR $CI_SOURCE_DIR $CI_PACKAGE_DEST_DIR $CI_BUILD" 
+			for prop in $ci_proplist; do
+				echo " \n set prop $prop" 
+                        done 
+         	   	echo " +++++++ Call jenkins Job here +++++++ "
+                        $G_SCRIPTDIR/pkg_build_3pp.bsh $CI_FILENAME $CI_PKGNAME $CI_PKGVERSION $CI_CONFIGSPECFILE $CI_CLEARCASEVIEW $CI_PKG_ARCH $CI_PROTODIR $CI_PROTODIR $CI_SOURCE_DIR $CI_PACKAGE_DEST_DIR $CI_BUILD
+                        res=`echo $?` 
+                        echo "$G_SCRIPTDIR/pkg_build_3pp.bsh $CI_FILENAME $CI_PKGNAME $CI_PKGVERSION $CI_CONFIGSPECFILE $CI_CLEARCASEVIEW $CI_PKG_ARCH $CI_PROTODIR $CI_PROTODIR $CI_SOURCE_DIR $CI_PACKAGE_DEST_DIR $CI_BUILD"
+                        if [ $res -ne 0 ]; then
+                        echo "Package $CI_PKGNAME wasn't built. Problem occured - please check jenkins console output" 
+                        exit 1
+               fi	
+	fi
+      		let l_count+=1 
+	done 
+        if [ $found == "FALSE" ]; then 
+           echo "$package not found in manifest file $MANIFESTFILE" 
+        fi
+done
+}
+
+
+#############################################
+
+
+
+##############################################
+############MAIN 
+##############################################
+
+
+# Script and host name
+DATETIME=`date +%d-%m-%Y_%H-%M-%S`
+G_SCRIPTNAME=$(basename $0)
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_LIBDIR=$SCRIPTDIR
+LOGDIR=/var/tmp/${G_SCRIPTNAME}_log
+if [ ! -d $LOGDIR ]; then
+    mkdir -p $LOGDIR
+fi
+
+LOG=${LOGDIR}/${G_SCRIPTNAME}_${DATETIME}.log
+SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+
+# Read common function libraries
+. $G_SCRIPTDIR/../lib/common_functions.lib
+G_ETCDIR=$( dirname $G_SCRIPTDIR )/etc
+
+#LOG=${LOGDIR}/${SCRIPTNAME}_${DATETIME}.log
+G_LIBDIR=$SCRIPTDIR
+#MANIFESTFILE=$SCRIPTDIR/../etc/config_specs/3pp_package_manifest
+
+if [ -z $MANIFESTFILE ]; then
+           echo "$MANIFESTFILE does not exist or is 0 bytes cannot continue"
+           exit 1
+fi
+
+# Read common function libraries
+#.  /home/eolikil/repos/cominf_test/SOURCES/build_scripts/infrastructure/lib/common_functions.lib
+
+# make sure some option is selected 
+if (($# == 0)); then
+        usage
+        exit 1
+fi
+
+
+
+while getopts "p:a" opt; do
+        case $opt in
+                p)      p_list=$OPTARG
+			check_one "$p_list" 
+                        ;;
+                a)      check_all 
+                        ;;
+                ?)
+                        echo "invalid option \"$opt\""
+                        usage
+                        exit 1
+                        ;;
+        esac
+done
+
+shift $((${OPTIND} - 1))
+if [ "$#" -ne 0 ]; then
+        usage
+       exit 1
+fi
+

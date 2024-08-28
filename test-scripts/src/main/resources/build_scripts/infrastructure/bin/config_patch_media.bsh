@@ -1,0 +1,203 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 07/01/2014    edavmax         First version
+
+usage() {
+cat << EOF
+
+Usage:  ${SCRIPTNAME} [-h]
+	${SCRIPTNAME} -s <ci shipment> -r <sol patches rstate> -d <location of patch bundle on clearcase server>
+			-p <mws location of sparc solaris media> -z <mws location of x86 solaris media>
+			-M <FQHN of MWS> -q <root password of MWS>
+			-k
+EOF
+
+
+return 0
+
+}
+
+#
+# Function to check command line arguments
+#
+check_args() {
+	if [ -z "$CI_FQ_SHIPMENT" ]; then
+		error "Error - shipment arg not specified"
+		return 1
+	fi
+	if [ -z "$SOLPATCHRSTATE" ]; then
+		error "Error - patch r-state arg not specified"
+		return 1
+	fi
+	if [ -z "$PATCHBUNDLELOC" ]; then
+		error "Error - patch location arg not specified"
+		return 1
+	fi
+	if [ -z "$SPARCSOLPATH" ]; then
+		usage
+		error "Path to SPARC solaris media not specified or path does not exist"
+		return 1
+	fi
+	if [ -z "$X86SOLPATH" ]; then
+		usage
+		error "Path to X86 solaris media not specified or path does not exist"
+		return 1
+	fi
+	if [ -z "$CI_MWS_HOSTNAME" ]; then
+		error "Error - MWS host name arg not specified"
+		return 1
+	fi
+	if [ -z "$CI_MWS_ROOTPW" ]; then
+		error "Error - MWS root passwd arg not specified"
+		return 1
+	fi
+	[  "$SKIPBUILDKGBMEDIA" = TRUE ] && {
+		info "Skipping building of KGB media"
+	}
+	return 0
+
+}
+
+#
+# Function to configure MWS to receive shipment
+#
+configure_shipments() {
+	for team in $KGBTEAM $PATCHTEAM; do
+		[[ "$team" = "$KGBTEAM" && "$SKIPBUILDKGBMEDIA" = TRUE ]] && continue
+		info "Configuring $CI_FQ_SHIPMENT for team $team"
+		$EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "root@$CI_MWS_HOSTNAME $MWSCONFIGURESHIPSCRIPT -a add -t $team -s OSSRC_${CI_FQ_SHIPMENT} -p $SPARCSOLPATH -x $X86SOLPATH" $CI_MWS_ROOTPW || {
+			error "Failure of script $MWSCONFIGURESHIPSCRIPT on $CI_MWS_HOSTNAME"
+			return 1
+		}
+	done
+
+}
+
+#
+# Function to copy patches to media staging area
+#
+copy_patches() {
+	local l_patch_bundle=$PATCHBUNDLELOC/Patches_${SOLPATCHRSTATE}.tar.gz
+	info "Copying solaris patch bundle $l_patch_bundle to shipment $CI_FQ_SHIPMENT"
+	$EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "root@$CI_MWS_HOSTNAME $MWSBUILDPACKAGESCRIPT -m om -d Patches -l $l_patch_bundle -v $SOLPATCHRSTATE -t $PATCHTEAM  -s $CI_FQ_SHIPMENT" $CI_MWS_ROOTPW || {
+		error "Failed to grab new patch bundle $l_patch_bundle from clearcase server"
+		return 1
+	}
+}
+
+#
+# Function to build KGB and Solaris patch media
+#
+#
+build_media() {
+echo ">>$SKIPBUILDKGBMEDIA<<"
+	for team in $KGBTEAM $PATCHTEAM; do
+		[[ "$team" = "$KGBTEAM" && "$SKIPBUILDKGBMEDIA" = TRUE ]] && continue
+		info "Building $team media for shipment $CI_FQ_SHIPMENT"
+		$EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "root@$CI_MWS_HOSTNAME $MWSCOPYJUMPSCRIPT -t $team -s OSSRC_${CI_FQ_SHIPMENT} -f -u" $CI_MWS_ROOTPW || {
+			error "Problem occured building $team shipment $CI_FQ_SHIPMENT" 
+			return 1
+		}
+	done
+}
+
+
+# MAIN
+SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+SCRIPTNAME=$(/bin/basename $0)
+REMOTE_SCRIPT=build_package_remote.bsh
+CLEARCASE_HOST=selid1t010.lmera.ericsson.se
+CLEARCASE_USER=ossrcci
+CLEARCASE_PASSWD=Ericsson1
+CLEARCASE_VIEW=ossrcci_view
+CLEARCASE_VOB_LOC=/vobs/oss_sck/build
+BUILD_PACKAGE=FALSE
+COMPRESS_PACKAGE=FALSE
+PACKAGE_LOCATION=
+P7ZIP=/usr/bin/p7zip
+KGBTEAM=infra
+PATCHTEAM=sol_patches
+MWSGITREPOBINDIR=/git_repos/cominf_test/SOURCES/build_scripts/infrastructure/bin
+MWSCONFIGURESHIPSCRIPT=$MWSGITREPOBINDIR/configure_shipment.bsh
+MWSBUILDPACKAGESCRIPT=$MWSGITREPOBINDIR/build_package_mws.bsh
+MWSCOPYJUMPSCRIPT=$MWSGITREPOBINDIR/copy_jump
+SKIPBUILDKGBMEDIA=FALSE
+. $SCRIPTDIR/../lib/common_functions.lib 
+
+#commands
+if [ -x /usr/local/bin/expect ]; then
+        EXPECT=/usr/local/bin/expect
+elif [ -x /app/expect/5.40.1/bin/expect  ]; then
+        EXPECT=/app/expect/5.40.1/bin/expect
+fi
+
+[ ! -x "$EXPECT" ] && {
+	error "Expect not installed on $(hostname)"
+	exit 1
+}
+
+
+#commands
+
+while getopts ":r:s:d:p:x:m:q:kh" opt
+	do
+	case ${opt} in
+		r)
+			SOLPATCHRSTATE=$OPTARG
+			;;
+		s)
+			CI_FQ_SHIPMENT=$OPTARG
+			;;
+		d)
+			PATCHBUNDLELOC=$OPTARG
+			;;
+		p)      SPARCSOLPATH=$OPTARG
+                        ;;
+                x)      X86SOLPATH=$OPTARG
+                        ;;
+		m)	CI_MWS_HOSTNAME=$OPTARG
+			;;
+		q) 	CI_MWS_ROOTPW=$OPTARG
+			;;
+		k)
+			SKIPBUILDKGBMEDIA=TRUE
+			;;
+		h)      # Print help and exit OK
+			usage
+			exit 0
+		;;
+		*)      # Print usage and exit error
+			usage
+			exit 1
+		;;
+	esac
+done
+
+check_args || {
+	usage
+	exit 1
+}
+
+configure_shipments || exit 1
+
+copy_patches || exit 1
+
+build_media || exit 1
+
+
+
+exit 0

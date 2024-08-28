@@ -1,0 +1,71 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set MOUNT [lindex $argv 1]
+
+#main
+
+spawn ssh -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+set timeout 600 
+send "pkgrm -n ERICusck\r"
+while 1 {
+        expect {
+
+                "was successful" {
+                        break}
+                "no package associated with" {
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        break}
+                }
+        }
+
+
+
+send "rm -rf /ossrc/upgrade/core/\r"
+expect "#"
+send "rm -rf /ossrc/upgrade/R*/\r"
+expect "#"
+sleep 10
+send "mkdir /tmp/temp_mount_point\r"
+expect "#"
+send "mount $MOUNT /tmp/temp_mount_point\r"
+#expect "#"
+#send "cp /tmp/temp_mount_point/ossrc_base_sw/eric_app/common/ERICurwmom.pkg /ossrc/upgrade/ \r"
+expect "#"
+send "/tmp/temp_mount_point/ossrc_base_sw/inst_config/common/upgrade/update_usck.bsh -p /tmp/temp_mount_point/ossrc_base_sw/inst_config\r"
+expect "successful"
+send "umount /tmp/temp_mount_point\r"
+expect "#"
+send "/opt/ericsson/sck/bin/system_checks.bsh -a pre_sys_upgrade\r"
+expect "Pre System Upgrade Check Result"
+sleep 30

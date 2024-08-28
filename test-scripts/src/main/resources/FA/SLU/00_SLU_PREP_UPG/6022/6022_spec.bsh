@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Tuesday 15th of April 2014 12:05:48
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="SLU"
+SPEC_UC_NAME="00_SLU_PREP_UPG"
+SPEC_TC_ID=6022
+SPEC_TC_SLOGAN="Verify solaris live upgrade prepare for upgrade check interrupts"
+SPEC_TC_TYPE="FT"
+SPEC_TC_POLARITY="negative"
+SPEC_TC_PRIORITY="low"
+SPEC_TC_AUTOMATED=1
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=300
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xgeonew"
+SPEC_TC_AUTOMATOR="xgeonew"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+#- Solaris installed and at multi-user milestone
+#- media cached on MWS
+#- disk slice available for new boot env
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#- download patch kit kit
+#- run pre checks
+#- patch live upgrade
+#- create NBE
+#- upgrade NBE
+#- activate
+#- cutover
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+#- lustatus - check NBE is active
+#- uname
+#- etc
+# END_POST_CONDITIONS

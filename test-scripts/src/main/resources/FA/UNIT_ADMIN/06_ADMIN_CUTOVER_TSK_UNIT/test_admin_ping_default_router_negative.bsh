@@ -1,0 +1,51 @@
+#!/bin/bash
+# Tests function admin_ping_default_router, failure case
+# Precondition: Must be on Admin cluster on isolated side
+# 
+#
+source /opt/ericsson/sck/lib/admin_common_functions.lib
+DEBUG=TRUE
+RES=0
+NO_OF_ERRORS=0
+
+################################################################################
+# Test 1: Positive run of admin_perform_isolate_system_postchecks 
+#
+###############################################################################
+
+#############Pre-condition - Server must be isolated ##########################
+if  ! orc_check_blocked_state
+then
+    echo "ERROR: this test should be run on an isolated admin server"
+    exit 1
+fi
+
+#############Test ########################################################
+
+RES=0
+admin_ping_default_router
+RES=$?
+
+if [ $RES -eq 1 ]
+then
+    echo "############Negative test of admin_ping_default_router was successful ##########"
+else 
+    echo "############Negative test of admin_ping_default_router failed ########## "
+    ((NO_OF_ERRORS=NO_OF_ERRORS=1))
+fi
+
+#############Test 1: End ########################################################
+
+
+####################Results summary ####################################################
+if [ $NO_OF_ERRORS -eq 0 ] 
+then
+    echo "############admin_ping_default_router negative tests executed successfully############"
+    exit 0
+else
+    echo "############admin_ping_default_router negative tests failed with ${NO_OF_ERRORS}############"
+    exit 1
+fi 
+
+
+##################Results summary ####################################################

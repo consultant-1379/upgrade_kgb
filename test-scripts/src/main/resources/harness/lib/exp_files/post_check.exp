@@ -1,0 +1,304 @@
+#!./expect -- 
+set timeout 120 
+#log_user 0
+# wait forever
+
+set systemTime [clock seconds]
+set SERVER [lindex $argv 0]
+set RELEASE [lindex $argv 1]
+set SHIPMENT [lindex $argv 2]
+set TEAM [lindex $argv 3 ]
+set TYPE [lindex $argv 4]
+set LLSV_NO [lindex $argv 5]
+set PLATFORM [lindex $argv 6]
+set DATE [lindex $argv 7] 
+set TIME [lindex $argv 8] 
+set INSTALLFINISH [lindex $argv 9] 
+set INSTALLLOGDATE [lindex $argv 10] 
+set DMBUILDDATE [lindex $argv 11] 
+set ONLINES [lindex $argv 12] 
+set ADMIN2 [lindex $argv 13] 
+set MWS_HOSTNAME [lindex $argv 14]
+set results(OVERALL) "1"
+set results(CLUSTER) "0"
+set results(WARNING) "0"
+set results(SMTOOL) "0"
+set results(INSTALL) "0"
+set D1 "\$1" 
+set D2 "\$2" 
+set D "\$" 
+set PIPESTATUS "\${PIPESTATUS\[0\]}" 
+set FILTER "\[\{,\},\"\]" 
+set SERVERS $SERVER
+if {$ADMIN2 != "NO"} {
+	set SERVERS "$SERVER,$ADMIN2"
+}
+set prompt "\\#|>" 
+spawn /bin/bash -
+expect -re $prompt
+send "unset correct\r"
+expect -re $prompt
+send "mkdir -p /proj/ossrcci/logs/extra/$RELEASE/$SHIPMENT/\r"
+expect -re $prompt
+send "chmod -fR 777 /proj/ossrcci/logs/extra/$RELEASE/$SHIPMENT/\r"
+expect -re $prompt
+sleep 3
+send "exit\r"
+expect "*"
+log_file /proj/ossrcci/logs/extra/$RELEASE/$SHIPMENT/post_check-II-$RELEASE-NA-$SHIPMENT-$LLSV_NO-$PLATFORM-$DATE-$TIME.txt
+proc get_arch {} {
+	global results 
+	send "uname -p\r"
+	expect "#"
+	set a1 $expect_out(buffer)
+	set a2 [split $a1 "\r\n"]
+	set results(ARCH) [lindex $a2 2]
+}
+proc check_if_cluster {} {
+	global results 
+	global D
+	send "gabconfig -a | wc -l | sed -e 's/^\[ \\t]*//' | sed 's/\[ \\t]*$D//'\r"
+	expect "#"
+	set b1 $expect_out(buffer)
+	set b2 [split $b1 "\r\n"]
+	if {[lindex $b2 2] >= "3"} {
+		incr results(CLUSTER)
+	}
+}
+
+proc check_package_install {pkg} {
+	global results
+	set pkg_1 $pkg 
+	append pkg_1 _1
+	set results($pkg_1) "0"
+	send -- "pkginfo -l $pkg | grep \"STATUS:  completely installed\" > /dev/null && echo \"OK\"  || echo \"fail\"\r"
+	expect "#"
+	set pkginfo1 $expect_out(buffer)
+	set pkginfo2 [split $pkginfo1 "\r\n"]
+	if {[lindex $pkginfo2 2] != "OK"} {
+		incr results(OVERALL)
+		incr results($pkg_1)
+	}
+	#send -- "pkginfo -l $pkg | grep \"VERSION:\"  || echo \"fail\"\r"
+	send -- "pkginfo -l $pkg | grep VERSION: | sed \'s/VERSION://\'  || echo \"fail\"\r"
+	#send -- "pkginfo -l $pkg | grep VERSION: | sed \'s/VERSION://;s/^[ \t]*//;s/[ \t]*$//\'  || echo \"fail\"\r"
+	expect "#"
+	set pkginfo3 $expect_out(buffer)
+	set pkginfo4 [split $pkginfo3 "\r\n"]
+	if {[lindex $pkginfo4 2] == "fail"} {
+		incr results(OVERALL)
+		incr results($pkg_1)
+	}
+	set results($pkg) [lindex $pkginfo4 2]
+}
+
+
+proc get_install1_info {} {
+	global results 
+	send "cat /ericsson/config/next_stage | grep cleanup > /dev/null && echo \"Installation of Core Completed\" || echo \"*** WARNING !! INSTALLATION OF CORE NOT COMPLETE!\"\r"
+	expect "#"
+	set c1 $expect_out(buffer)
+	set c2 [split $c1 "\r\n"]
+	if {[lindex $c2 2] != "Installation of Core Completed"} {
+		incr results(OVERALL)
+		incr results(INSTALL)
+	}
+	set results(CORE) [lindex $c2 1]
+	send "cat /ericsson/config/.iistage | grep done > /dev/null && echo \"Installation of OSS Completed\"  || echo \"*** WARNING !! INSTALLATION OF OSS_INSTALL NOT COMPLETE!\"\r"
+	expect "#"
+	set d1 $expect_out(buffer)
+	set d2 [split $d1 "\r\n"]
+	set results(OSS) [lindex $d2 2]
+	if {[lindex $d2 2] != "Installation of OSS Completed"} {
+		incr results(OVERALL)
+		incr results(INSTALL)
+	}
+}
+proc get_mc_status {} {
+	global results 
+	global D
+	send "smtool -l | egrep -v \"BI_SMRS_MC |netop_ems |started\" | wc -l | sed -e 's/^\[ \\t]*//' | sed 's/\[ \\t]*$D//'\r"
+	expect "#"
+	set e1 $expect_out(buffer)
+	set e2 [split $e1 "\r\n"]
+	if {[lindex $e2 2] != "0"} {
+		incr results(WARNING)
+		set results(SMTOOL) [lindex $e2 2]
+	}
+}
+proc get_not_online_mcs {} {
+        global results
+        global D
+        send "smtool -l | egrep -v \"BI_SMRS_MC |netop_ems |started\"\r"
+        expect "#"
+        set e1 $expect_out(buffer)
+        set e2 [split $e1 "\r\n"]
+        set results(SMTOOL1) [lrange $e2 2 end-1]
+
+}
+proc check_cluster {} {
+	global results 
+	global ONLINES 
+	global D
+	send "hastatus -sum | grep  \" ONLINE \" | wc -l | sed -e 's/^\[ \\t]*//' | sed 's/\[ \\t]*$D//'\r"
+	expect "#"
+	set f1 $expect_out(buffer)
+	set f2 [split $f1 "\r\n"]
+	if {[lindex $f2 2] != "$ONLINES"} {
+		incr results(OVERALL)
+	}
+}
+
+#main
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+
+set timeout 30
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+			spawn /bin/bash -
+			expect -re "$prompt"
+			send "printf \"@%s@%s@%s@%s@%s@%s@%s@%s@%s@%s\\n\" \"$INSTALLFINISH\" \"$PLATFORM\" \"Initial Install\" \"$DMBUILDDATE\" \"$SERVERS\" \"UNKNOWN\" Failed \"\<a href=\"./logs/install-$PLATFORM-$INSTALLLOGDATE.html\"\>Install log\<\/a\>\" \"\<a href=\"./logs/test-$PLATFORM-$INSTALLLOGDATE.html\"\>Test Report\<\/a\>\" \"\<a href=\"./logs/contentII-$PLATFORM-$INSTALLLOGDATE.html\"\>Content\<\/a\>\" >> /net/$MWS_HOSTNAME/export/jumpstart/teams/$TEAM/OSSRC_$RELEASE/$SHIPMENT/results1-$PLATFORM-$INSTALLLOGDATE\r"
+			expect -re "$prompt"
+			sleep 5
+			send_user "RESULTLINE: OVERALL: 			FAIL\n"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+			spawn /bin/bash -
+			expect -re "$prompt"
+			send "printf \"@%s@%s@%s@%s@%s@%s@%s@%s@%s@%s\\n\" \"$INSTALLFINISH\" \"$PLATFORM\" \"Initial Install\" \"$DMBUILDDATE\" \"$SERVERS\" \"UNKNOWN\" Failed \"\<a href=\"./logs/install-$PLATFORM-$INSTALLLOGDATE.html\"\>Install log\<\/a\>\" \"\<a href=\"./logs/test-$PLATFORM-$INSTALLLOGDATE.html\"\>Test Report\<\/a\>\" \"\<a href=\"./logs/contentII-$PLATFORM-$INSTALLLOGDATE.html\"\>Content\<\/a\>\" >> /net/$MWS_HOSTNAME/export/jumpstart/teams/$TEAM/OSSRC_$RELEASE/$SHIPMENT/results1-$PLATFORM-$INSTALLLOGDATE\r"
+			expect -re "$prompt"
+			sleep 5
+			send_user "RESULTLINE: OVERALL: 			FAIL\n"
+                        exit 1}
+                }
+        }
+
+
+
+
+expect "#"
+incr results(OVERALL) -1
+get_arch
+#if {$results(ARCH) == "i386"} {
+#	check_if_cluster
+#	if {$results(CLUSTER) == "1"} {
+#		check_cluste#r
+#	}
+#}
+get_install1_info
+get_mc_status
+get_not_online_mcs
+check_package_install ERICsck
+check_package_install ERICcore
+check_package_install ERICsol
+check_package_install ERICaxe
+check_package_install ECONFsystem 
+check_package_install ECONFbase
+send "exit\r"
+expect "#"
+set TotalERICsck [expr {$results(ERICsck_1) + $results(OVERALL)}] 
+set TotalERICcore [expr {$results(ERICcore_1) + $results(OVERALL)}] 
+set TotalERICsol [expr {$results(ERICsol_1) + $results(OVERALL)}] 
+set TotalERICaxe [expr {$results(ERICaxe_1) + $results(OVERALL)}] 
+set TotalECONFsystem [expr {$results(ECONFsystem_1) + $results(OVERALL)}] 
+set TotalECONFbase [expr {$results(ECONFbase_1) + $results(OVERALL)}]
+spawn /bin/bash -
+expect -re "$prompt"
+if {$results(INSTALL) != 0} {
+set INSTALLRESULT "Failed"
+} else {
+set INSTALLRESULT "Completed"
+}
+if {$results(OVERALL) != 0} {
+	send "printf \"@%s@%s@%s@%s@%s@%s@%s@%s@%s@%s\\n\" \"$INSTALLFINISH\" \"$PLATFORM\" \"Initial Install\" \"$DMBUILDDATE\" \"$SERVERS\" \"$INSTALLRESULT\" Failed \"\<a href=\"./logs/install-$PLATFORM-$INSTALLLOGDATE.html\"\>Install log\<\/a\>\" \"\<a href=\"./logs/test-$PLATFORM-$INSTALLLOGDATE.html\"\>Test Report\<\/a\>\" \"\<a href=\"./logs/contentII-$PLATFORM-$INSTALLLOGDATE.html\"\>Content\<\/a\>\" >> /net/$MWS_HOSTNAME/export/jumpstart/teams/$TEAM/OSSRC_$RELEASE/$SHIPMENT/results1-$PLATFORM-$INSTALLLOGDATE\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: OVERALL: 						FAIL\n"
+} elseif {$results(WARNING) != 0} {
+	send "printf \"@%s@%s@%s@%s@%s@%s@%s@%s@%s@%s\\n\" \"$INSTALLFINISH\" \"$PLATFORM\" \"Initial Install\" \"$DMBUILDDATE\" \"$SERVERS\" \"$INSTALLRESULT\" Warning \"\<a href=\"./logs/install-$PLATFORM-$INSTALLLOGDATE.html\"\>Install log\<\/a\>\" \"\<a href=\"./logs/test-$PLATFORM-$INSTALLLOGDATE.html\"\>Test Report\<\/a\>\" \"\<a href=\"./logs/contentII-$PLATFORM-$INSTALLLOGDATE.html\"\>Content\<\/a\>\" >> /net/$MWS_HOSTNAME/export/jumpstart/teams/$TEAM/OSSRC_$RELEASE/$SHIPMENT/results1-$PLATFORM-$INSTALLLOGDATE\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: OVERALL: 						WARNING\n"
+} else {
+	send "printf \"@%s@%s@%s@%s@%s@%s@%s@%s@%s@%s\\n\" \"$INSTALLFINISH\" \"$PLATFORM\" \"Initial Install\" \"$DMBUILDDATE\" \"$SERVERS\" \"$INSTALLRESULT\" Passed \"\<a href=\"./logs/install-$PLATFORM-$INSTALLLOGDATE.html\"\>Install log\<\/a\>\" \"\<a href=\"./logs/test-$PLATFORM-$INSTALLLOGDATE.html\"\>Test Report\<\/a\>\" \"\<a href=\"./logs/contentII-$PLATFORM-$INSTALLLOGDATE.html\"\>Content\<\/a\>\" >> /net/$MWS_HOSTNAME/export/jumpstart/teams/$TEAM/OSSRC_$RELEASE/$SHIPMENT/results1-$PLATFORM-$INSTALLLOGDATE\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: OVERALL: 						OK\n"
+}
+
+if {$TotalERICsck == 0} {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ERICsck -b $results(ERICsck) -p $PLATFORM -c Passed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ERICsck 		$results(ERICsck): 		OK\n"
+} else {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ERICsck -b $results(ERICsck) -p $PLATFORM -c Failed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ERICsck 		$results(ERICsck): 		FAIL\n"
+}
+if {$TotalERICcore == 0} {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ERICcore -b $results(ERICcore) -p $PLATFORM -c Passed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ERICcore 		$results(ERICcore): 		OK\n"
+} else {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ERICcore -b $results(ERICcore) -p $PLATFORM -c Failed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ERICcore 	$results(ERICcore): 		FAIL\n"
+}
+if {$TotalERICsol == 0} {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ERICsol -b $results(ERICsol) -p $PLATFORM -c Passed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ERICsol 		$results(ERICsol): 		OK\n"
+} else {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ERICsol -b $results(ERICsol) -p $PLATFORM -c Failed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ERICsol 		$results(ERICsol): 		FAIL\n"
+}
+if {$TotalERICaxe == 0} {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ERICaxe -b $results(ERICaxe) -p $PLATFORM -c Passed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ERICaxe 		$results(ERICaxe): 		OK\n"
+} else {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ERICaxe -b $results(ERICaxe) -p $PLATFORM -c Failed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ERICaxe 		$results(ERICaxe): 		FAIL\n"
+}
+if {$TotalECONFsystem == 0} {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ECONFsystem -b $results(ECONFsystem) -p $PLATFORM -c Passed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ECONFsystem 	$results(ECONFsystem): 		OK\n"
+} else {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ECONFsystem -b $results(ECONFsystem) -p $PLATFORM -c Failed\r"
+	expect -re "$prompt"
+	send_user "RESULTLINE: ECONFsystem 	$results(ECONFsystem): 		FAIL\n"
+}
+if {$TotalECONFbase == 0} {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ECONFbase -b $results(ECONFbase) -p $PLATFORM -c Passed\r"
+        expect -re "$prompt"
+        send_user "RESULTLINE: ECONFbase      $results(ECONFbase):          OK\n"
+} else {
+        send " /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin/update_results -r $RELEASE -s $SHIPMENT -a ECONFbase -b $results(ECONFbase) -p $PLATFORM -c Failed\r"
+        expect -re "$prompt"
+        send_user "RESULTLINE: ECONFbase      $results(ECONFbase):          FAIL\n"
+}
+if {$results(SMTOOL) == 0} {
+        send_user "RESULTLINE: Smtool check:    				OK\n"
+} else {
+        send_user "RESULTLINE: Smtool check:    Warning --> $results(SMTOOL) MC's not started\n"
+        send_user "RESULTLINE:     Not started\n"
+        for {set i 0} {$i<=[expr [llength $results(SMTOOL1)]]} {incr i} {
+                if {[lindex $results(SMTOOL1) $i] != ""} {
+                        send_user "RESULTLINE:           [lindex $results(SMTOOL1) $i]\n"
+                }
+        }
+}
+
+sleep 5
+send "exit\r"

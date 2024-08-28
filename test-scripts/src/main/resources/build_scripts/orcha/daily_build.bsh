@@ -1,0 +1,274 @@
+#!/usr/bin/bash
+TODAY=`/usr/bin/date +"%d_%m_%Y"`
+mkdir -p ~/drops/DROP_${TODAY}
+PUSH="FALSE"
+BUILD="FALSE"
+NEW_RELEASE="FALSE"
+shipment="16A"
+
+######
+#  Reads $UPG_VER and sets variable NEW_VERSION with incremented version
+######
+function get_new_ver {
+    pattern='^R([0-9]*)([a-zA-Z])([0-9]*)$'
+    [[ $UPG_VER =~ $pattern ]]
+    MAJOR=${BASH_REMATCH[1]}
+    SEP=${BASH_REMATCH[2]}
+    MINOR=${BASH_REMATCH[3]}
+    NEW=`expr $MINOR + 1`
+    NEW_VERSION="R${MAJOR}${SEP}${NEW}"
+}
+
+function parse_supplied_params()
+{
+
+# Parse the optional parameters
+	echo "Attempting to parse inputs"
+  # while getopts ":f:d" ARG
+  while getopts ":pbabcdenh" ARG
+  do 
+    case ${ARG} in
+      p)    PUSH="TRUE"
+			echo "Push is set to true:"
+            ;;
+      b)    BUILD="TRUE"
+			echo "BUILD is set to true:"
+            ;;	
+	  n)	NEW_RELEASE="TRUE"
+			echo "16A is set to true:"
+            ;;	
+	  h)    NHARD="TRUE"
+			echo "NHARD is set to true:"
+            ;;	  
+      *)    echo "ERROR: Invalid option ${OPTARG} supplied"
+            exit 1
+            ;;
+    esac
+  done
+  
+  return 0
+}
+
+function get_new_ver {
+    pattern='^R([0-9]*)([a-zA-Z])([0-9]*)$'
+    [[ $UPG_VER =~ $pattern ]]
+    MAJOR=${BASH_REMATCH[1]}
+    SEP=${BASH_REMATCH[2]}
+    MINOR=${BASH_REMATCH[3]}
+    NEW=`expr $MINOR + 1`
+	NEW_VERSION="R${MAJOR}${SEP}${NEW}"
+}
+
+function increment_nhard_state(){
+	
+	if [ ${UPG_VER} = "R1A01_PA01" ] 
+	then
+		NEW_VERSION="R99A01"
+	fi 
+	
+	cleartool co -nc /vobs/fw/cif2_CDimage/cif4/OM/security/cxp_info
+	sed "s/VERSION=.*/VERSION=${NEW_VERSION}/" < /vobs/fw/cif2_CDimage/cif4/OM/security/cxp_info > /tmp/nhard_cxp_info.$$
+	cp /tmp/nhard_cxp_info.$$ /vobs/fw/cif2_CDimage/cif4/OM/security/cxp_info
+	rm -f /tmp/nhard_cxp_info.$$
+	VERSION=`sed -n 's/VERSION=//p' /vobs/fw/cif2_CDimage/cif4/OM/security/cxp_info`
+	echo "VERSION ${VERSION}"
+	cleartool ci -nc -iden /vobs/fw/cif2_CDimage/cif4/OM/security/cxp_info
+
+}
+
+function build_nodehardening()
+{
+	echo "==============================="
+	echo ""
+	echo "BUILDING node hardening"
+	echo ""
+	echo "==============================="
+	#cleartool setcs /home/xdhiilm/clearcase/sck_dev-o16.0_orchestrator_smrs.cs 
+	UPG_VER=$(cat /vobs/fw/cif2_CDimage/cif4/OM/security/cxp_info | /usr/bin/grep VERSION | awk -F= '{print $2}')
+	get_new_ver
+	increment_nhard_state || exit 1
+	
+	
+	label="ORCHA_NODEHARDEN-${shipment}_${NEW_VERSION}"
+	
+	echo "        ==============================="
+	echo "        Old Version ${UPG_VER}"
+	echo ""
+	echo "        New Label will be ${label}"
+	echo ""
+	echo "        New Version ${NEW_VERSION}"
+	echo "        ==============================="
+	
+	#Create Drop directory
+	mkdir -p ~/drops/DROP_$TODAY/
+	RES=$?
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed to make directory ~/drops/DROP_${TODAY}/"
+		exit 1
+	fi
+	echo "Script created/reused directory ~/drops/DROP_${TODAY}/"
+	
+	#OMSAS Media Scripts overlay generation
+	rm -f ~/drops/DROP_$TODAY/CXP9017504_*
+	# increment_omsas_media_state
+	directory=$(pwd)
+	cd /vobs/fw/cif2_CDimage/cif4/OM/
+	tar cvf ~/drops/DROP_$TODAY/CXP9017504_${NEW_VERSION}.tar ./security
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed to create build"
+		exit 1
+	fi
+	preliminary_flag=0
+	if [ ${preliminary_flag} -eq 1 ]; then
+		echo "prelminary flag selected - no labelling will occur"
+	else
+        echo "Labelling the vob with $label ... "
+		cleartool mklbtype -nc $label > /dev/null 2>&1 
+		cleartool lstype -kind lbtype:$label -inv /vobs/fw/cif2_CDimage/cif4/OM/security 1 >/dev/null 2>&1 
+        if [ $? -ne 0 ]; then
+                cleartool mklabel -replace -recurse $label /vobs/fw/cif2_CDimage/cif4/OM/security >/dev/null
+        elif [ "$force" -eq 0 ]; then
+            error "Label $label already exists, use the -f flag if you're ABSOLUTELY 100% sure you want to reuse this r-state"
+		fi
+		
+	fi
+
+	
+	ls ~/drops/DROP_$TODAY/CXP9017504_*
+	
+	echo "==============================="
+
+
+}	
+
+function set_config_spec()
+{
+	config_spec=$(echo "68" | $SELECT_CONFIG_PROFILE | grep "o15.2_orchestrator.cs" | grep -v Config | awk {'print $1'})
+	if [ "${NEW_RELEASE}" == "TRUE" ] ; then
+		config_spec=$(echo "68" | $SELECT_CONFIG_PROFILE | grep "o16.0_orchestrator.cs" | grep -v Config | awk {'print $1'})
+	fi 
+	
+	echo "CONFIG IS: $config_spec"
+	config_spec=$(echo "${config_spec}" | $SELECT_CONFIG_PROFILE | grep orches)
+	/usr/atria/bin/cleartool catcs | grep ".../orch_upgrade*"
+	return $?
+}
+
+#*************************************************************************
+#
+# Step 1: Parse build options
+#
+#************./*************************************************************
+
+parse_supplied_params "${@}" || exit 1
+
+#*************************************************************************
+#
+# Step 2: Set configuration specification 
+#
+#*************************************************************************
+
+set_config_spec || exit 1
+
+if [ "${NHARD}" = "TRUE" ] && [ "${BUILD}" = "TRUE" ] ; then
+	build_nodehardening
+
+fi
+
+
+if [ "${BUILD}" = "TRUE" ] ; then
+# Create latest Liveupgrade
+# Get current version
+	UPG_VER=`cat /vobs/fw/cif2_CDimage/cif4/OM/Liveupgrade/cxp_info | awk -F= '/VERSION/{print $2}'`
+	get_new_ver
+	mkdir -p ~/drops/DROP_$TODAY/
+	#Get list of products so know which is Liveupgrade
+	PRODUCTS=`/opt/rational/clearcase/bin/cleartool ls -vob_only -s -nxn /vobs/fw/cif2_CDimage/cif4/OM | grep -iv cxp`
+	echo "PRODUCTS ${PRODUCTS[@]}"
+	index=1
+	for line in ${PRODUCTS[@]}; do
+		if [[ $line == *Liveupgrade* ]]
+		then
+			break
+		fi
+		index=`expr $index + 1`
+	done
+	echo "Going to build version $NEW_VERSION of Liveupgrade (option $index)"
+
+	(sleep 5; echo "$index"; sleep 5; echo "${NEW_VERSION}"; sleep 5; echo "" ) | /vobs/wds/cc_support/ranos/release/build_cxp
+
+	FILENAME="/tmp/OM/CXP_BUILDS/Liveupgrade_${NEW_VERSION}.tar.gz"
+	rm ~/drops/DROP_$TODAY/Liveupgrade_*
+	mv $FILENAME ~/drops/DROP_$TODAY/
+	
+
+# Create latest ERICorchupg
+	cd /vobs/oss_sck/build/
+	UPG_VER=`./pkgit ERICorchupg | awk '/ERICORCHUPG/{print $2}'`
+	get_new_ver
+	./pkgit -r $NEW_VERSION ERICorchupg
+	rm rm ~/drops/DROP_$TODAY/ERICorchupg.pkg
+	mv /vobs/oss_sck/build/ERICorchupg.pkg ~/drops/DROP_$TODAY/
+
+# Create latest ERICusck
+	UPG_VER=`./pkgit ERICusck | awk '/ERICUSCK/{print $2}'`
+	get_new_ver
+	./pkgit -r $NEW_VERSION ERICusck
+	
+	rm ~/drops/DROP_$TODAY/ERICusck.pkg
+	mv /vobs/oss_sck/build/ERICusck.pkg ~/drops/DROP_$TODAY/
+
+# Create latest ERICcore
+	UPG_VER=`./pkgit ERICcore | awk '/ERICCORE/{print $2}'`
+	get_new_ver
+	./pkgit -r $NEW_VERSION ERICcore
+	rm ~/drops/DROP_$TODAY/ERICcore.pkg
+	mv /vobs/oss_sck/build/ERICcore.pkg ~/drops/DROP_$TODAY/
+
+# Create latest omtools
+# Get current version
+	UPG_VER=`cat /vobs/fw/cif2_CDimage/cif4/OM/omtools/cxp_info | awk -F= '/VERSION/{print $2}'`
+	get_new_ver
+
+#Get list of products so know which is omtools
+	PRODUCTS=`/opt/rational/clearcase/bin/cleartool ls -vob_only -s -nxn /vobs/fw/cif2_CDimage/cif4/OM | grep -iv cxp`
+	echo "PRODUCTS ${PRODUCTS[@]}"
+	index=1
+	for line in ${PRODUCTS[@]}; do
+		if [[ $line == *omtools* ]]
+		then
+			break
+		fi
+		index=`expr $index + 1`
+	done
+	echo "Going to build version $NEW_VERSION of omtools (option $index)"
+	(sleep 5; echo "$index"; sleep 5; echo "$NEW_VERSION"; sleep 5; echo "" ) | /vobs/wds/cc_support/ranos/release/build_cxp
+	FILENAME="/tmp/OM/CXP_BUILDS/omtools_${NEW_VERSION}.tar.gz"
+	rm ~/drops/DROP_$TODAY/omtools_*
+	mv $FILENAME ~/drops/DROP_$TODAY/
+	
+	# Create latest ERICorch
+	cd /vobs/oss_sck/build/
+	UPG_VER=`./pkgit ERICorch | awk '/ERICORC/{print $2}'`
+	get_new_ver
+	./pkgit -r $NEW_VERSION ERICorch
+	rm rm ~/drops/DROP_$TODAY/ERICorch.pkg
+	mv /vobs/oss_sck/build/ERICorch.pkg ~/drops/DROP_$TODAY/
+fi
+#Push to MWS #1
+
+	if [ "${PUSH}" = "TRUE" ] ; then
+		echo "Going to push build to MWS#1"
+		cd ~/drops
+		tar cvf DROP_$TODAY.tar ./DROP_$TODAY
+		gzip -f DROP_$TODAY.tar
+		scp DROP_$TODAY.tar.gz root@10.44.234.130:/JUMP/UPGRADE_SW/daily_builds/
+	fi
+	
+
+
+
+
+

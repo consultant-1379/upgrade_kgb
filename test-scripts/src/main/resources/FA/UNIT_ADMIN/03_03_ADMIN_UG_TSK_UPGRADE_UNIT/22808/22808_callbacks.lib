@@ -1,0 +1,202 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# 12.11.14      xphilco  Positive test for the port_ping.pl utility.
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		    # Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+    
+	return 0
+
+    
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+
+	PORT_PING=/ericsson/core/lib/port_ping.pl
+	[ -e ${PORT_PING} ] || return 1
+    return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+
+    PORT_PING=/ericsson/core/lib/port_ping.pl
+    HOST=10.44.192.191
+    PORTS="2049"
+    O_RES=1
+    for PORT in ${PORTS} ; do
+        RES=0
+        echo "Testing socket to ${HOST}:${PORT}"
+        ${PORT_PING} ${HOST} ${PORT}
+        RES=$?
+        if [ ${RES} -eq 0 ]; then
+            O_RES=0
+        fi
+    done
+
+    return ${O_RES}
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+    
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete
+	# Change return code as required
+    source /joe/admin_common_functions.lib
+    CP_STATUS_FILE="/var/opt/ericsson/sck/data/cp.status"
+    CP_STATUS_FILE_BK="/var/opt/ericsson/sck/data/cp.status_BK"
+    SSH_DIR="/.ssh"
+    SSH_BACKUP_DIR="/joe/backup_ssh"
+    LOG_FILE="/tmp/pre_tmp22802.log"
+    STATUS_FILE="/ericsson/config/.admin_reboot_tasks_status_file"
+    CURRENT_STATUS_FILE="/ericsson/config/.admin_post_upgrade_tasks_status_file"
+    HOST=`${HNAMECMD}`
+    orc_header_2 "Cleaning up test case"
+    ######################################################################
+    # TC Restore Backup CP Status
+    ######################################################################
+    #Back up CP status file
+    
+    cp $CP_STATUS_FILE_BK $CP_STATUS_FILE
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to restore local ${CP_STATUS_FILE} from ${CP_STATUS_FILE_BK}"
+        return 1
+    fi
+
+    ######################################################################
+    # TC Restore Backup SSH DIR
+    ######################################################################
+    rm -r $SSH_DIR
+    mv $SSH_BACKUP_DIR $SSH_DIR
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        echo "ERROR: Failed to restore local ${SSH_DIR} from  ${SSH_BACKUP_DIR}"
+        return 1
+    fi
+
+
+    ######################################################################
+    # TC Create suitable status file for previous module
+    ######################################################################
+    rm $STATUS_FILE
+    RES=$?
+    if [ $RES -ne 0 ]
+    then
+        rm $CURRENT_STATUS_FILE
+        RES=$?
+        if [ $RES -ne 0 ]
+        then
+            echo "ERROR: Failed to remove ${STATUS_FILE}"
+            return 1
+        fi
+    fi
+
+    
+    return 0
+}

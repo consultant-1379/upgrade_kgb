@@ -1,0 +1,97 @@
+#!./expect --
+
+
+set timeout 620
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set mws [lindex $argv 2]
+set mws_rootpw [lindex $argv 3]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+expect "#"
+send "cd /ericsson/config\r"
+expect "#"
+send -- "sftp root@$mws\r"
+expect "Password"
+send -- "$mws_rootpw\r"
+expect "sftp>"
+send "cd /JUMP/MWS_add_client_files/\r"
+        expect {
+                "sftp>" {
+                        send -- "get $ADMIN2.ini\r"
+        		expect {
+				"sftp>" {
+                        		send -- "bye\r"
+                        		expect "#"}
+
+"No such file or directory" {
+                exit 1}
+
+}
+
+                        expect "sftp>"
+                        send -- "bye\r"
+                        expect "#"}
+                "No such file or directory" {
+                exit 1}
+}
+send -- "/ericsson/core/cluster/bin/add_cluster_node\r"
+                        expect "cluster.ini file"
+send -- "y\r"
+                        expect "system to add or modify"
+send -- "$ADMIN2\r"
+                        expect "]:"
+send -- "\r"
+                        expect "]:"
+send -- "\r"
+                        expect "PASSWD"
+send -- "shroot\r"
+                        expect "PASSWD"
+send -- "shroot\r"
+
+set timeout 1200
+while 1 {
+        expect {
+                "]:" {
+                        send "\r"}
+                
+                "Are these values correct (y/n)?" {
+                        send "y\r"
+                        break}
+                
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+set timeout 3600
+expect "to complete installation"
+sleep 10

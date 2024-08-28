@@ -1,0 +1,159 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/04/2012    edavmax         First version
+
+usage() {
+cat << EOF
+
+Usage:  ${SCRIPTNAME} [-k ] [-h]
+
+This script is called by the script ci_job.bsh script. It performs the following actions:
+
+-Installs cominf software on specified server 
+
+-k target server has been kickstarted - only install test harness package
+
+The script assumes the cominf software packages have already been copied to /var/tmp
+
+
+EOF
+
+return 0
+
+}
+
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+. $G_SCRIPTDIR/ci.env
+G_TMP_DIR=/var/tmp
+G_PKGTMPDIR=/var/tmp
+G_COMINF_TEST_HARNESS_PREFIX=${G_COMINF_TEST_HARNESS_RPM%.rpm}
+G_COMINF_TEST_HARNESS_TGZ=${G_COMINF_TEST_HARNESS_PREFIX}.tar.gz
+G_PLATFORM=$( uname -a ) 
+G_KICKSTART=FALSE
+IST_RUN=/opt/ericsson/sck/bin/ist_run
+G_COMINF_PACKAGES="ERICocs.pkg ERICsdse.pkg"
+G_COMINF_ADMFILE="ERICpkg.adm"
+G_COMINF_SOFTWARE_TGZ=cominf_software.tar.gz
+
+while getopts "h:k" opt; do
+
+	case $opt in
+		h)
+			usage
+			exit 0
+		;;
+		k)
+			G_KICKSTART="TRUE"
+		;;
+		?)      # Print usage and exit error
+			printf "${SCRIPTNAME}: ERROR: Invalid option: '${OPTARG}'.\n"
+			usage
+			exit 1
+		;;
+
+	esac
+done
+
+G_CONFIGTYPE=$( awk -F= '{print $2}' /ericsson/config/ericsson_use_config )
+if [ -z "$G_CONFIGTYPE" ]; then
+	echo "Error config type of server not specified"
+	exit 1
+fi
+
+if [ ! -f $G_TMP_DIR/$G_COMINF_SOFTWARE_TGZ ]; then
+	echo "** Error unable to find cominf software tar file **"
+	exit 1
+fi
+
+currdir=$(pwd)
+cd $G_TMP_DIR
+gzip -cd $G_TMP_DIR/$G_COMINF_SOFTWARE_TGZ | tar xvf - || {
+	echo "** Error failed to untar $G_TMP_DIR/$G_COMINF_SOFTWARE_TGZ"
+	exit 1
+}
+cd $currdir
+
+# check for necessary software
+if [ "$G_KICKSTART" = FALSE ]; then
+	for pkg in $G_COMINF_PACKAGES; do
+		if [ ! -s $G_TMP_DIR/$pkg ]; then
+			echo "Error - unable to find package $G_TMP_DIR/$pkg"
+			exit 1
+		fi
+	done
+	if [ ! -s $G_TMP_DIR/$G_COMINF_ADMFILE ]; then
+		echo "Error - unable to find package adm file $G_TMP_DIR/$G_COMINF_ADMFILE"
+		exit 1
+	fi
+fi
+if [ ! -s $G_TMP_DIR/$G_COMINF_TEST_HARNESS_TGZ ]; then
+	echo "Error - unable to find test harness package $G_TMP_DIR/$G_COMINF_TEST_HARNESS_TGZ"
+	exit 1
+fi
+
+
+if [ "$G_CONFIGTYPE" = system ]; then
+	# install new smrs package
+	if [ -f $G_TMP_DIR/$G_SMRS_PKGNAME ]; then
+		echo "** installing package $G_SMRS_PKGNAME **"
+		$IST_RUN -d $G_TMP_DIR/$G_SMRS_PKGNAME -auto -pa -force || {
+			echo "Error installation of $G_SMRS_PKGNAME on $( hostname ) failed"
+			exit 1
+		}
+	else
+		echo "Unable to find smrs package $G_SMRS_PKGNAME on $( hostname )"
+		exit 1
+	fi
+fi
+if [[  "$G_CONFIGTYPE" = om_serv_master ||  "$G_CONFIGTYPE" = om_serv_slave ]]; then
+
+	if [ "$G_KICKSTART" = FALSE ]; then
+		for pkg in $G_COMINF_PACKAGES; do
+			echo "Removing package $pkg"
+			pkgrm -n -a $G_TMP_DIR/$G_COMINF_ADMFILE ${pkg%.pkg} > /dev/null 2>&1 || {
+				echo "** Warning - failed to remove package $pkg **"
+			}
+			echo "Adding package $pkg"
+			pkgadd -G -n -a $G_TMP_DIR/$G_COMINF_ADMFILE -d $G_TMP_DIR/$pkg all > /dev/null 2>&1  || {
+				echo "** Error - failed to add package $pkg **"
+				exit 1
+			}
+			
+		done
+		
+	fi
+	
+fi
+echo "Unpacking cominf test harness tarball on $( hostname )"
+basedir=/
+if [[  "$G_CONFIGTYPE" = system ||  "$G_CONFIGTYPE" = appserv ]]; then
+	basedir=/var/tmp
+fi
+/bin/rm -rf $basedir/opt/ericsson/cominf_test
+
+cd $basedir
+gzip -cd $G_TMP_DIR/$G_COMINF_TEST_HARNESS_TGZ | /usr/sfw/bin/gtar xvf - > /dev/null  
+if [ $? -eq 1 ]; then
+	echo "Error - failed to unpack cominf test harness tarball on $( hostname )"
+	exit 1
+fi
+		
+exit 0
+
+
+
+

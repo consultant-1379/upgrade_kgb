@@ -1,0 +1,191 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# Revision History
+# <date>	<signum>	<details>
+# 18/05/2012	eedmaxw		v1.0
+
+handle_interrupt() {
+
+	printf "Interrupted - could be the test spec callback timeout [${SPEC_TC_TIMEOUT}] seconds\n"
+
+	#exec 3>&-
+	exit 143
+
+}
+
+# MAIN
+#
+# The MAIN section parses the command line and invokes the correct 
+# callback function in the sourced TC callback library. 
+
+trap handle_interrupt HUP QUIT INT TERM 
+
+# Get test case ID and callback name from command line
+mode=$1 
+path=$2
+callback=$4
+
+datetime=$(date "+%Y-%m-%d %H:%M:%S")
+
+if [[ ${mode} = "AT_TC" ]]; then
+
+	# Running a TC callback
+
+	tc_id=$3 
+	display_mode="TC"
+
+	if ! cd ${path}; then
+		printf "ERROR: TC [${tc_id}]: [cd ${path}] failed.\n"
+		exit 1
+	fi
+
+	# source env file if one was specified
+	if [ -n "$ENVFILE" ]; then
+		. $ENVFILE
+	fi
+
+	# Source the TC callbacks
+	if ! . ./${tc_id}_callbacks.lib; then
+		printf "ERROR: TC [${tc_id}]: Failed to source the TC callback library [${tc_id}_callbacks.lib]\n"
+		exit 1
+	fi
+
+	# Source the test spec file to get settings
+	if ! . ./${tc_id}_spec.bsh; then
+		printf "ERROR: TC [${tc_id}]: Failed to source the TC spec file [${tc_id}_spec.bsh]\n"
+		exit 1
+	fi
+
+	# Source the general COMInf test script function library
+	if [[ -f ${AT_LIB}/tst_cominf.lib ]]; then
+		if ! . ${AT_LIB}/tst_cominf.lib; then
+			printf "ERROR: TC [${tc_id}]: Failed to source COMInf test lib [${AT_LIB}/tst_cominf.lib]\n"
+			exit 1
+		fi
+	fi
+
+	# Source the test NFD  test script function library
+        if [[ -f ${AT_LIB}/test_atnfd.lib ]]; then
+                if ! . ${AT_LIB}/test_atnfd.lib; then
+                        printf "ERROR: TC [${tc_id}]: Failed to source NFD test lib [${AT_LIB}/test_atnfd.lib]\n"
+                        exit 1
+                fi
+        fi
+
+        # Source the general NFD  test script function library
+        if [[ -f ${AT_LIB}/atnfd.lib ]]; then
+                if ! . ${AT_LIB}/atnfd.lib; then
+                        printf "ERROR: TC [${tc_id}]: Failed to source NFD test lib [${AT_LIB}/atnfd.lib]\n"
+                        exit 1
+                fi
+        fi
+
+        # Source the general 3pp  test script function library
+        if [[ -f ${AT_LIB}/at3pp.lib ]]; then
+                if ! . ${AT_LIB}/at3pp.lib; then
+                        printf "ERROR: TC [${tc_id}]: Failed to source 3pp test lib [${AT_LIB}/at3pp.lib]\n"
+                        exit 1
+                fi
+        fi
+
+	# Source the FA function library
+	if [[ -f ${AT_LIB}/tst_${SPEC_FA_NAME}.lib ]]; then
+		if ! . ${AT_LIB}/tst_${SPEC_FA_NAME}.lib; then
+			printf "ERROR: TC [${tc_id}]: Failed to source FA function library [${AT_LIB}/tst_${SPEC_FA_NAME}.lib]\n"
+			exit 1
+		fi
+	fi
+
+	passcode=
+	[[ ${callback} = "TC_TEST" ]] && passcode=": PASSCODE ${SPEC_TC_TEST_PASSCODE}"
+
+	printf "${datetime} TC [${tc_id}] ${callback}: START${passcode}\n"
+
+fi
+
+if [[ ${mode} = "AT_TS" ]]; then
+
+	# Running a TS callback
+
+	ts_id=$3
+	display_mode="TS"
+
+	if ! cd ${path}; then
+		printf "ERROR: TS [${ts_id}]: [cd ${path}] failed.\n"
+		exit 1
+	fi
+
+	# source env file if one was specified
+	if [ -n "$ENVFILE" ]; then
+		. $ENVFILE
+	fi
+
+        # Source the general NFD  test script function library
+        if [[ -f ${AT_LIB}/atnfd.lib ]]; then
+                if ! . ${AT_LIB}/atnfd.lib; then
+                        printf "ERROR: TC [${tc_id}]: Failed to source NFD test lib [${AT_LIB}/atnfd.lib]\n"
+                        exit 1
+                fi
+        fi
+
+	# Source the TS callbacks
+	if ! . ./${ts_id}_callbacks.lib; then
+		printf "ERROR: TS [${ts_id}]: Failed to source the TS callback library [${ts_id}_callbacks.lib]\n"
+		exit 1
+	fi
+
+
+	printf "${datetime} TS [${ts_id}] ${callback}: START\n"
+fi
+
+case ${callback} in
+
+
+TS_SETUP)	ts_setup
+		ret=$?
+		;;
+
+TS_CLEANUP)	ts_cleanup
+		ret=$?
+		;;
+
+TC_SETUP)	tc_setup
+		ret=$?
+		;;
+
+TC_PRECON)	tc_precon
+		ret=$?
+		;;
+
+TC_TEST)	tc_test
+		ret=$?
+		;;
+
+TC_POSTCON)	tc_postcon
+		ret=$?
+		;;
+
+TC_CLEANUP)	tc_cleanup
+		ret=$?
+		;;
+
+esac
+
+printf "${datetime} ${display_mode} [$3] ${callback}: EXIT ${ret}\n"
+
+exit ${ret}

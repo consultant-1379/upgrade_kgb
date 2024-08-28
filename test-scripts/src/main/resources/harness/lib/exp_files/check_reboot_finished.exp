@@ -1,0 +1,78 @@
+#!./expect -- 
+
+#Return 1 if serious problem don't continue
+#Return 2 no mirrors defined, do nothing proceed with upgrade
+#Return 3 in sync, do nothing proceed with upgrade
+#Return 4 boot from detach and sync
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set D "\$" 
+
+#main
+
+proc get_nitializing_mc {} {
+        global results
+        global D
+        send "smtool -l | egrep  \"nitializing |retrying\" | wc -l | sed -e 's/^\[ \\t]*//' | sed 's/\[ \\t]*$D//'\r"
+        expect "#"
+        set e1 $expect_out(buffer)
+        set e2 [split $e1 "\r\n"]
+        set results(SMTOOL) [lindex $e2 2]
+}
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+set timeout 900
+expect "#"
+get_nitializing_mc 
+ if {$results(SMTOOL) != "0"} {
+	sleep 1800
+	get_nitializing_mc 
+} else {
+	exit 0
+}
+ if {$results(SMTOOL) != "0"} {
+	sleep 1800
+	get_nitializing_mc 
+} else {
+	exit 0
+}
+ if {$results(SMTOOL) != "0"} {
+	sleep 1800
+	get_nitializing_mc 
+} else {
+	exit 0
+}
+ if {$results(SMTOOL) != "0"} {
+	sleep 1800
+	get_nitializing_mc 
+} else {
+	exit 0
+}
+
+send -- "exit\r"
+expect eof

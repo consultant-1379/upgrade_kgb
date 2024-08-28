@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# Record details of all active test cases
+#
+
+DT=$(date +'%F-%H-%M-%S')
+echo ${DT}
+FA=/var/tmp/platform_taf/FA
+H=$(hostname)
+# Change the below to your own development path if running locally
+if [ "${H}" = "merlin11" ]; then
+    FA="/home/pcooper/dev/orchestrator_taf/test-scripts/src/main/resources/FA"
+fi
+if [ ! -d ${FA} ]; then
+    echo "Directory ${FA} does not exist"
+    exit 2
+fi
+OUTDIR=/var/tmp/tcs
+if [ ! -d ${OUTDIR} ]; then
+    mkdir ${OUTDIR}
+fi
+OUTFILE="${OUTDIR}/active-tcs-${DT}.csv"
+cd ${FA}
+date | tee ${OUTFILE}
+echo "FA^UC^TC^Author^Automation^Slogan^Polarity^PassCode"
+FAS=$(ls | grep -v active-tcs.bsh | grep -v "UNIT" | grep -v setup | grep -v range)
+for F in ${FAS} ; do
+    FA=${F}
+    cd ${F}
+    UCS=$(ls | grep -v p.bsh | grep -v setup | grep -v range)
+    for U in ${UCS} ; do
+        cd ${U}
+        Y=0
+        TCS=$(ls | grep -v p.bsh | grep -v setup | grep -v range)
+        for T in ${TCS} ; do
+            SLOG=$(cat ${T}/${T}_spec.bsh | grep SLOGAN | awk -F= '{print $2}')
+            AUTH=$(cat ${T}/${T}_spec.bsh | grep TC_AUTHOR | awk -F= '{print $2}')
+            STATE=$(cat ${T}/${T}_spec.bsh | grep SPEC_TC_AUTOMATED | awk -F= '{print $2}')
+            POLARITY=$(cat ${T}/${T}_spec.bsh | grep SPEC_TC_POLARITY | awk -F= '{print $2}')
+            PASSCODE=$(cat ${T}/${T}_spec.bsh | grep SPEC_TC_TEST_PASSCODE | awk -F= '{print $2}')
+            if [ "${STATE}" -eq "0" ]; then
+                S="Disabled"
+            else
+                S="Enabled"
+            fi
+            if [ ${Y} -eq 0 ]; then
+                echo "${FA}^${U}^${T}^${AUTH}^${S}^${SLOG}^${POLARITY}^${PASSCODE}" | tee -a ${OUTFILE}
+                Y=1
+            else
+               echo "^^${T}^${AUTH}^${S}^${SLOG}^${POLARITY}^${PASSCODE}" | tee -a ${OUTFILE}
+            fi
+        done
+        cd ../
+    done
+    cd ../
+done
+
+echo "A copy of this data can be found in ${OUTFILE}"

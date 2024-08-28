@@ -1,0 +1,81 @@
+         <ManagedElement sourceType="SIU">
+            <ManagedElementId string="%nename%"/>
+            <primaryType type="STN"/>
+            <managedElementType types=""/>
+            <associatedSite string="Site=%site%"/>
+            <nodeVersion string="08A"/>
+            <platformVersion string=""/>
+            <swVersion string=""/>
+            <vendorName string="Not Ericsson"/>
+            <userDefinedState string="Active"/>
+            <managedServiceAvailability int="1"/>
+            <isManaged boolean="true"/>
+            <connectionStatus string="ON"/>
+            <Connectivity>
+               <DEFAULT>
+                  <emUrl url="http://%ip%:80/"/>
+                  <ipAddress ip_v4="%ip%"/>
+                  <hostname string="%nename%"/>
+                  <nodeSecurityState state="ON"/>
+                  <boardId string=""/>
+                  <Protocol number="0">
+                     <protocolType string="SNMP"/>
+                     <port int="1161"/>
+                     <protocolVersion string="v1+v2"/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string="public"/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Protocol number="1">
+                     <protocolType string="SSH"/>
+                     <port int="22"/>
+                     <protocolVersion string=""/>
+                     <securityName string=""/>
+                     <authenticationMethod string=""/>
+                     <encryptionMethod string=""/>
+                     <communityString string=""/>
+                     <context string=""/>
+                     <namingUrl string=""/>
+                     <namingPort int=""/>
+                     <notificationIRPAgentVersion string=""/>
+                     <alarmIRPAgentVersion string=""/>
+                     <notificationIRPNamingContext context=""/>
+                     <alarmIRPNamingContext context=""/>
+                  </Protocol>
+                  <Browser>
+                     <browser string=""/>
+                     <browserURL string=""/>
+                     <bookname string=""/>
+                  </Browser>
+               </DEFAULT>
+            </Connectivity>
+            <Tss>
+               <Entry>
+                  <System string="%nename%"/>
+                  <Type string="SECURE"/>
+                  <User string="%nename%"/>
+                  <Password string="secret"/>
+               </Entry>
+               <Entry>
+                  <System string="%nename%"/>
+                  <Type string="NORMAL"/>
+                  <User string="%nename%"/>
+                  <Password string="secret"/>
+               </Entry>
+            </Tss>
+            <Relationship>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=swstore-%slave%" AssociationType="ManagedElement_to_ftpSwStore"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmdown-%slave%" AssociationType="ManagedElement_to_neTransientCmDown"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=cmup-%slave%" AssociationType="ManagedElement_to_neTransientCmUp"/>
+               <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+               <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+            </Relationship>
+         </ManagedElement>

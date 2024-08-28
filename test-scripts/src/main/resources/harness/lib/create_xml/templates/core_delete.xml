@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_0.dtd">
+<Model version="1" importVersion="6.0">
+<Delete>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,ManagedElement=%nename%01"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=CORE_FtpServer,FtpService=core_pmup"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,FtpServer=CORE_FtpServer"/>
+<Object fdn="SubNetwork=ONRM_ROOT_MO,Site=CORE_SITE1"/>
+</Delete>
+</Model>

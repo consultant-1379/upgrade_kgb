@@ -1,0 +1,92 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set DDC [lindex $argv 2]
+set NMS [lindex $argv 3]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${ADMIN1}
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+expect "#"
+send "ssh ${ADMIN2}-priv\r"
+while 1 {
+        expect {
+                "${ADMIN2}\{root\} #" {
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+
+set timeout 1600
+
+
+if {$DDC == "YES"} {
+		send "/opt/ericsson/sck/bin/remove_nas_volume.bsh ddc_data\r"
+                expect "#"
+                sleep 120 
+}
+if {$NMS == "YES"} {
+		send "/opt/ericsson/sck/bin/remove_nas_volume.bsh nms_cosm\r"
+                expect "#"
+                sleep 120 
+}
+
+
+send "hastop -all\r"
+expect "#"
+sleep 600 
+set timeout 120 
+set count 0
+while {$count < 15} {
+                send "hastatus -sum\r"
+
+                expect {
+                        "VCS ERROR V-16-1-10600 Cannot connect to VCS engine" {
+			expect "#"
+                        sleep 5
+			set timeout 1200 
+			send "/ericsson/core/cluster/etc/clear_scsi3_keys_upgrade\r"
+			expect "Are you sure you wish to continue"
+			send "y\r"
+			expect "#"
+                        sleep 30 
+			send "/usr/sbin/svcadm disable svc:/system/vcs:default\r"
+			expect "#"
+                        sleep 5
+                        exit 0}
+
+                timeout {
+                        puts "timeout"
+                        set count [expr $count+1]}
+                }
+}
+exit 1

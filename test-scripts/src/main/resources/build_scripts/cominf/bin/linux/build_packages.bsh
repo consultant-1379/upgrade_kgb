@@ -1,0 +1,388 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/04/2012    edavmax         First version
+
+create_media_ident_file() {
+
+echo "creating media identity file"
+
+cat > $G_MEDIA_IDENTITY_FILE <<ENDOFINPUT
+media_label=cominf_linux
+media_desc=COMINF BASE SW
+media_prefix=19089
+media_number=CXP9022929
+media_rev=${COMINF_OM_LINUX_MEDIA_REV}
+media_dir=COMINF_${COMINF_OM_LINUX_MEDIA_OSS_VER}/${COMINF_OM_LINUX_MEDIA_OSS_SHIPMENT}
+media_arch=common
+ENDOFINPUT
+}
+
+usage() {
+cat << EOF
+
+Usage:  ${G_SCRIPTNAME} [-h] [-t]
+
+- builds cominf rpms 
+- creates tarball of Cominf software
+- creates iso file of Cominf software
+
+-t	include test harness rpm in tarball
+
+It assumes that GIT setup has already been done on the host running the script. 
+
+EOF
+
+return 0
+
+}
+
+#
+# Function to create a tar ball from supplied rpm
+#
+create_test_harness_tarball() {
+	echo "Creating cominf test harness tarball"
+	local test_rpm=$1
+	local tmp_dir="/tmp/cominf_test_rpm"
+	if [ ! -s "$test_rpm" ]; then
+		echo "Error rpm \"$1\" does not exist or is empty"
+		return 1
+	fi
+	local tarfilename=$(basename $test_rpm)
+	tarfilename=${tarfilename%.*}.tar.gz
+	if [ -d $tmp_dir ]; then
+		/bin/rm -rf $tmp_dir || return 1
+	fi
+	mkdir -p $tmp_dir || return 1
+	cd $tmp_dir
+	$RPM2CPIO $test_rpm | cpio -idv > /dev/null 2>&1 || return 1 
+	[ -d $tmp_dir/opt ] || return 1
+	tar -zcvf $tarfilename  opt > /dev/null || return 1
+	cp $tarfilename $G_DEST_PACKAGEDIR || {
+		echo "Error - copy of test harness tarball to tmp build area failed"
+		return 1
+	}
+	
+
+}
+
+#
+# Function to cache media on MWS
+#
+cache_media_mws() {
+	# if kickstarts are in progress
+	# at the moment then we wait
+
+	l_count=0
+	while pgrep -f $G_KICKSTARTSCRIPT > /dev/null; do
+		echo "Waiting for $G_KICKSTARTSCRIPT to finish"
+		if [ $l_count -gt 360 ]; then
+			echo "Error - giving up on waiting for $G_KICKSTARTSCRIPT to finish"
+			return 1
+		fi   
+		sleep 10
+		let l_count+=1
+	done
+	printf "\n** caching media on MWS **\n"
+	for file in $G_SCRIPTDIR/cache_new_media.bsh $G_SCRIPTDIR/get_ci_media_exp.bsh $G_SCRIPTDIR/remove_existing_media_exp.bsh $G_SCRIPTDIR/cache_new_media_exp.bsh $RSTATESFILE; do
+		scp $file root@$G_MWS_IP:/var/tmp || return 1
+	done
+	ssh root@$G_MWS_IP /var/tmp/cache_new_media.bsh || return 1
+
+}
+
+#MAIN
+
+G_INST_TYPE=cominf
+G_SCRIPTNAME=$(/bin/basename $0)
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_ETCDIR=${G_SCRIPTDIR}/etc
+RSTATESFILE=$G_ETCDIR/rstates
+G_BUILD_ROOTDIR=$( /usr/bin/dirname $( /usr/bin/dirname $G_SCRIPTDIR ))
+G_KICKSTARTSCRIPT=$G_SCRIPTDIR/kickstart_server.bsh
+G_WORKSPACEDIR=$G_BUILD_ROOTDIR/workspace
+G_MEDIA_IDENTITY_FILE=$G_WORKSPACEDIR/.cominf_linux
+G_STAGINGDIR=$G_WORKSPACEDIR/$G_INST_TYPE
+G_SRC_BOOTSTRAPDIR=$G_BUILD_ROOTDIR/bootstrap/$G_INST_TYPE
+G_SRC_CXPINFODIR=$G_BUILD_ROOTDIR/cxp_info
+G_SRC_REPODATA=$G_BUILD_ROOTDIR/repodata
+G_COMPSXMLFILE=$G_SRC_REPODATA/comps.xml
+G_DEST_PACKAGEDIRNAME=packages
+G_DEST_PACKAGEDIR=$G_STAGINGDIR/$G_DEST_PACKAGEDIRNAME
+G_DEST_CXPINFODIR=$G_STAGINGDIR/cxp_info
+G_PACKAGE_TGZFILENAME=cominf_software.tar.gz
+G_PACKAGE_TGZFILE=$G_WORKSPACEDIR/$G_PACKAGE_TGZFILENAME
+G_CXPINFOFILE=$G_STAGINGDIR/cxp_info
+G_COMINF_REPOLIST="core ldap OpenDJ jdk"
+G_GIT_SERVER=eselivm2v238l.lmera.ericsson.se
+G_GIT_PORT=29418
+G_USER=edavmax
+G_TEST_HARNESS_RPM="COMInf_TEST_HARNESS-R1A01-0.noarch.rpm"
+G_ORACLE_JRE_RPM=$( ls -l $G_WORKSPACEDIR/jdk/latest | awk '{print $NF}' )
+G_OPENDJRPM=$( ls -l $G_WORKSPACEDIR/OpenDJ/2.5_official/latest | awk '{print $NF}' )
+G_MWS_IP=10.45.201.54
+
+#commands
+GIT=/usr/bin/git
+RPMBUILD=/usr/bin/rpmbuild
+RPM2CPIO=/usr/bin/rpm2cpio
+CREATEREPO=/usr/bin/createrepo
+
+while getopts ":ht" opt
+	do
+	case ${opt} in
+		h)      # Print help and exit OK
+			usage
+			exit 0
+		;;
+		t)      # include test harness rpm in tarball
+			G_COMINF_REPOLIST="$G_COMINF_REPOLIST cominf_test"
+		;;
+		*)      # Print usage and exit error
+			usage
+			exit 1
+		;;
+	esac
+done
+
+
+# check for installed utilities
+for utility in $GIT $RPMBUILD $RPM2CPIO $CREATEREPO; do
+	if [ ! -x $utility ]; then
+		echo "Error - looks like $utility not installed. Install associated rpm & try again."
+		exit 1
+	fi
+done
+
+cd $G_SCRIPTDIR
+if ! $GIT pull; then
+	echo "Error - failed to update git pull cominf_build repo"
+	exit 1
+fi
+
+# source the rstates file
+if [ -s $RSTATESFILE ]; then
+	. $RSTATESFILE
+	missing=FALSE
+	reqpars="COMINF_OM_LINUX_MEDIA_REV COMINF_OM_LINUX_MEDIA_OSS_VER COMINF_OM_LINUX_MEDIA_OSS_SHIPMENT COMINF_CORE_RSTATE COMINF_LDAP_RSTATE"
+	for par in $reqpars; do
+		if [ -z $(eval echo \$$par) ]; then
+				echo "Error - $par must be specified in rstate file $RSTATESFILE"
+				missing=TRUE
+		fi
+	done
+	if [ "$missing" = TRUE ]; then
+		echo "Error - required parameter missing"
+		exit 1
+	fi
+else
+	echo "Error - File $RSTATESFILE not found"
+	exit 1
+fi
+
+
+G_ISOFILE=/$G_WORKSPACEDIR/19089-CXP9022929_${COMINF_OM_LINUX_MEDIA_REV}.iso
+
+# blow away staging dir
+if [ -d $G_STAGINGDIR ]; then
+	echo "Deleting staging dir $G_STAGINGDIR"
+	/bin/rm -rf $G_STAGINGDIR || {
+		echo "Unable to delete staging dir $G_STAGINGDIR"
+		exit 1
+	}
+fi
+
+mkdir -p $G_DEST_PACKAGEDIR || {
+        echo "Error - failed to create directory $G_DEST_PACKAGEDIR"
+        exit 1
+}
+
+mkdir -p $G_DEST_CXPINFODIR || {
+        echo "Error - failed to create directory $G_DEST_CXPINFODIR"
+        exit 1
+}
+
+
+for repo_name in $G_COMINF_REPOLIST; do
+	case $repo_name in
+		"core")
+			rpm_rstate=$COMINF_CORE_RSTATE
+			;;
+		"ldap")
+			rpm_rstate=$COMINF_LDAP_RSTATE
+			;;
+		*)
+			 rpm_rstate=R1A01
+			;;
+	esac
+
+	echo -e "\n** Configuring repo $G_WORKSPACEDIR/$repo_name **"
+	pushd . > /dev/null
+	if [ -d $G_WORKSPACEDIR/$repo_name/.git ]; then
+		echo "Updating git repo $G_WORKSPACEDIR/$repo_name"
+		cd $G_WORKSPACEDIR/$repo_name 
+		if ! $GIT pull; then
+			echo "Error - failed to update git pull repo $G_WORKSPACEDIR/$repo_name"
+			echo "Error - recommend you delete this dir and run script again" 
+		fi
+	else
+		cd $G_WORKSPACEDIR 
+		echo "Cloning git repository $repo_name.."
+		if ! $GIT clone ssh://$G_USER@$G_GIT_SERVER:$G_GIT_PORT/com.ericsson.oss.cominf/$repo_name;  then
+			echo "Error - failed to clone git repo $G_WORKSPACEDIR/$repo_name"
+			exit 1
+		fi
+	fi
+	popd > /dev/null
+		
+	build_script=$G_WORKSPACEDIR/$repo_name/build.sh
+	if [ -x $build_script ]; then
+		echo "building rpms using command $build_script $rpm_rstate"
+		if $build_script $rpm_rstate > /dev/null 2>&1 > /dev/null;  then
+			# copy rpm to tmp build area
+			echo "Copying $repo_name rpms to $G_DEST_PACKAGEDIR"
+			cp $G_WORKSPACEDIR/$repo_name/RPMS/noarch/*.rpm $G_DEST_PACKAGEDIR || {
+				echo "Error - copy of rpm(s) to tmp build area failed"
+				exit 1
+			}
+			if [ $repo_name = "cominf_test" ]; then
+				
+				create_test_harness_tarball  $G_WORKSPACEDIR/$repo_name/RPMS/noarch/$G_TEST_HARNESS_RPM || {
+					echo "Failed to create cominf test harness tarball"
+					exit 1
+				}
+			fi
+			
+			
+		else
+			echo "Error - build script $build_script failed"
+			exit 1
+		fi
+	else
+		echo "Note: no build script found for repo $repo_name. Assuming no rpm build needed."
+	fi
+	echo -e "*********************************************************\n"
+
+done
+
+
+# JAVA JRE and OpenDJ do not need to be build - can just copy directly to build area
+
+echo "Copying $G_OPENDJRPM to staging area"
+cp $G_WORKSPACEDIR/OpenDJ/2.5_official/$G_OPENDJRPM $G_DEST_PACKAGEDIR || { 
+	echo "Error - copy of OpenDJ to tmp build area failed"
+	exit 1
+}
+
+echo "Copying $G_ORACLE_JRE_RPM to staging area"
+cp $G_WORKSPACEDIR/jdk/$G_ORACLE_JRE_RPM $G_DEST_PACKAGEDIR || {
+	echo "Error - copy of jdk to tmp build area failed"
+	exit 1
+}
+
+# copy bootstrap files
+echo "Copying bootstrap dirs to staging area"
+cp -rp $G_SRC_BOOTSTRAPDIR/* $G_STAGINGDIR || { 
+	echo "Error - failed to copy bootstrap files"
+	exit 1
+}
+
+# copy cxp_info files
+echo "Copying cxp_info dir to staging area."
+cp -rp $G_SRC_CXPINFODIR $G_STAGINGDIR || {
+        echo "Error - failed to copy cxp_info "
+        exit 1
+}
+
+# copy repoodata
+echo "Copying repo files to staging area"
+cp -rp $G_SRC_REPODATA/*.repo $G_DEST_PACKAGEDIR || {
+        echo "Error - failed to copy repo files" 
+        exit 1
+}
+
+# create repodata
+if [ ! -s $G_COMPSXMLFILE ]; then
+	echo "Error  - failed to find file $G_COMPSXMLFILE"
+	exit 1
+fi
+
+if [ ! -d $G_DEST_PACKAGEDIR ]; then
+	echo "Error unable to find package directory"
+	exit 1
+fi
+echo "Creating repodata and defining yum groups"
+if ! $CREATEREPO -g $G_COMPSXMLFILE $G_DEST_PACKAGEDIR ; then 
+	echo "Error - failed to create package repo data"
+	exit 1
+fi
+
+# tar up contents of tmp build dir
+cd $G_WORKSPACEDIR
+if tar -zcvf $G_PACKAGE_TGZFILE $( basename $G_MEDIA_IDENTITY_FILE ) $G_INST_TYPE > /dev/null 2>&1; then
+	echo "COMInf software tarball $G_PACKAGE_TGZFILE created successfully"
+	# create iso file
+	echo "Creating ISO file $G_ISOFILE"
+	if [ ! -d $G_WORKSPACEDIR/media_tmp ]; then
+		mkdir $G_WORKSPACEDIR/media_tmp || {
+			echo "Error - failed to create dir $G_WORKSPACEDIR/media_tmp"
+			exit 1
+		}
+	fi
+	if [ -f $G_WORKSPACEDIR/media_tmp/$( basename $G_MEDIA_IDENTITY_FILE ) ]; then
+		/bin/rm  -f $G_WORKSPACEDIR/media_tmp/$( basename $G_MEDIA_IDENTITY_FILE )
+	fi
+	create_media_ident_file
+	cp $G_MEDIA_IDENTITY_FILE $G_WORKSPACEDIR/media_tmp || {
+		echo "Error - failed to copy media identity file to media staging area"
+		exit 1
+	}
+	if [ ! -h $G_WORKSPACEDIR/media_tmp/$G_INST_TYPE ]; then
+		ln -s $G_WORKSPACEDIR/$G_INST_TYPE $G_WORKSPACEDIR/media_tmp/$G_INST_TYPE || {
+			echo "Error  - failed to create symbolic link $G_WORKSPACEDIR/media_tmp/$G_INST_TYPE"
+			exit 1
+		}
+	fi
+	# remove test packages
+	rm -f $G_WORKSPACEDIR/media_tmp/$G_INST_TYPE/packages/COMInf_TEST_HARNESS* || {
+		echo "Error - failed to remove test harness packages from media"
+		exit 1
+	}
+	mkisofs -f -V "Cominf_Linux_Apps" -r $G_WORKSPACEDIR/media_tmp > $G_ISOFILE || {
+		echo "Error failed to create $G_ISOFILE"
+		exit 1
+	}
+	echo "Generating md5 in file ${G_ISOFILE%.iso}.md5"
+	md5sum  $G_ISOFILE | awk '{print $1}'  > ${G_ISOFILE%.iso}.md5
+	# cache media on mws
+	cache_media_mws || {
+		echo "Error - failed to cache media on MWS"
+		exit 1 
+	} 
+else
+	echo "Error - failed to create $G_PACKAGE_TGZFILE"
+	exit 1
+fi
+
+echo "** Building SMRS package **"
+
+${G_SCRIPTDIR}/build_smrs_package.bsh || {
+	echo "Error - failed to build smrs package"
+	exit 1
+}
+
+
+exit 0

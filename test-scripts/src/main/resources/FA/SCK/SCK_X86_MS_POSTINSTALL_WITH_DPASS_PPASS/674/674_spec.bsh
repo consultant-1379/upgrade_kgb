@@ -1,0 +1,211 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Monday 27th of May 2013 2:55:50
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="SCK"
+SPEC_UC_NAME="SCK_X86_MS_POSTINSTALL_WITH_DPASS_PPASS"
+SPEC_TC_ID=674
+SPEC_TC_SLOGAN="Adding Second Admin Server in the Cluster"
+SPEC_TC_TYPE="KGB"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="high"
+SPEC_TC_AUTOMATED=1
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=4500
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="eeigoco"
+SPEC_TC_AUTOMATOR="eeigoco"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+#Admin 1 is up and running with All MCs online
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#At this point the second Admin Server (OSS-RC Admin 2) is added to the
+#cluster as follows:
+#• Run the following script on the OSS-RC Admin 1 to add the OSS-RC
+#Admin 2 to the cluster. Run this script after the OSS-RC Admin 2 jumpstart
+#finishes. It will prompt for details of the second server. This should take
+#about 30 minutes
+## /ericsson/core/cluster/bin/add_cluster_node
+#Example 35 shows some sample questions that may be displayed.
+#This function will add a remote system to the running cluster or allow the
+#modification and re-addition of a currently defined remote system to the running
+#cluster.
+#The remote system must be currently jumpstarted with the bmr_inst option
+#so that it is booted from the slice 6 partition of a valid root disk. The system
+#image for the remote system created locally is then restored to slice zero. If this
+#is not already done, answer ‘n’ to the following question and ensure that the
+#remote system is jumpstarted correctly.
+#The following systems are defined in the /ericsson/config/cluster.ini
+#file.
+#Example 35 Adding Second Admin Server in the Cluster
+#SYSTEM_1 server
+#Do you want to add/modify a system in the
+#/ericsson/config/cluster.ini file (y/n)? y
+#Enter hostname of system to add or modify : server
+#Creating SYSTEM_2 with hostname server
+#hostname [server]:
+#IPaddress : 10.10.10.59
+#------------Checking access to 10.10.10.59--------------
+#Please enter root PASSWD for atrcxb1137 (required for SSH
+#connection):
+#Please re-enter root PASSWD for atrcxb1137:
+#->Checking ping towards 10.10.10.59
+#->Successful........
+#->Checking ssh towards 10.10.10.59
+#->Removing older entries for 10.10.10.59 and atrcxb1137
+#locally in /.ssh/authorized_keys
+#->Removing older entries for 10.10.10.59 and atrcxb1137
+#locally in /.ssh/known_hosts
+#->Successful........
+#->Checking running boot-slice on 10.10.10.59
+#->Successful........
+#->Setting up ssh access to 10.10.10.59
+#->Removing /.ssh on 10.10.10.59
+#->generating new ssh keys on 10.10.10.59
+#->Copying /.ssh/id_rsa.pub to /.ssh/authorized_keys on
+#10.10.10.59
+#->Getting /.ssh/authorized_keys from 10.10.10.59
+#->Putting /.ssh/authorized_keys to 10.10.10.59
+#->Appending keys to /.ssh/authorized_keys on 10.10.10.59
+#->Appending keys to /.ssh/authorized_keys locally
+#->Successful........
+#------------Access to 10.10.10.59 confirmed ------------
+#Continue entering new system details
+#First Storage LAN NIC (NIC1) : bnxe4
+#Second Storage LAN NIC (NIC2) : bnxe5
+#First Storage LAN NIC (NIC1) Base IP address :
+#10.10.10.59
+#Second Storage LAN NIC (NIC2) Base IP address :
+#10.10.10.59
+#Storage IP Address : 10.10.10.59
+#Storage LAN Netmask : 255.255.255.0
+#First Public LAN NIC (NIC1) [bnxe0] :
+#Second Public LAN NIC (NIC2) [bnxe1] :
+#First Public LAN NIC (NIC1) Base IP address :
+#10.12.14.61
+#Second Public LAN NIC (NIC2) Base IP address :
+#10.12.14.62
+#Public LAN Netmask : 255.255.255.0
+#Public LAN default router : 10.12.14.1
+#First Cluster Heartbeat NIC (NIC1) [bnxe2]:
+#Second Cluster Heartbeat NIC (NIC2) [bnxe3]:
+#Private LAN NIC : bnxe6
+#Private LAN NIC IP address : 200.200.200.35
+#Private LAN Netmask [255.255.255.0]:
+#Backup LAN NIC bnxe6] : bnxe7
+#Backup LAN NIC IP address : 10.0.2.33
+#Backup LAN Netmask : 255.255.255.0
+#
+#Are these values correct (y/n)? [y] y
+#
+#The script is automated from here on. When it is complete the second OSS-RC
+#Admin 2 Server will have been added to the cluster.
+#Note: There will be 2 times auto reboot for admin2 once add_cluster_n
+#odescript completes on Admin1. So after two times reboot complete
+#on Admin2, then run the maintain_ldap.bsh script on admin1to
+#update the LDAP client files
+#Run the following command on Admin1 to update the LDAP client files:
+## /opt/ericsson/sck/bin/maintain_ldap.bsh
+#
+#
+#
+#
+#
+#
+#Adding Second Root Disk on OSS-RC Admin 2
+#OSS Admin 2 is now installed but is running on an unmirrored root disk.
+#Define the mirrors using DMR and add a second root disk.
+#For more information on DMR, please see the Disk Mirror and Recovery Tool,
+#System Administration Guide, Reference [19].
+## /ericsson/dmr/bin/dmtool
+#WARNING:
+#Cannot determine column for Usage Type in vxprint -ht
+#------------------< Define mirrors >----------------------
+#2010-09-27 14:57:35 atrcxb1141 10137
+#NO MIRROR DEFINITION FOUND!
+#PLEASE PAY ATTENTION! THE DEFINTION WILL BE USED FROM NOW
+#ON.
+#NOTE: There is no Master or Main side. All sides are
+#Mirrors sides. Having 2 sets of disks (copies of all
+#data), define 2 Mirrors!
+#The definition will be saved in
+#/ericsson/dmr/etc/dm_define, where it can be checked (and
+#modified).
+#How many mirrors should be defined (1-n) [2]:
+#===> Trying to make a suggestion
+#-> Checking disks
+#Could not interpret the disks
+#===> Define manually
+#…
+#Mirrors are defined manually on OSS-RC Admin 2.
+#
+#
+#------------< Print Mirror Configuration >------------
+#2011-01-15 13:43:33 atrcxb1137 29002
+#Intro:
+#All disks for each mirror will be displayed, with both
+#disk access name and disk media name. The first disk in
+#each mirror is always considered root disk by DMR.
+#Mirror 1 Mirror 2
+#------------ ------------ ------------ ------------
+#noMatch noMatch
+#c0t5006016C44604B47d6s2 c0t5006016C44604B47d8s2
+#c0t5006016C44604B47d7s2 c0t5006016C44604B47d9s2
+#But found no match for root disks.
+#Are data disks OK (y/n)? [y]
+#===> Ask for ROOT disks
+#Here you will have to define the ROOT disks on your server manually.
+#------------< Print Mirror Configuration >------------
+#--
+#2010-09-27 15:03:39 atrcxb1141 10137
+#Intro:
+#All disks for each mirror will be displayed, with both
+#disk access name and disk media name. The first disk in
+#each mirror is always considered root disk by DMR.
+#Mirror 1 Mirror 2
+#------------ ------------ ------------ ------------
+#d11 c0t0d0s2 c0t1d0s2
+#- c0t5006016C44604B47d6s2 - c0t5006016C44604B47d8s2
+#- c0t5006016C44604B47d7s2 - c0t5006016C44604B47d9s2
+#Root Disk Manipulations (ro)
+#Add Root Disk (a)
+#---< Print Mirror Configuration >---
+#Mirror 1 Mirror 2
+#------------ ------------ ------------ -----------
+#d11 c0t0d0s2 - c0t1d0s2
+#: :
+#Enter disk to add as root disk: c0t1d0s2
+#After root disk mirroring, Disk sync process will start. To check if sync
+#completes or not use below command:
+## metastat -c
+#This sync will take 30 mins. Once sync complete, do the switchover sybase1 to
+#admin2.
+#
+#For more information on cluster nodes, please see the chapter “Adding a cluster
+#node” in the OSS-RC Master Server on x86, Cluster System Administration
+#Guide.
+#
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+#Hastatus -sum shows 2 nodes running.
+#DMR shows root disks defined
+#DMR shows Fencing disks defined
+#svcs shows no services in maintenance.
+#svcs shows multi-user milestone is online
+#svcs shows multi-user-server milestone is online
+# END_POST_CONDITIONS

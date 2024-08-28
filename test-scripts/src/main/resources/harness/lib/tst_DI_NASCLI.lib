@@ -1,0 +1,125 @@
+#########################################################################
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the content(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The content(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the content(s)  has been supplied.
+#
+#------------------------------------------------------------------------
+#
+#       GLOBAL VARIABLES
+#------------------------------------------------------------------------
+	TESTSYS="sys$tc_id"
+	TESTFS="fs$tc_id"
+	TESTSNAP="snap$tc_id"
+	TESTCACHE="$TESTSYS-cache"
+	TESTCLIENT=$(hostname)
+	TESTSHARE="share$tc_id"
+
+# 	FUNCTIONS
+#------------------------------------------------------------------------
+# 	NASCLI_get_SFS_data()
+# 	NASCLI_get_SFS_support_data()
+#	NASCLI_is_NAS_plugin_installed()
+#	get_installation_type()
+#	is_NASCLI_using_SFS_defrag()
+
+
+# Queries the SFS - Logs on to SFS as support user and runs a specified command,
+# logging the SFS's output to a specified log file(overwriting it in the process).
+# $1 = SFS command
+# $2 = output log filepath
+NASCLI_get_SFS_data() {
+	cmd="$1"
+	logfile="$2"
+
+	if [ -z "$cmd" ]; then
+		echo "$FUNCNAME: No command specified"
+		return 1
+	elif [ -z "$logfile" ]; then
+		echo "$FUNCNAME: No log-file specified"
+		return 1
+	fi
+
+$EXPECT /var/tmp/platform_taf/harness/bin/ssh_setup2.sh ssh "support@nasconsole /opt/VRTSnasgw/clish/bin/clish -u master -c '$cmd'" symantec > $logfile
+        return $?
+}
+
+
+NASCLI_get_SFS_support_data() {
+	cmd="$1"
+	logfile="$2"
+
+	if [ -z "$cmd" ]; then
+		echo "$FUNCNAME: No command specified"
+		return 1
+	elif [ -z "$logfile" ]; then
+		echo "$FUNCNAME: No log-file specified"
+		return 1
+	fi
+
+$EXPECT /var/tmp/platform_taf/harness/bin/ssh_setup2.sh ssh "support@nasconsole '$cmd'" symantec > $logfile
+        return $?
+}
+
+# Checks if the NAS plugin is installed 
+# pkginfo: application ERICstmnas Storage Manager Plugin NAS SFS
+# EXITCODES: Success = 0 Fail = 1
+NASCLI_is_NAS_plugin_installed() {
+
+	pkginfo ERICstmnas
+	_stmnas=$?
+	pkginfo ERICstmapi
+	_stmapi=$?
+
+	if [[ _stmnas -ne 0 || _stmapi -ne 0 ]];then
+		return 1
+	fi
+	return 0
+}
+
+
+# Checks if installation is OSS or ENIQ
+get_installation_type() {
+	if [[ -s /eniq/installation/config/inst_type ]]; then
+		echo "ENIQ"
+	elif [[ -s /ericsson/config/inst_type ]]; then
+		echo "OSS"
+	fi
+}
+
+[[ $(get_installation_type) == "ENIQ" ]] && {
+			NASCLICONFPATH=/eniq/storage/plugins/filestore/etc/nasplugin.conf
+			[[ -s $NASCLICONFPATH ]] || NASCLICONFPATH=/ericsson/storage/plugins/filestore/etc/nasplugin.conf
+
+			NASCLI=/eniq/storage/bin/nascli
+			[[ -s $NASCLI ]] || NASCLI=/ericsson/storage/bin/nascli
+
+			STORAGE_INI=/eniq/installation/config/storage.ini
+			[[ -s $STORAGE_INI ]] || STORAGE_INI=/eniq/sw/conf/storage.ini
+			}
+
+[[ $(get_installation_type) == "OSS" ]] && {
+			NASCLICONFPATH=/ericsson/storage/plugins/filestore/etc/nasplugin.conf
+			NASCLI=/ericsson/storage/bin/nascli
+			STORAGE_INI=/ericsson/config/storage.ini
+			}
+
+
+# Checks if the SFS is configured to use the SFS Defragment function.
+# EXITCODES: Success = 0 Fail = 1
+is_NASCLI_using_SFS_defrag() {
+
+	if [ ! -f $NASCLICONFPATH ]; then echo "$NASCLICONFPATH does not exist!"; return 1; fi
+
+	grep "^SFS_DEFRAG=y" $NASCLICONFPATH > /dev/null	
+	if [ $? -ne 0 ];then 
+		echo "Error: Add entry or set "SFS_DEFRAG=y" in $NASCLICONFPATH!"
+		return 1
+	fi
+	return 0
+}

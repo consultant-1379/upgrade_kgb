@@ -1,0 +1,55 @@
+#!./expect -- 
+
+set timeout 120 
+#log_user 0
+
+set ADMIN2 [lindex $argv 0]
+set OMPATH [lindex $argv 1]
+set MWSIP [lindex $argv 2]
+set OLDD [lindex $argv 3]
+
+set d1 "\$1" 
+set d2 "\$2"
+set d3 "\$3"
+set d4 "\$4"
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${ADMIN2}.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+set timeout 3200
+expect "#"
+send -- "mkdir /var/tmp/OM\r"
+expect "#"
+send -- "mount ${MWSIP}:${OMPATH} /var/tmp/OM\r"
+expect "#"
+		send -- "/var/tmp/OM/Liveupgrade/manage_be.bsh -A -b $OLDD\r"
+		expect "Are you sure you wish to activate the Boot Environment"
+		sleep 5
+		send -- "Yes\r"
+		expect "Activation of boot environment <$OLDD> successful"
+		send -- "umount /var/tmp/OM\r"
+		expect "#"
+		send -- "rmdir /var/tmp/OM/\r"
+		expect "#"
+		send -- "init 6\r"
+		expect "eof"

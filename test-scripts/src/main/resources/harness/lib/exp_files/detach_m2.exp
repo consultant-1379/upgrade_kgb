@@ -1,0 +1,46 @@
+#!./expect -- 
+set timeout 3600 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+
+
+set timeout 300
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+		}	
+	}
+
+expect "#"
+sleep 2
+	send "/ericsson/dmr/bin/dmtool de d\r"
+while 1 {
+        expect {
+
+                "Select Mirror to Detach:" {
+                        send "2\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        break}
+                }
+        }
+expect "Cleanup"
+sleep 120

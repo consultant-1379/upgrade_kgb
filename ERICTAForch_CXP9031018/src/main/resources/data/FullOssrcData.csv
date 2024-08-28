@@ -1,0 +1,2 @@
+wfile,args,exitCode
+/ericsson/orchestrator/etc/full_ossrc_workflow.xml,-p execute -y --nospinner -o 2,0

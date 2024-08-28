@@ -1,0 +1,186 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+#
+# 2012-05-15	XFELDAN	Initial script
+# 2012-06-12	XFELDAN	Code review
+# 2012-08-18	xsimrea	Bumped default timeout from 20 to 40 seconds
+# 2012-09-24	xsimrea	Move "trap" to top of script, and catch EOFs
+# 2012-11-01	xsimrea	Add parameters for initial "timeout" code, initial "eof" code (defualts to same as timeout)
+#
+#	Writes an expect script file based on an input data file
+#
+
+# After meditation, the best solution seems to be to write an 'awk' script
+# to manage the bulk of the work.
+#
+# Usage: con_ex.bsh -d <data file> -o <output file> -c <command to spawn>
+#
+# The data file format will be a flat file with alternate lines of
+# challenges and responses.  Make sure there are no blank lines in the
+# file, unless to indicate blank responses
+#
+# Return codes	Meaning
+# 0				Success
+# 1				Not all arguments given
+# 2				Zero-length argument given
+# 3				Data file not readable
+# 4				Output file not readable
+# 5				Invalid parameter given
+
+usage () {
+	echo "Usage: ${0} -d <data file> -o <output file> -c <command to spawn> [-r] [-t init_timeout_code] [-e init_eof_code] \\"
+	echo "                           [-a <challenge timeout>] [-b <main timeout>] [-h]"
+	echo "where -d - name of the input file, with challenge on odd-numbered lines, response on even"
+	echo "      -o - name of the output file, an expect script"
+	echo "      -c - command to run"
+	echo "      -r - if present, expect will use regular-expression matching on challenges, otherwise glob matching"
+	echo "      -p - if present, the check for spawned process exit code is at end of script, defaults to start"
+	echo "      -t - initial exit code for timed-out challenges - defaults to 1"
+	echo "      -e - initial exit code for eof (challenges where spawned process exits early) - defaults to same as timeout"
+	echo "      -a - timeout for each challenge/response, default 40 seconds"
+	echo "      -b - timeout for main script, after all challenge/responses complete, default 300 seconds"
+	echo "      -h - this help"
+	echo " The timeout and end-of-file exit codes are both incremented for each challenge/response pair."
+	echo " If the \"trap\" (check for spawned process exit code) is at the start of the script, the return from the spawned"
+	echo " process will be returned rather than the incremented eof code.  If the trap is at the end, the incremented eof"
+	echo " code will be used, and the process's exit code will only be used after all challenge/responses have completed."
+}
+
+opt_re=
+timeoutcode=
+eofcode=
+opt_trap=0
+chall_timeout=40
+main_timeout=300
+while getopts ":hd:o:c:rpt:e:a:b:" option; do
+	case ${option} in
+	h)	usage; exit 0	;;
+	d)	datafile=${OPTARG}	;;
+	o)	outputfile=${OPTARG};;
+	c)	command=$OPTARG		;;
+	r)	opt_re="-re "		;;
+	p)	opt_trap=1			;;
+	t)	timeoutcode=$OPTARG	;;
+	e)	eofcode=$OPTARG		;;
+	a)	chall_timeout=$OPTARG	;;
+	b)	main_timeout=$OPTARG	;;
+	?)	echo "Invalid parameter: -$OPTARG"; usage; exit 5;;
+	esac
+done
+
+if [ -z "$datafile" -o -z "$outputfile" -o -z "$command" ]; then
+	usage
+	exit 1
+fi
+
+for i in {1..4}; do
+#	echo "\$$i: ${!i}";
+	if [ -z ${!i} ]; then
+		echo "\$$i is zero-length"
+		exit 2
+	fi
+done
+
+if [ ! -r $datafile -o -d $datafile ]; then
+	echo "${datafile} is not a readable regular file"
+	exit 3
+fi
+
+if [ ! -w `dirname ${outputfile}` -o -d $outputfile ]; then
+	echo "${outputfile} is not a writable file"
+	exit 4
+fi
+
+[ -z "$timeoutcode" ] && timeoutcode=1
+[ -z "$eofcode" ] && eofcode=$timeoutcode
+
+# If on Solaris use the xpg4 version of awk
+if [[ "$(uname)" = "SunOS" ]]; then
+        AWK=/usr/xpg4/bin/awk
+fi
+# On Linux, awk will be in the path
+if [[ "$(uname)" = "Linux" ]]; then
+        AWK=awk
+fi
+
+# Escape any dollar signs in $command
+command=$(echo "$command" | sed 's/\$/\\\\\$/')
+
+# Generate the expect script from the challenge/response pairs
+${AWK} -v cmd="${command}" -v opt="${opt_re}" -v timeoutcode=$timeoutcode -v eofcode=$eofcode -v opt_trap=$opt_trap -v chall_timeout=$chall_timeout -v main_timeout=$main_timeout '
+NR == 1 {
+	print "set timeout " chall_timeout
+	print ""
+	if (opt_trap == 0) {print "trap {"
+		print "	if [catch {wait -i -1} output] return"
+		print "	if {[lindex $output [expr [llength $output] -1]] != 0 } {"
+		print "		exit [lindex $output [expr [llength $output] -1]]"
+		print "	}"
+		print "} SIGCHLD"
+	}
+	print ""
+	print "spawn -noecho", cmd
+	print ""}
+ 
+{
+	# Escape any double-quotes in the input line
+	gsub("\"", "\\\"")
+
+	# Odd-numbered lines are the challenge lines, so wait for them.
+	# Even-numbered lines are responses, so send them to the spawned process, with a trailing line-feed.
+	if (NR % 2 == 1) {
+		# Challenge line
+		print "expect {"
+		print "	" opt "\"" $0 "\" {"
+		if (timeoutcode == eofcode) {
+			print "	} default {"
+			print "		exit " eofcode
+			print "	}"
+		} else {
+			print "	} timeout {"
+			print "		exit " timeoutcode
+			print "	} eof {"
+			print "		exit " eofcode
+			print "	}"
+		}
+		print "}"
+		print "sleep 0.15"
+		timeoutcode++
+		eofcode++
+	} else {
+		# Response line
+		print "send -- \"" $0 "\\r\""
+	}
+}
+
+END {
+    if (opt_trap == 1) {print "trap {"
+		print "	if [catch {wait -i -1} output] return"
+		print "	if {[lindex $output [expr [llength $output] -1]] != 0 } {"
+		print "		exit [lindex $output [expr [llength $output] -1]]"
+		print "	}"
+		print "} SIGCHLD"
+	}
+	print ""
+	print "set timeout " main_timeout
+	print "expect {"
+	print "    EOF {}"
+	print "    timeout { exit 99 }"
+	print "}"
+	print "sleep 2"
+
+}' $datafile>$outputfile
+
+exit $?

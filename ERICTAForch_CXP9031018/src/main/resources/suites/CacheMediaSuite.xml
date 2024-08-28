@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="CacheMediaSuite">
+    <test name="CacheMediaSuite">
+        <classes>
+            <class name="com.ericsson.oss.orchestrator.test.cases.CacheLatestMediaOnMwsScenario" />
+        </classes>
+    </test>
+</suite>
+

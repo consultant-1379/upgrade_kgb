@@ -1,0 +1,61 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set MWS_HOSTNAME [lindex $argv 1]
+set MWS_ROOTPW [lindex $argv 2]
+set BUIP1 [lindex $argv 3]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@${MWS_HOSTNAME}
+#exp_internal 1
+#expect_after timeout exit
+#set timeout 60
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "${MWS_ROOTPW}\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+#expect "#"
+#send "ssh $BUIP1\r"
+#expect "Password:"
+#send "shroot\r"
+while 1 {
+         expect {
+                 "#" {
+                    send "ssh ${BUIP1}\r"}
+                 "Password:" {
+                    send "shroot\r"
+                    break}
+                 eof {
+                     puts "warning: timed out"
+                     exit 1}
+                 timeout {
+                     puts "warning: timed out"
+                     exit 1}
+               }
+}
+
+expect "#"
+send "/opt/ericsson/sck/bin/split_cluster unblock_disk_access\r"
+expect "#"
+sleep 180 
+exit 0

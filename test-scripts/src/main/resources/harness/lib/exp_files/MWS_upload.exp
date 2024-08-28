@@ -1,0 +1,69 @@
+#!./expect -- 
+#exp_internal 1
+set release [lindex $argv 0]
+set shipment [lindex $argv 1]
+set mws [lindex $argv 2]
+set mws_rootpw [lindex $argv 3]
+
+set timeout 9600
+expect_after timeout exit
+spawn /usr/local/bin/ssh -o ServerAliveInterval=10 root@$mws
+
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "$mws_rootpw\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+expect "\/#"
+sleep 2
+send -- "chmod -R a+rw /export/jumpstart/teams/OSSRC_${release}/${shipment}\r"
+expect "\/#"
+send -- "/ericsson/jumpstart/bin/manage_nfs_media.bsh -a remove -m ossrc -p /export/SW_LOCATION/OSSRC_MEDIA/OSSRC_${release}/${shipment} -N\r"
+expect "\/#"
+send -- "/ericsson/jumpstart/bin/manage_nfs_media.bsh -a remove -m om -p /export/SW_LOCATION/OM_MEDIA/OSSRC_${release}/${shipment} -N\r"
+expect "\/#"
+sleep 60
+send -- "/ericsson/jumpstart/bin/manage_nfs_media.bsh -a add -m ossrc -p /export/jumpstart/OSSRC_${release}/${shipment}/ossrc_base_sw -N\r"
+while 1 {
+        expect {
+		"ERROR" {
+                        exit 1}
+                "\/#" {
+                        break}
+                eof {
+                        exit 1}
+                timeout {
+                       exit 1}
+               }
+       }
+send -- "/ericsson/jumpstart/bin/manage_nfs_media.bsh -a add -m om -p /export/jumpstart/OSSRC_${release}/${shipment}/om -N\r"
+while 1 {
+        expect {
+		"ERROR" {
+                        exit 1}
+                "\/#" {
+                        break}
+                eof {
+                        exit 1}
+                timeout {
+                        exit 1}
+                }
+        }
+send -- "chmod -R a+rw /export/SW_LOCATION/OSSRC_MEDIA/OSSRC_${release}/${shipment}\r"
+expect "\/#"
+sleep 5

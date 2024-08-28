@@ -1,0 +1,79 @@
+#!./expect -- 
+
+#Return 1 if serious problem don't continue
+#Return 2 no mirrors defined, do nothing proceed with upgrade
+#Return 3 in sync, do nothing proceed with upgrade
+#Return 4 boot from detach and sync
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set results(DEFINED) "1"
+set results(INSYNC) "1"
+set results(WARNING) "0"
+set results(SMTOOL) "0"
+set results(INSTALL) "0"
+set D1 "\$1" 
+set D2 "\$2" 
+set D "\$" 
+set PIPESTATUS "\${PIPESTATUS\[0\]}" 
+set FILTER "\[\{,\},\"\]" 
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+
+send "/ericsson/dmr/bin/dmtool s p\r"
+expect "#"
+send "/usr/sbin/vxdisk list | grep disk\[0-9]\[0-9]*mirr\r"
+expect "#"
+send "echo $?\r"
+expect "#"
+   set f1 $expect_out(buffer)
+        set f2 [split $f1 "\r\n"]
+        if {[lindex $f2 2] != "0"} {
+		exit 2
+        }
+send "/ericsson/dmr/bin/dmtool check_for_two_good_mirrors\r"
+set timeout 180
+while 1 {
+	expect {
+		"Found these good mirrors: 1 2" {
+			sleep 5
+			exit 3}
+		"Mirror 2 is missing active" {
+			sleep 5
+			exit 4}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+exit 1

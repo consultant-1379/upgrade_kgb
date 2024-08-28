@@ -1,0 +1,9 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd" >
+<suite name="CleanupSuite">
+    <test name="CleanupSuite">
+        <classes>
+            <class name="com.ericsson.oss.orchestrator.test.cases.CleanupUpgradeScenario" />
+        </classes>
+    </test>
+</suite>
+

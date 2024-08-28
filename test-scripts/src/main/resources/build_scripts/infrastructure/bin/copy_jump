@@ -1,0 +1,1126 @@
+#!/bin/bash 
+
+
+# *****************************************************************************
+# Script Name:   copy_jump 
+# Author:        lmirbe 
+# Function:      copy DM working jump to CI jump area 
+#
+# History:       07-10-11 by Rob Blee
+#		24-05-13 edavmax refactored for infra team
+# *****************************************************************************
+
+
+
+#
+# Slipstream uploaded test packages into the build
+#
+copy_uploaded_test_packages ()
+{
+    local l_destination=$1 
+	local l_test_package_path=$l_destination/test_packages
+
+	if [ ! -d $l_test_package_path ]; then
+		error "Failed to locate uploaded test package path $l_test_package_path"
+		return 1
+	fi
+	if [ ! -d $l_destination ]; then
+		error "Failed to locate shipment destination path $l_destination"
+		return 1
+	fi
+	# if there are no packages in the uploaded test package dir
+	# then there is nothing to do
+	if [ -z "$( find $l_test_package_path -type f 2>&1 )" ]; then
+		info "No uploaded test packages apparently"
+        #Still need to build the ci media information for the first run of copy_jump
+        initial_run="yes"
+        build_cimediainfo_webpage "${TEAM}" "${shipment}" "${initial_run}" || {
+    		warning "Error building CI media information for ${team} - ${shipment}.\n copy_jump will continue..."
+        }
+		return 0
+	fi
+
+	# create temporary directories for comparing packages
+	mkdir -p $CURRENTPKGTMPDIR &&
+	mkdir -p $NEWPKGTMPDIR || {
+		error "Failed to create tmp directories"
+		return 1
+	}
+
+	# process OM files
+	# files in the oneshot dir will get added once to the media and then get deleted
+	# no version checks are done on the files, they are simply copied and deleted after
+
+	info "Processing one-time uploaded OM Packages"
+	oneshot_cxps=
+	check_multiple_om_cxps $l_test_package_path/om/one_shot || return 1
+	for file in $( find $l_test_package_path/om/one_shot/. -name . -o -type d -prune -o -name '*.tar.gz' -print 2>/dev/null ); do
+		cxp=$( echo $(basename $file ) | awk -F. '{print $1}' | awk -F_ '{print $1}')
+		if [ -z "$cxp" ] || ! echo $ALLOWED_CXPS | grep -w $cxp > /dev/null; then
+			error "Unrecognised CXP \"$cxp\" from tar file $file"
+			return 1
+		fi
+		info "Processing $(basename $file ).."
+		newver=$( echo $(basename $file ) | awk -F. '{print $1}' | awk -F_ '{print $2}')
+		info "Copying new package $(basename $file ) version $newver to media"
+		pushd . > /dev/null &&
+		cd $l_destination/om &&
+		/bin/rm -rf $l_destination/om/$cxp &&
+		gzip -cd $file | tar xvf - > /dev/null || { 
+			error "Failed to copy $(basename $file) to media"
+			return 1
+		}
+		info "Removing $(basename $file)"
+		/bin/rm -f $file || {
+			error "Failed to remove $file"
+			return 1
+		}
+		popd > /dev/null
+		oneshot_cxps="$oneshot_cxps $cxp"
+		
+		
+	done
+	
+	info "Processing uploaded OM Packages"
+    test_om_cxps=
+	check_multiple_om_cxps $l_test_package_path/om || return 1
+	for file in $( find $l_test_package_path/om/. -name . -o -type d -prune -o -name '*.tar.gz' -print 2>/dev/null ); do
+		cxp=$( echo $(basename $file ) | awk -F. '{print $1}' | awk -F_ '{print $1}')
+		if [ -z "$cxp" ] || ! echo $ALLOWED_CXPS | grep -w $cxp > /dev/null; then
+			error "Unrecognised CXP \"$cxp\" from tar file $file"
+			return 1
+		fi
+		if echo $oneshot_cxps | grep -w $cxp > /dev/null ; then
+			info "Not selecting uploaded package $(basename $file ) since equivalent one-shot package has already been copied to the media"
+			continue
+		fi
+		info "Processing $(basename $file ).."
+		newver=$( echo $(basename $file ) | awk -F. '{print $1}' | awk -F_ '{print $2}')
+		if [ -s $l_destination/om/$cxp/cxp_info ]; then
+			currentver=$( grep '^VERSION=' $l_destination/om/$cxp/cxp_info | awk -F= '{ print $2 }' )
+		else
+			warning "Unable to get version information of package $(basename $file ) from DM media. Assuming new package"
+			currentver=""
+		fi
+		if [[ "$newver" < "$currentver" || "$newver" == "$currentver" ]]; then
+			warning "Not selecting uploaded package $(basename $file ) since version $newver is less than or equal to the version already on the DM media $currentver"
+			continue
+		else
+			info "Copying new package $(basename $file ) version $newver to media"
+			pushd . > /dev/null &&
+			cd $l_destination/om &&
+			/bin/rm -rf $l_destination/om/$cxp &&
+			gzip -cd $file | tar xvf - > /dev/null || { 
+				error "Failed to copy $(basename $file) to media"
+				return 1
+			}
+			popd > /dev/null
+            test_om_cxps="${test_om_cxps} ${cxp}"
+		fi
+	done
+    
+
+	# backup manifest files
+	sparc_manifest=$l_destination/ossrc_base_sw/build_manifest_sparc
+	sparc_manifest_supp=$l_test_package_path/ossrc_base_sw/build_manifest_sparc_supp
+	x86_manifest=$l_destination/ossrc_base_sw/build_manifest_i386
+	x86_manifest_supp=$l_test_package_path/ossrc_base_sw/build_manifest_i386_supp
+	for file in $sparc_manifest $x86_manifest; do
+		cp $file ${file}_II_DM_UNCHANGED || {
+			error "Failed to backup $file"
+			return 1
+		}
+		cp $file ${file}_UG_DM_UNCHANGED || {
+			error "Failed to backup $file"
+			return 1
+		}
+	done
+	info "Processing one-shot uploaded OSSRC Packages"
+	oneshot_common_pkgs=""
+	oneshot_sparc_pkgs=""
+	oneshot_i386_pkgs=""
+	for arch in common i386 sparc; do
+		if [[ $arch = common || $arch = i386 ]]; then
+			manifest_file=$x86_manifest
+			manifest_file_supp=$x86_manifest_supp
+			manifest_file_list="$x86_manifest $sparc_manifest"
+		else
+			manifest_file=$sparc_manifest
+			manifest_file_supp=$sparc_manifest_supp
+			manifest_file_list=$manifest_file
+		fi
+		
+		for newpkgfile in $( find $l_test_package_path/ossrc_base_sw/one_shot/$arch/. -name . -o -type d -prune -o -print 2>/dev/null ); do 
+			newpkgfilename=$( basename $newpkgfile )
+			newpkgname="${newpkgfilename%%.*}"
+			newpkgext="${newpkgfilename#*.}"
+			if [ "$newpkgext" = pkg.7z ]; then
+				# have to melt package to get version
+				# assume 7z file is named after pkg contained in archive
+				newcmppkg=$NEWPKGTMPDIR/$newpkgname.pkg
+				[ -f $newcmppkg ] && /bin/rm -f $newcmppkg
+				cp $newpkgfile $NEWPKGTMPDIR || {
+					error "Failed to copy new package to tmp dir"
+					return 1
+				}
+				pushd . > /dev/null
+				cd $NEWPKGTMPDIR
+				p7zip -d $newpkgfilename > /dev/null || {
+					error "Failed to melt new package in tmp dir"
+					return 1
+				}
+				[ ! -s $newcmppkg ] && {
+					error "Unexpected condition occured when comparing packages"
+					return 1
+				}
+				popd > /dev/null
+			elif [ "$newpkgext" = pkg ]; then
+				newcmppkg=$newpkgfile
+			else
+				error "Unexpected package file extension \"$newpkgext\""
+				return 1
+			fi
+			newpkgver=$(pkginfo -ld $newcmppkg |grep VERSION: | sed 's/VERSION://;s/^[ \t]*//;s/[ \t]*$//')
+			pkg_media_loc=$( awk '/^'$newpkgname' / { print $5 }' $manifest_file )
+			pkg_dest=$l_destination/ossrc_base_sw/$pkg_media_loc
+			info "Including one-shot package $newpkgfilename in media build"	
+			cp $newpkgfile $pkg_dest || {
+				 error "Failed to copy new package $newpkgfilename to $pkg_dest"
+				return 1
+			}
+			case $arch in
+				common)
+					oneshot_common_pkgs="$oneshot_common_pkgs $newpkgfilename"
+					;;
+				sparc)
+					oneshot_sparc_pkgs="$oneshot_sparc_pkgs $newpkgfilename"
+					;;
+				i386)
+					oneshot_i386_pkgs="$oneshot_i386_pkgs $newpkgfilename"
+					;;
+			esac
+			# update manifest file(s)
+			for manfile in $manifest_file_list; do
+				declare -a man_array=( $( awk '/^'$newpkgname' / { print }' $manfile))
+				target_package=${man_array[0]}
+				apr=${man_array[1]}
+				misc1=${man_array[3]}
+				misc2=${man_array[4]}
+				misc3=${man_array[5]}
+				/bin/sed "/$target_package /d" $manfile > $manfile.tmp
+				echo "$target_package $apr $newpkgver $misc1 $misc2 $misc3" >> $manfile.tmp
+				/bin/mv -f $manfile.tmp $manfile
+			done
+			# remove the package
+			info "Removing one-shot package $newpkgname"
+			/bin/rm -f $newpkgfile || {
+				error "Failed to remove one-shot package $newpkgname"
+				return 1
+			}
+		done
+	done
+    common_test_pkgs=
+    i386_test_pkgs=
+    sparc_test_pkgs=
+	info "Processing uploaded OSSRC Packages"
+	for arch in common i386 sparc; do
+		if [[ $arch = common || $arch = i386 ]]; then
+			manifest_file=$x86_manifest
+			manifest_file_supp=$x86_manifest_supp
+		else
+			manifest_file=$sparc_manifest
+			manifest_file_supp=$sparc_manifest_supp
+		fi
+		
+		for newpkgfile in $( find $l_test_package_path/ossrc_base_sw/$arch/. -name . -o -type d -prune -o -print 2>/dev/null ); do 
+			newpkg=FALSE
+			newpkgfilename=$( basename $newpkgfile )
+			eval echo \$oneshot_${arch}_pkgs | grep $newpkgfilename > /dev/null && {
+				info "Not processing $newpkgfile since equivalent one-shot package has already been copied to media"
+				continue
+			}
+			newpkgname="${newpkgfilename%%.*}"
+			newpkgext="${newpkgfilename#*.}"
+			pkg_media_loc=$( awk '/^'$newpkgname' / { print $5 }' $manifest_file )
+			# if no entry for package in manifest file check in supp file
+			if [ -z "$pkg_media_loc" ]; then
+				info "Unable to determine location of package $newpkgname from manifest file $( basename $manifest_file)"
+				info "Checking for supplementary manifest file $( basename $manifest_file_supp )"
+				if [ -s $manifest_file_supp ]; then
+					pkg_media_loc=$( awk '/^'$newpkgname' / { print $5 }' $manifest_file_supp )
+					if [ -z "$pkg_media_loc" ]; then
+						error "Unable to determine media location for package $newpkgname"
+						return 1
+					else
+						newpkg=TRUE
+					fi
+				else
+					error "Unable to determine media location for package $newpkgname"
+					return 1
+				fi
+				
+			fi
+			pkg_dest=$l_destination/ossrc_base_sw/$pkg_media_loc
+			if [ "$newpkg" = FALSE ]; then
+				# do version check 
+				currentpkgfile=$( find $pkg_dest -name $newpkgname.pkg\* 2>/dev/null )
+				currentpkgfilename=$( basename $currentpkgfile )
+				currentpkgext="${currentpkgfilename#*.}"
+				
+				
+				if [ "$newpkgext" = pkg.7z ]; then
+					# have to melt package before doing version comparison 
+					# assume 7z file is named after pkg contained in archive
+					newcmppkg=$NEWPKGTMPDIR/$newpkgname.pkg
+					[ -f $newcmppkg ] && /bin/rm -f $newcmppkg
+					cp $newpkgfile $NEWPKGTMPDIR || {
+						error "Failed to copy new package to tmp dir"
+						return 1
+					}
+					pushd . > /dev/null
+					cd $NEWPKGTMPDIR
+					p7zip -d $newpkgfilename > /dev/null || {
+						error "Failed to melt new package in tmp dir"
+						return 1
+					}
+					[ ! -s $newcmppkg ] && {
+						error "Unexpected condition occured when comparing packages"
+						return 1
+					}
+					popd > /dev/null
+				elif [ "$newpkgext" = pkg ]; then
+					newcmppkg=$newpkgfile
+				else
+					error "Unexpected package file extension \"$newpkgext\""
+					return 1
+				fi
+
+				if [ "$currentpkgext" = pkg.7z ]; then
+					# have to melt package before doing version comparison 
+					# assume 7z file is named after pkg contained in archive
+					currentcmppkg=$CURRENTPKGTMPDIR/$newpkgname.pkg
+					[ -f $currentcmppkg ] && /bin/rm -f $currentcmppkg
+					cp $currentpkgfile $CURRENTPKGTMPDIR || {
+						error "Failed to copy current package to tmp dir"
+						return 1
+					}
+					pushd . > /dev/null
+					cd $CURRENTPKGTMPDIR
+					p7zip -d $currentpkgfilename > /dev/null || {
+						error "Failed to melt current package in tmp dir"
+						return 1
+					}
+					[ ! -s $currentcmppkg ] && {
+						error "Unexpected condition occured when comparing packages"
+						return 1
+					}
+					popd > /dev/null
+				elif [ "$currentpkgext" = pkg ]; then
+					currentcmppkg=$currentpkgfile
+				else
+					error "Unexpected package file extension \"$currentpkgext\""
+					return 1
+				fi
+ 				currentpkgver=$(pkginfo -ld $currentcmppkg |grep VERSION: | sed 's/VERSION://;s/^[ \t]*//;s/[ \t]*$//')
+ 				newpkgver=$(pkginfo -ld $newcmppkg |grep VERSION: | sed 's/VERSION://;s/^[ \t]*//;s/[ \t]*$//')
+				if [[ "$NOVERSIONCHECK" = FALSE && ( "$newpkgver" <  "$currentpkgver" || "$newpkgver" =  "$currentpkgver" )  ]]; then
+					warning "Not copying uploaded package $newpkgname to media since version $newpkgver <= current version $currentpkgver"
+					continue
+				else
+					if [ "$NOVERSIONCHECK" = FALSE ]; then
+						info "Copying uploaded package $newpkgname to media since version $newpkgver > $currentpkgver" 
+					else
+						info " Forced Copying of uploaded package $newpkgname to media - version check disabled!" 
+					fi
+
+					cp $newpkgfile $pkg_dest || {
+						 error "Failed to copy new package $newpkgname to $pkg_dest"
+						return 1
+					}
+                    oss_testpkg_uploaded="yes"
+					# update manifest file(s)
+					if [ $arch = common ]; then
+						manifest_file_list="$x86_manifest $sparc_manifest"
+					else
+						manifest_file_list=$manifest_file
+					fi
+					for manfile in $manifest_file_list; do
+						declare -a man_array=( $( awk '/^'$newpkgname' / { print }' $manfile))
+						target_package=${man_array[0]}
+						apr=${man_array[1]}
+						misc1=${man_array[3]}
+						misc2=${man_array[4]}
+						misc3=${man_array[5]}
+						/bin/sed "/$target_package /d" $manfile > $manfile.tmp
+						echo "$target_package $apr $newpkgver $misc1 $misc2 $misc3" >> $manfile.tmp
+                        
+						/bin/mv -f $manfile.tmp $manfile
+					done
+				fi
+				/bin/rm -f $CURRENTPKGTMPDIR/* 
+				/bin/rm -f $NEWPKGTMPDIR/*
+			else
+				# just copy package to media location - no version check
+				if [ ! -d $pkg_dest ]; then
+					mkdir -p $pkg_dest || {
+						 error "Failed to create dir for new package $pkgname"
+						return 1
+					}
+				fi 
+				info "Copying new package $newpkgname to media"
+				cp $newpkgfile $pkg_dest || {
+ 					error "Failed to copy new package $pkgname to $pkg_dest"
+					return 1
+				}
+                oss_testpkg_uploaded="yes"
+			fi
+            if [ ! -z "${oss_testpkg_uploaded}" ] && [ "${oss_testpkg_uploaded}" == "yes" ];then
+                case "${arch}" in
+                    common) common_test_pkgs="${common_test_pkgs} ${newpkgname}"
+                            ;;
+                    i386)   i386_test_pkgs="${i386_test_pkgs} ${newpkgname}"
+                            ;;
+                    sparc)  sparc_test_pkgs="${sparc_test_pkgs} ${newpkgname}"
+                            ;;
+                esac
+            fi
+		done
+	done
+    #OSS-RC Media test and oneshot packages
+    echo "${common_test_pkgs}" >> /tmp/common_test_pkgs.$$
+    echo "${i386_test_pkgs}" >> /tmp/i386_test_pkgs.$$
+    echo "${sparc_test_pkgs}" >> /tmp/sparc_test_pkgs.$$
+    echo "${oneshot_common_pkgs}" >>/tmp/common_oneshot_pkgs.$$
+    echo "${oneshot_sparc_pkgs}" >>/tmp/sparc_oneshot_pkgs.$$
+    echo "${oneshot_i386_pkgs}" >>/tmp/i386_oneshot_pkgs.$$
+    #OM Media test and oneshot packages
+    echo "${oneshot_cxps}" >>/tmp/om_oneshot_cxps.$$
+    echo "${test_om_cxps}" >>/tmp/om_test_cxps.$$
+    
+	build_cimediainfo_webpage "${TEAM}" "${shipment}" || {
+    		warning "Error building CI media information for ${team} - ${shipment}.\n copy_jump will continue..."
+	}
+	
+}
+
+#
+# Function to check for multiple versions of
+# packages on the OM media test_packages area
+#
+check_multiple_om_cxps() {
+	local l_testpkgdir=$1
+	if [ ! -d "$l_testpkgdir" ]; then
+		error "$FUNCNAME: supplied test package dir \"$dir\" does not exist"
+		return 1
+	fi
+	info "Checking for multiple version of cxp packages in test package dir \"$l_testpkgdir\""
+	for cxp in $ALLOWED_CXPS; do
+		num_cxp=$( ls -l $l_testpkgdir/${cxp}_*.tar.gz 2> /dev/null   | wc -l )
+		if [[ "$num_cxp" =~ [0-9]+ && $num_cxp -gt 1 ]]; then
+			error "More than one version of $cxp in test package dir $l_testpkgdir"
+			error "Only one version is allowed - unwanted version must be removed before continuing"
+			return 1
+		fi
+	done
+
+
+}
+
+#
+# function to upload OM and OSSRC media on MWS
+#
+cache_media() {
+	local l_retrycnt=10
+	local l_count=0
+	local l_sleepinterval=60
+	local l_media_ident_file
+	local l_media_dir
+
+	local l_team=$1
+	local l_shipment=$2
+	local l_media_type=$3
+
+	[ -z "$l_shipment" ] && {
+		 error "$FUNCNAME: shipment arg not specified"
+		return 1
+	}
+	[ -z "$l_team" ] && {
+		 error "$FUNCNAME: team arg not specified"
+		return 1
+	}
+
+	case $l_media_type in
+		"om")
+			l_media_ident_file=${TEAM_MWS_DESTINATION}/${shipment}/om/.om
+			l_media_type_dir=OM_MEDIA
+			l_media_src_dir=om
+			;;
+		"ossrc")
+			l_media_ident_file=${TEAM_MWS_DESTINATION}/${shipment}/ossrc_base_sw/.ossrc_base_sw_i386
+			l_media_type_dir=OSSRC_MEDIA
+			l_media_src_dir=ossrc_base_sw
+			;;
+		*)
+			error "$FUNCNAME: unrecognised media type \"$l_media_type\""
+			return 1
+			;;
+	esac
+			
+
+	[ ! -s $l_media_ident_file ] && {
+		 error "$FUNCNAME: media ident file missing"
+		return 1
+	}
+	l_cached_media_dir=$( grep 'media_dir=' $l_media_ident_file | awk -F= '{print $2}' )
+
+
+	# block if there is an instance of manage_nfs_media already running
+	local l_cachescriptpids=$( pgrep -f $MWS_NFSMEDIACACHESCRIPT ) 
+	if [ -n "$l_cachescriptpids" ]; then
+		info "Waiting for instance(s) of $MWS_NFSMEDIACACHESCRIPT (pid(s)=$l_cachescriptpids) to finish"
+		while [ $l_count -lt $l_retrycnt ]; do
+			[ -z "$l_cachescriptpids" ] && break
+			sleep $l_sleepinterval
+			l_cachescriptpids=$( pgrep -f $MWS_NFSMEDIACACHESCRIPT ) 
+			let l_count+=1
+		done
+	fi
+	[ -n "$l_cachescriptpids" ] && {
+		 error "Timed out waiting for instance(s) of $MWS_NFSMEDIACACHESCRIPT to finish"
+		return 1
+	}
+
+	# remove existing media
+	if [ -d $MWS_CACHEDLOCATION/$l_media_type_dir/$l_cached_media_dir ]; then
+		info "Removing existing $l_media_type media $l_cached_media_dir"
+		$MWS_NFSMEDIACACHESCRIPT -a remove -m $l_media_type -p $MWS_CACHEDLOCATION/$l_media_type_dir/$l_cached_media_dir -N || {
+			error "Error occured removing existing $l_media_type media $l_cached_media_dir"
+			return 1
+		}
+	fi
+	# add new media
+	info "Caching $l_media_type Media from ${TEAM_MWS_DESTINATION}/${shipment}/$l_media_src_dir"
+	$MWS_NFSMEDIACACHESCRIPT -a add -m $l_media_type -p ${TEAM_MWS_DESTINATION}/${shipment}/$l_media_src_dir -N || {
+		error "Error occured caching $l_media_type media from ${TEAM_MWS_DESTINATION}/${shipment}/$l_media_src_dir"
+		return 1
+	}
+	if [ "$l_media_type" = ossrc ]; then
+		for file in ci_upgrade.sh solarischeck.ksh; do
+			cp $SCRIPTDIR/$file $MWS_CACHEDLOCATION/$l_media_type_dir/$l_cached_media_dir || {
+				error "Failed to copy $file to $MWS_CACHEDLOCATION/$l_media_type_dir/$l_cached_media_dir"
+				return 1
+			}
+		done
+		mkdir -p $MWS_CACHEDLOCATION/$l_media_type_dir/$l_cached_media_dir/CONF 
+		cp $SCRIPTDIR/../etc/package.adm $MWS_CACHEDLOCATION/$l_media_type_dir/$l_cached_media_dir/CONF || {
+			error "Failed to copy package.adm file to $MWS_CACHEDLOCATION/$l_media_type_dir/$l_cached_media_dir/CONF"
+			return 1
+		}
+		 
+	fi
+	chmod -R a+rw $MWS_CACHEDLOCATION/$l_media_type_dir/$l_cached_media_dir
+
+}
+
+
+# usage function
+usage () {
+cat << EOF
+
+Synchronises one or more OSSRC shipments from Delivery Management server.
+
+Usage:  ${SCRIPTNAME} -s "<shipment1> <shipment2> <shipment3>" -t <team> [-n] [-f]
+
+-n = disable version check of test packages i.e. force onto media
+-f = disable check for integrity of a shipment
+-u = enable caching of OSSRC upgrade media
+
+Example:
+
+${SCRIPTNAME} -s "OSSRC_O13_2/13.2.9_LLSVA OSSRC_O14_0/14.0.5.daily" -t infra 
+
+EOF
+    return 0
+}
+
+#
+# apply console bug w/a for  IS-513 
+#
+
+apply_console_bug_wa() {
+	shipment=$1
+	cont_file=${TEAM_MWS_DESTINATION}/${shipment}/ossrc_base_sw/bootstrap/bin/continue_ossrc_installation.bsh
+	if ! egrep '"Successfully executed core.sh.".*/dev/console' $cont_file > /dev/null 2>&1; then
+		 echo "Applying console w/a to $cont_file"
+        	/usr/xpg4/bin/sed 's,.*Successfully executed core.sh.*$,$ECHO "Successfully executed core.sh." > /dev/console\
+$ECHO "Successfully executed core.sh." >>  ${LOGFILE},' $cont_file > /tmp/tmp.$$
+		mv -f /tmp/tmp.$$ $cont_file
+		chmod +x $cont_file
+	fi
+
+	return 0
+}
+
+
+
+
+#
+# cleanup script
+#
+cleanupOnExit() {
+	echo "cleaning up.."
+	if [ -f $LOCKFILE ]; then
+		/bin/rm -f $LOCKFILE || {
+			echo "Failed to remove lockfile"
+		}
+	fi
+	cd /
+	
+	[ -d $CURRENTPKGTMPDIR ] && /bin/rm -rf $CURRENTPKGTMPDIR
+	[ -d $NEWPKGTMPDIR ] && /bin/rm -rf $NEWPKGTMPDIR
+	for shipment in $SHIPMENTS; do
+		media_ident_files="${TEAM_MWS_DESTINATION}/${shipment}/om/.om \
+			${TEAM_MWS_DESTINATION}/${shipment}/ossrc_base_sw/.ossrc_base_sw_i386 \
+			${TEAM_MWS_DESTINATION}/${shipment}/ossrc_base_sw/.ossrc_base_sw_sparc"
+
+		for ident_file in $media_ident_files; do
+			if [ -f /tmp/$( basename $ident_file ).bak.$$ ]; then
+				mv -f /tmp/$( basename $ident_file ).bak.$$ $ident_file
+			fi
+		done
+	done
+
+}
+
+#
+#
+#
+
+function copyShipment() {
+		shipment=$1
+		if [ -z "$shipment" ]; then
+			error "No shipment arg to $FUNCNAME"
+			return 1
+		fi
+
+		check_shipment $shipment $COPYFLAGCHECK || {
+			error  "Problem with shipment $shipment"
+ 			return 1
+		}
+		source=$DM_SHIPMENTLOCATION/$shipment
+
+		info "========================< Start Copy of shipment $shipment `date '+%Y%m%d-%H:%M:%S'` >========================"
+		shipment_proj=$( dirname $shipment )
+		shipment_base=$( basename $shipment )
+		shipment_label=$( echo "$shipment_base" | sed 's/^[0-9]*\.[0-9]*\.[0-9]*\([._]*.*\)$/\1/' )
+
+		if [ ! -d $TEAM_MWS_DESTINATION/$shipment ]; then
+			error "Team shipment directory $TEAM_MWS_DESTINATION/$shipment does not exist. Check initial config for shipment has been done"
+			return 1
+		fi
+
+		#copy files
+		info "Copying files using command $RSYNC -av  --include=om/ --include=ossrc_base_sw/ --exclude=${shipment_base}/* --delete $source $TEAM_MWS_DESTINATION/$shipment_proj"
+		$RSYNC -av  --include=om/ --include=ossrc_base_sw/ --exclude=${shipment_base}/* --delete $source $TEAM_MWS_DESTINATION/$shipment_proj >> $LOG || {
+			error "Rsync of data for shipment $shipment from DM server has failed - skipping this shipment"
+			return 1
+		}
+		#for file in $MWS_DESTINATION/$shipment/om $MWS_DESTINATION/$shipment/ossrc_base_sw \
+			#$MWS_DESTINATION/$shipment/ossrc_base_sw/.ossrc_base_sw_i386 \
+			#$MWS_DESTINATION/$shipment/ossrc_base_sw/.ossrc_base_sw_sparc; do
+			#if [ $file = $MWS_DESTINATION/$shipment/om ]; then
+				#recurflag="-R"
+			#else
+				#recurflag=""
+			#fi
+			#chmod $recurflag 777 $file || error "Failed to set permissions on $file"
+		#done
+		chmod -fR 777 $TEAM_MWS_DESTINATION/$shipment || {
+			error "Failed to set permissions on shipment directory - skipping this shipment" 
+			return 1
+		}
+
+		# copy sundry files
+		for file in $source/bootargs_sun4u.txt; do 
+			cp $file $TEAM_MWS_DESTINATION/$shipment || { 
+				error "Failed to copy $file to $TEAM_MWS_DESTINATION/$shipment - skipping this shipment"
+				return 1
+			}
+		done
+
+
+		#unzip ERICaxe
+		if [ -f "${MWS_DESTINATION}/${shipment}/ossrc_base_sw/eric_app/common/$ERICAXEPKG" ] ; then
+			pushd . > /dev/null
+			cd ${MWS_DESTINATION}/${shipment}/ossrc_base_sw/eric_app/common/
+			/bin/p7zip -d $ERICAXEPKG || {
+				error "Failed to melt $ERICAXEPKG - skipping shipment"
+				return 1
+			}
+			popd > /dev/null
+		fi
+		
+		#edit media ident files
+		media_ident_files="${TEAM_MWS_DESTINATION}/${shipment}/om/.om \
+			${TEAM_MWS_DESTINATION}/${shipment}/ossrc_base_sw/.ossrc_base_sw_i386 \
+			${TEAM_MWS_DESTINATION}/${shipment}/ossrc_base_sw/.ossrc_base_sw_sparc"
+
+		for ident_file in $media_ident_files; do
+			if [ -f $ident_file ] ; then
+				cp $ident_file /tmp/$( basename $ident_file ).bak.$$
+				media_rev=$( grep 'media_rev=' $ident_file | awk -F= '{print $2}' )
+				if ! echo $media_rev | egrep "${shipment_label}_${TEAM}\$" > /dev/null; then
+					sed -e 's/_II//;s/_LLSV[AB123]//;s/_CU//' -e '/^media_rev/s|$|'${shipment_label}_${TEAM}'|' $ident_file >/tmp/ident_file.$$ &&
+					/bin/mv -f /tmp/ident_file.$$ $ident_file || {
+				 		error "Failed to update media identity file $ident_file"
+						return 1
+					}
+				fi
+				media_dir=$( grep 'media_dir=' $ident_file | awk -F= '{print $2}' )
+				if ! echo $media_dir | egrep "${shipment_label}_${TEAM}\$" > /dev/null; then
+					sed -e 's/_II//;s/_LLSV[AB123]//;s/_CU//' -e '/^media_dir/s|$|'${shipment_label}_${TEAM}'|' $ident_file >/tmp/ident_file.$$ &&
+					/bin/mv -f /tmp/ident_file.$$ $ident_file || {
+				 		error "Failed to update media identity file $ident_file"
+						return 1
+					}
+				fi
+			else
+				error "Failed to locate media identity file $ident_file"
+				return 1
+                	fi
+		done
+
+
+		#update jump with previous uploaded packages
+		copy_uploaded_test_packages ${TEAM_MWS_DESTINATION}/${shipment} || {
+			error "Problem occured copying test packages onto the media"
+			return 1
+		}
+        
+		#change bootargs
+		mws_ip=$( getent hosts $( hostname ) | awk '{ print $1 }' | tail -1 )
+		[ -z "$mws_ip" ] && {
+			error "Unable to determine IP of this MWS"
+			return 1
+		}
+		sed "s/$DM_MWS_IP/$mws_ip/g" $TEAM_MWS_DESTINATION/$shipment/bootargs_sun4u.txt > $TEAM_MWS_DESTINATION/$shipment/bootargs.$$ &&
+		/bin/chmod 666 $TEAM_MWS_DESTINATION/$shipment/bootargs.$$ &&
+		/bin/mv -f $TEAM_MWS_DESTINATION/$shipment/bootargs.$$ $TEAM_MWS_DESTINATION/$shipment/bootargs_sun4u.txt || {
+			error "Failed to update $TEAM_MWS_DESTINATION/$shipment/bootargs_sun4u.txt"
+			return 1
+		}
+
+		# apply workaround to avoid messages not appearing on console
+		apply_console_bug_wa $shipment || return 1
+        
+		# cache install media 
+		info "Caching install media to MWS"
+		cache_media $TEAM $shipment ossrc || {
+			error "Problem occured caching ossrc media for $shipment"
+			return 1
+		}
+		cache_media $TEAM $shipment om || {
+			error "Problem occured caching om media for $shipment"
+			return 1
+		}
+
+		# cache upgrade ossrc media
+		if [ "$CACHEUPGRADEMEDIA" = TRUE ]; then
+			for ident_file in ${TEAM_MWS_DESTINATION}/${shipment}/ossrc_base_sw/.ossrc_base_sw_i386 \
+						${TEAM_MWS_DESTINATION}/${shipment}/ossrc_base_sw/.ossrc_base_sw_sparc
+			do
+				if [ -f $ident_file ] ; then
+					media_rev=$( grep 'media_rev=' $ident_file | awk -F= '{print $2}' )
+					if ! echo $media_rev | egrep "_UG\$" > /dev/null; then
+						sed '/^media_rev/s|$|_UG|' $ident_file >/tmp/ident_file.$$ &&
+						/bin/mv -f /tmp/ident_file.$$ $ident_file || {
+				 			error "Failed to update media identity file $ident_file"
+							return 1
+						}
+					fi
+					media_dir=$( grep 'media_dir=' $ident_file | awk -F= '{print $2}' )
+					if ! echo $media_dir | egrep "\_UG\$" > /dev/null; then
+						sed -e '/^media_dir/s|$|_UG|' $ident_file >/tmp/ident_file.$$ &&
+						/bin/mv -f /tmp/ident_file.$$ $ident_file || {
+				 			error "Failed to update media identity file $ident_file"
+							return 1
+						}
+					fi
+				else
+					error "Failed to locate media identity file $ident_file"
+					return 1
+                		fi
+			done
+			
+			# cache upgrade media
+			info "Caching upgrade ossrc media to MWS"
+			cache_media $TEAM $shipment ossrc || {
+				error "Problem occured caching upgrade ossrc media for $shipment"
+				return 1
+			}
+		fi
+
+
+		wdate=`date +'%a %b %e %Y %T'`
+		echo $wdate > $TEAM_MWS_DESTINATION/$shipment/upload_date
+
+
+}
+
+build_cimediainfo_webpage()
+{
+    
+    local team=$1
+    local shipment=$2
+    local initial_run=$3
+    if [ -z ${team} ] || [ -z ${shipment} ];then
+        warning "No team or shipment specified for build_cimediainfo_webpage()"
+        return 1
+    fi
+    local shipment_dir=${TEAM_MWS_DESTINATION}/${shipment}
+    local releasename=$(echo "${shipment}" | sed 's#\(.*\)/.*#\1#g')
+    local shipmentname="$(echo "${shipment}" | sed 's#.*/\(.*\)#\1#g')_${team}"
+    local ossrcsw_dir=${shipment_dir}/ossrc_base_sw
+    # local ossrcsw_testpkg_dir=${shipment_dir}/test_packages/ossrc_base_sw
+    # local ossrcsw_oneshot_dir=${ossrcsw_testpkg_dir}/one_shot
+    local om_dir=${shipment_dir}/om
+    # local om_testpkg_dir=${shipment_dir}/test_packages/om
+    # local om_oneshot_dir=${shipment_dir}/test_packages/om/one_shot
+    local build_shipment_json=build_shipment_json.py
+    local i386_manifest="${ossrcsw_dir}/build_manifest_i386"
+    local sparc_manifest="${ossrcsw_dir}/build_manifest_sparc"
+    pushd . >/dev/null
+    info "========================< Building CI Media Webpage Shipment information for ${shipment} $(date '+%Y%m%d-%H:%M:%S') >========================"
+    if [ ! -d "${shipment_dir}" ]; then
+        warning "${shipment_dir} does not exist. Not running build_cimediainfo_webpage for ${shipment}"
+        return 1
+    fi
+    
+    if [ ! -f "${i386_manifest}" ] || [ ! -f "${sparc_manifest}" ];then
+        warning "One or more of the manifest files do not exist:\n${i386_manifest}\n${sparc_manifest}"
+        return 1
+    fi
+    webpageroot=/var/tmp/ci_media_webpage/teams
+    if [ ! -d ${webpageroot}/${team} ];then
+        mkdir -p ${webpageroot}/${team} || {
+            error "Could not create the ${webpageroot}/${team} directory"
+            return 1
+        }
+    else
+        rm -rf ${webpageroot}/${team}/* || {
+            error "Could not clean out ${webpageroot}/${team} directory"
+            return 1
+        }
+    fi
+
+    mkdir ${webpageroot}/${team}/${releasename} || { 
+        error "Could not create ${webpageroot}/${team}/${releasename}. Exiting..."
+        return 1
+        }
+        
+    prefix="${webpageroot}/${team}/${releasename}/${shipmentname}"
+    pkglist_header="package r-state test_pkg one_shot_pkg arch"
+    #OSS-RC MEDIA
+    info "========================< Parsing OSS-RC Media Manifest files for ${shipment} $(date '+%Y%m%d-%H:%M:%S') >========================"
+    cd "${ossrcsw_dir}"
+    echo "${pkglist_header}" >${prefix}_ossrcsw_pkglist
+    grep -i i386 "${i386_manifest}" | awk -F" " '{print $1 " " $3 " no no i386"}' >> ${prefix}_ossrcsw_pkglist 
+    ossrcsw_i386result=$?
+    echo "after i386 manifest $(ls -l ${prefix}_ossrcsw_pkglist)"
+    grep -i common "${i386_manifest}" | awk -F" " '{print $1 " " $3 " no no common"}' >> ${prefix}_ossrcsw_pkglist 
+    ossrcsw_commonresult=$?
+    echo "after common manifest $(ls -l ${prefix}_ossrcsw_pkglist)"
+    grep -i sparc "${sparc_manifest}" | awk -F" " '{print $1 " " $3 " no no sparc"}' >> ${prefix}_ossrcsw_pkglist 
+    ossrcsw_sparcresult=$?
+    echo "after sparc manifest $(ls -l ${prefix}_ossrcsw_pkglist)"
+    
+    if [ "${ossrcsw_i386result}" -ne 0 ] || [ "${ossrcsw_i386result}" -ne 0 ] || [ "${ossrcsw_commonresult}" -ne 0 ];then
+        error "Error parsing OSS-RC Media Manifest files for ${shipment} $(date '+%Y%m%d-%H:%M:%S')"
+        return 1
+    fi
+    ###NEW
+    
+    #OM Media
+    info "========================< Collecting list of packages for the OM Media for ${shipment} $(date '+%Y%m%d-%H:%M:%S') >========================"
+    cd ${om_dir}
+    echo ${pkglist_header} > ${prefix}_om_pkglist
+    grep -i version */cxp_info | sed 's#/cxp_info\:VERSION=# #g' | xargs -I {} echo "{} no no om" >>${prefix}_om_pkglist 
+    ompid=$?
+    piperesult="${PIPESTATUS[0]}"
+    if [ "${ompid}" -ne 0 ] || [ "${piperesult}" -ne 0 ]; then
+        error "Error collecting list of packages for the OM Media for ${shipment}"
+        return 1
+    fi
+    
+    #OSS-RC Media test and oneshot packages
+    local common_test_pkgs=/tmp/common_test_pkgs.$$
+    local i386_test_pkgs=/tmp/i386_test_pkgs.$$
+    local sparc_test_pkgs=/tmp/sparc_test_pkgs.$$
+    local oneshot_common_pkgs=/tmp/common_oneshot_pkgs.$$
+    local oneshot_sparc_pkgs=/tmp/sparc_oneshot_pkgs.$$
+    local oneshot_i386_pkgs=/tmp/i386_oneshot_pkgs.$$
+    #OM Media test and oneshot packages
+    local oneshot_om_cxps=/tmp/om_oneshot_cxps.$$
+    local test_om_cxps=/tmp/om_test_cxps.$$
+    is_test_pkg="yes"
+    is_oneshot_pkg="no"
+    
+    for pkglist in ${common_test_pkgs} ${i386_test_pkgs} ${sparc_test_pkgs} ${oneshot_common_pkgs} ${oneshot_sparc_pkgs} ${oneshot_i386_pkgs}  ${test_om_cxps} ${oneshot_om_cxps}
+    do
+        
+        if [ ! -f "${pkglist}" ] && [ -n ${initial_run} ] && [ "${initial_run}" == "yes" ]; then
+            #don't need to update with test package information if this is the first time copy_jump has been run
+            continue
+        fi
+        arch=$(echo ${pkglist%%_*}|sed 's#.*\/\(.*\)#\1#g')
+        
+        if [ $(echo ${pkglist}| grep -c "oneshot") -eq 1 ];then
+            is_test_pkg="no"
+            is_oneshot_pkg="yes"
+        fi
+        pkglistfile="${prefix}_ossrcsw_pkglist"
+        if [ "${arch}" == "om" ];then
+            pkglistfile="${prefix}_om_pkglist"
+        fi
+        
+        pkgs=$(cat ${pkglist})
+        
+        if [ -z ${pkgs} ];then
+            #if there are no test/oneshot pkgs skip to the next iteration
+            continue
+        fi
+        pkgs=$(echo "${pkgs}"|sed 's#^ \(.*\)#\1#g')
+        for pkg in ${pkgs}
+        do
+            pkg=$(echo ${pkg%%.*})
+            sed "s#^\(${pkg} R[0-9]*[A-Z]*[0-9]*\).*${arch}#\1 ${is_test_pkg} ${is_oneshot_pkg} ${arch}#g" ${pkglistfile} > ${pkglistfile}.tmp
+            mv ${pkglistfile}.tmp ${pkglistfile} 
+        done
+        
+        /bin/rm -f "${pkglist}"
+    done
+    
+    #generate json files to be used by the CI Media Info Page
+    #Current python version on MWS and jenkins server is 2.6.x - some refactoring may be needed to use version 3.x
+    info "========================< Building JSON files for CI Media Information webpage for ${shipment} $(date '+%Y%m%d-%H:%M:%S') >========================"
+    build_json_prefix="${webpageroot}/${team}/${releasename}"
+    popd >/dev/null
+    python ${build_shipment_json} ${build_json_prefix} ${shipmentname} ${team} || {
+        error "Error building CI Media Information json files for ${shipment}"
+        return 1
+    }
+    
+    team_shipments=$(pwd)/team_shipments.json
+    pushd . 2>/dev/null
+    cd ${webpageroot}
+    team_shipments=$(pwd)/team_shipments.json
+    cd /export/jumpstart/teams
+    echo -n "{\"teams\":[">${team_shipments}
+    for team in $(find * -type d -prune)
+    do
+        shipment_list="["
+	for s in $(find ${team}/*/* -type d -prune 2>/dev/null)
+	do
+	  s_name="${s##${team}\/}"
+	  s_shipment="${s_name##[A-z0-9_]*\/}_${team}"
+	  shipment_list="$shipment_list {\"name\":\"${s_name}\",\"shipment\":\"${s_shipment}\"},"
+	done
+        shipment_list="${shipment_list%%,}]"
+	echo -n "{\"name\":\"${team}\",\"shipments\":${shipment_list}}," >>${team_shipments}
+    done
+    popd 2>/dev/null
+    echo "]}" >> ${team_shipments}
+    sed 's|,\(\]\}\)$|\1|g' ${team_shipments} >${team_shipments}.tmp
+    mv ${team_shipments}.tmp ${team_shipments}
+    jobuser=cominfci
+    hubgateway=ath-solaris.lmera.ericsson.se
+    cominfcipwd="uU95O71yP211R74y"
+    webcontentdir="/proj/cominf/cominf/jenkins/userContent/cimediainfo/json/"
+    shipment_file="${webpageroot}/${team}/${releasename}/json/${shipmentname}.json"
+
+    info "========================< Checking Solaris Hub is available (${hubgateway}) is available $(date '+%Y%m%d-%H:%M:%S') >========================"
+
+    ping ${hubgateway} | tee -a "${LOG}" || {
+        error "${hubgateway} not responding to ping. Aborting file transfer" | tee -a "${LOG}"
+        return 1
+    }
+    [ "${PIPESTATUS[0]}" -ne 0 ] && info "========================<${hubgateway} is available $(date '+%Y%m%d-%H:%M:%S') >========================"
+    ${EXPECT} ${SSH_SETUPSCRIPT} ssh "${jobuser}@${hubgateway} bash -c '\[ -d ${webcontentdir} \]'" ${cominfcipwd} 
+    if [ "$?" -ne 0 ]; then
+	echo "${webcontentdir} does not exist"
+
+	info "========================<Creating ${webcontentdir} on Jenkins Shared Storage $(date '+%Y%m%d-%H:%M:%S') >========================"
+	${EXPECT} ${SSH_SETUPSCRIPT}  ssh "${jobuser}@${hubgateway} mkdir -p ${webcontentdir}"  ${cominfcipwd} | tee -a "${LOG}"
+	[ "${PIPESTATUS[0]}" -ne 0 ] && {
+		error "Error creating ${webcontentdir} on Jenkins Master Host ${infraciserver}"
+		return 1
+	}
+    fi
+    ${EXPECT} ${SSH_SETUPSCRIPT} scp "${team_shipments} ${jobuser}@${hubgateway}:${webcontentdir}" ${cominfcipwd} | tee -a "${LOG}" 
+    [ "${PIPESTATUS[0]}" -ne 0 ] && {
+        error "Error copying ${team_shipments} to the Hub"
+        return 1
+    }
+    ${EXPECT} ${SSH_SETUPSCRIPT} scp "${shipment_file} ${jobuser}@${hubgateway}:${webcontentdir}/${team}" ${cominfcipwd} | tee -a "${LOG}" 
+    [ "${PIPESTATUS[0]}" -ne 0 ] && {
+        error "Error copying ${shipment_file} to the Hub"
+        return 1
+    }
+    return 0
+}
+
+LD_LIBRARY_PATH=/app/expect/5.38/lib:/app/tcl/8.4.5/lib:$LD_LIBRARY_PATH export LD_LIBRARY_PATH
+umask 0
+DATETIME=`date +%d-%m-%Y_%H-%M-%S`
+SCRIPTNAME=$(basename $0)
+LOGDIR=/var/tmp/${SCRIPTNAME}_log
+LOG=${LOGDIR}/${SCRIPTNAME}_${DATETIME}.log
+SCRIPTDIR=$(cd $(dirname $0); pwd)
+DM_SERVER_IP=159.107.173.47
+DM_SHIPMENTLOCATION=/net/${DM_SERVER_IP}/export/jumpstart
+VALID_TEAMS="infra 3pp sck iiug eeisken sol_patches stor ci uploadtest"
+II_BUILD_COMPLETEFLAGS="copy_sparc copy_i386"
+LOCKFILEDIR=/var/tmp/${SCRIPTNAME}_lck
+LOCKFILE=$LOCKFILEDIR/$$
+MWS_DESTINATION=/export/jumpstart
+RSYNC=/usr/local/bin/rsync
+CI_INTEGRATIONVOBBINDIR=/view/www_integrationci/vobs/ossrc/del-mgt/isobuild/ci/bin
+CC_SERVER=selid1a029.lmera.ericsson.se
+SSH_SETUPSCRIPT=$SCRIPTDIR/ssh_setup2.sh
+OSSCIUSER=ossrcci
+OSSCIUSER_PASS=Ericsson1
+EXPECT=/usr/local/bin/expect
+ALLOWED_CXPS="blade bootstrap ddc DU EMC freeware iptool ldap_setup Liveupgrade ombs omtools Patches peer_tools security selfmon sfs storage"
+CURRENTPKGTMPDIR=/var/tmp/currentpkg.$$
+NEWPKGTMPDIR=/JUMP/newpkg.$$
+ERICAXEPKG=ERICaxe.pkg.7z
+DM_MWS_IP=159.107.173.47
+MWS_NFSMEDIACACHESCRIPT=/ericsson/jumpstart/bin/manage_nfs_media.bsh
+MWS_CACHEDLOCATION=/export/SW_LOCATION
+NOVERSIONCHECK=FALSE
+COPYFLAGCHECK=TRUE
+CACHEUPGRADEMEDIA=FALSE
+
+. $SCRIPTDIR/../lib/common_functions.lib
+info "========================< Copy Jump Started `date '+%Y%m%d-%H:%M:%S'` >========================"
+
+# MAIN
+# set up log directory
+if [ ! -d $LOGDIR ]; then
+	mkdir $LOGDIR || {
+		warning "Unable to create $LOGDIR"
+	}
+fi
+
+# Cleanup when script exits
+trap 'cleanupOnExit' EXIT HUP INT QUIT TERM
+echo $*
+
+
+info "Logging all messages to $LOG"
+# process cmd line options
+while getopts ":s:t:nfuh" opt; do
+        case $opt in
+                s)      SHIPMENTS=$OPTARG
+			;;
+                t)      TEAM=$OPTARG
+			;;
+                n)      NOVERSIONCHECK=TRUE
+			;;
+                f)      COPYFLAGCHECK=FALSE
+			;;
+                u)      CACHEUPGRADEMEDIA=TRUE
+			;;
+                h)      usage
+			exit 0
+			;;
+		?)
+			echo "invalid option \"$opt\""
+			usage
+			exit 1
+			;;
+        esac
+done
+shift `expr $OPTIND - 1`
+
+
+# check required arguments
+if [ -z "$SHIPMENTS" ]; then
+	usage
+	error "No shipments specified"
+	exit 1
+fi
+
+if [ -z "$TEAM" ]; then
+	usage
+	error "No team specified"
+	exit 1
+else
+	echo $VALID_TEAMS | grep -w $TEAM > /dev/null 2>&1 || {
+		error "Invalid team \"$TEAM\". Must be one of $VALID_TEAMS"
+		exit 1
+	}
+fi
+
+if [ "$COPYFLAGCHECK" = FALSE ]; then
+	warning "Check for integrity of build has been disabled"
+fi
+
+
+# check another instance of script not running with same shipment/team
+if [ ! -d $LOCKFILEDIR ]; then
+	mkdir $LOCKFILEDIR || {
+		 error "Failed to create lock file dir"
+		exit 1
+	}
+fi
+for lckfile in $( find $LOCKFILEDIR -type f 2>/dev/null ); do
+	pid=$( awk '{print $1}' $lckfile)
+	lck_team=$( awk '{print $2}' $lckfile)
+	kill -0 $pid > /dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		if [ "$lck_team" = $TEAM ]; then
+			# process is still running - check args
+			lck_shipments=$( cut -f2- -d ' ' $lckfile )
+			for shipment in $SHIPMENTS; do
+				echo $lck_shipments | grep -w $shipment > /dev/null && {     
+					error "Another instance of "$SCRIPTNAME $*" appears to be running for team $TEAM and shipment $shipment"
+					exit 1
+				}
+			done
+		fi
+	else
+		# remove stale lock file
+		warning "Removing stale lockfile"
+		/bin/rm -f $lckfile || {
+			 error "Failed to remove stale lockfile $lckfile"
+			exit 1
+		}
+	fi
+done
+
+
+# create lockfile
+echo "$$ $TEAM $SHIPMENTS" > $LOCKFILE || {
+	 error "Failed to create lockfile"
+	exit 1
+}
+
+if [ ! -x $EXPECT ]; then
+	error "$EXPECT not found !"
+	exit 1
+fi
+
+# check DM server is up
+check_dm_server || exit 1 
+
+TEAM_MWS_DESTINATION=${MWS_DESTINATION}/teams/${TEAM}
+
+for shipment in $SHIPMENTS
+do
+	copyShipment $shipment || {
+		error "Errors occured copying shipment $shipment from DM server... skipping"
+		exit 1
+	}
+done 
+info "========================< Copy Jump Completed `date '+%Y%m%d-%H:%M:%S'` >========================"

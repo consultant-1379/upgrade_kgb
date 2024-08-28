@@ -1,0 +1,38 @@
+#!./expect -- 
+set timeout 300 
+#log_user 0
+
+set RELEASE [lindex $argv 0]
+set SHIPMENT [lindex $argv 1]
+spawn ssh -ostricthostkeychecking=no root@atrcx1089.athtem.eei.ericsson.se
+
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "dmbld23\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+expect "#"
+send "bash\r"
+expect "#"
+sleep 2
+send -- "\[ -f /net/159.107.173.47/export/jumpstart/OSSRC_$RELEASE/$SHIPMENT.daily/copy_sparc ] && rm /net/159.107.173.47/export/jumpstart/OSSRC_$RELEASE/$SHIPMENT.daily/copy_sparc\r"
+expect "#"
+send -- "\[ -f /net/159.107.173.47/export/jumpstart/OSSRC_$RELEASE/$SHIPMENT.daily/copy_i386 ] && rm /net/159.107.173.47/export/jumpstart/OSSRC_$RELEASE/$SHIPMENT.daily/copy_i386\r"
+expect "#"
+sleep 10
+send "exit\r"

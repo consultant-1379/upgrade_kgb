@@ -1,0 +1,149 @@
+set force_conservative 1
+set timeout -1
+set core [lindex $argv 4]
+set gran [lindex $argv 5]
+set wran [lindex $argv 6]
+set option [lindex $argv 7]
+set cifip [lindex $argv 8]
+set server [lindex $argv 1]
+set ilom [lindex $argv 0]ilom.athtem
+set prompt "^.*-> $"
+set timeout 5400
+spawn telnet atrcx1089.athtem.eei.ericsson.se 
+expect "login:"
+send "root\r"
+expect "assword:"
+send "dmbld23\r"
+expect "#"
+send "bash\r"
+expect "#"
+send "/usr/bin/ssh root@$ilom\r"
+expect -timeout 10 "Are you sure you want to continue connecting (yes/no)" {send "yes\r"; exp_continue}
+expect_after timeout exit
+expect "Password:"
+send "shroot12\r"
+expect -re $prompt 
+send "stop -f SYS\r"
+expect "Are you sure you want to immediately stop /SYS (y/n)?"
+send "y\r"
+exec sleep 5 
+expect -re $prompt 
+send "start SYS\r"
+expect "Are you sure you want to start /SYS (y/n)?"
+send "y\r"
+exec sleep 5 
+expect -re $prompt 
+send "stop SP/console\r"
+expect "Are you sure you want to stop /SP/console (y/n)?"
+send "y\r"
+expect -re $prompt 
+send "start SP/console\r"
+expect "Are you sure you want to start /SP/console (y/n)?"
+send "y\r"
+expect "F12"
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send -- \x0E
+send "y\r"
+expect "Total number of GSM Cells"
+send "0\r"
+set timeout 1200
+expect "Total number of UTRAN Cells"
+send "100\r"
+expect "Total number of LTE Cells"
+send "0\r"
+expect "Total number of Core Nodes"
+send "2\r"
+#expect "Total number of  TDRAN Cells"
+#send "0\r"
+expect "How many AXD based nodes are to be supported (0-75)"
+send "0\r"
+expect "Will the TGR application be used"
+send "YES\r"
+expect "How many TeS nodes"
+send "0\r"
+expect "Allocate space for SGW"
+send "YES\r"
+expect "Allocate space for PMS"
+send "YES\r"
+expect "Allocate space for EBSW"
+send "YES\r"
+expect "Allocate space for EBS-S"
+send "YES\r"
+expect "Please enter the number of sites that the OSS-RC installation will support"
+send "0\r"
+expect "Please enter the combined number of cells on all OSS-RC servers that will be audited by IRATHOM application"
+send "0\r"
+expect "Please enter the number of STN nodes that the OSS-RC installation will support"
+send "0\r"
+expect "Please enter the number of MGW nodes that the OSS-RC installation will support"
+send "0\r"
+expect "Please enter the number of SGSN nodes that the OSS-RC installation will support"
+send "0\r"
+expect "Please enter the number of SGSN MME nodes that the OSS-RC installation will support"
+send "0\r"
+expect "Please enter the number of GGSN nodes per OSS-RC"
+send "0\r"
+expect "Please enter the number of 2G/3G SAUs per OSS-RC"
+send "0\r"
+expect "Please enter the number of 4G SAUs per OSS-RC"
+send "0\r"
+expect "Please enter the number of APG43 nodes that the OSS-RC installation will support"
+send "0\r"
+expect "Please enter the number of Redback SmartEdge nodes that the OSS-RC installation will support"
+send "0\r"
+expect "Please enter the number of SASN based nodes with SARA functionality that the OSS-RC installation will support"
+send "0\r"
+expect " \[ii\]"
+send "ii\r"
+expect "The hostname of the OSS server"
+send "\r"
+expect "Enter the Netgroup name"
+send "\r"
+expect "The default password for the OSS-RC sybase users"
+send "sybase11\r"
+expect "The timezone for your geographical region"
+send "GB-Eire\r"
+expect "defaultrouter IP address"
+send "\r"
+expect "NAMESERVERS"
+send "159.107.173.3\r"
+expect "DNSDOMAIN"
+send "athtem.eei.ericsson.se\r"
+expect "LDAPDOMAIN"
+send "athtem.eei.ericsson.se\r"
+expect "SLS_SERVER"
+send "\r"
+expect "SENTINEL_LICENSE_FILE_PATH"
+send "\r"
+expect "SEC_TYPE"
+send "\r"
+expect "VXVMLIC"
+send "[lindex $argv 2]\r"
+expect "NETWORK_TYPE"
+send "\r"
+expect "IM_ROOT"
+send "ONRM_ROOT_MO\r"
+expect "X29_SUFF"
+send "\r"
+expect "NT_SERVER_IPADDRESS"
+send "\r"
+expect "WAS_IP_1"
+send "\r"
+expect "Are these values ok"
+send "y\r"
+# Die after waiting 5 hours, ought to be enough
+set timeout 18000
+expect "Successfully executed core"
+exec sleep 600
+send "exit\r"

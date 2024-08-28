@@ -1,0 +1,188 @@
+#!/bin/bash
+
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/04/2012    edavmax         First version
+
+usage() {
+cat << EOF
+
+Usage:  ${SCRIPTNAME} -f <Test env file> [-h]
+
+This script is called by the script ci_build.bsh script. It performs the following actions:
+
+-Installs cominf software on specified server 
+
+
+EOF
+
+return 0
+
+}
+
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_TMP_DIR=/var/tmp
+G_PACKAGE_TGZFILENAME=cominf_software.tar.gz
+G_PACKAGE_TGZFILE=$G_TMP_DIR/$G_PACKAGE_TGZFILENAME
+G_INST_TYPE=cominf
+G_COMINF_SOFTWARE_LOCATION=$G_TMP_DIR/$G_INST_TYPE/packages
+G_JENKINS_REPOFILE=$G_COMINF_SOFTWARE_LOCATION/cominf_apps_ci.repo
+G_YUM_REPODIR=/etc/yum.repos.d
+G_YUM_COMINF_APPGROUP="COMInf Applications"
+G_COMINF_TEST_HARNESS_PREFIX=COMInf_TEST_HARNESS-R1A01-0.noarch
+G_COMINF_TEST_HARNESS_RPM=${G_COMINF_TEST_HARNESS_PREFIX}.rpm
+G_COMINF_TEST_HARNESS_TGZ=${G_COMINF_TEST_HARNESS_PREFIX}.tar.gz
+G_PLATFORM=$( uname -a ) 
+G_KICKSTART=FALSE
+SMRS_PKGNAME=ERICbismrsmc_R1A01_PA01.pkg
+IST_RUN=/opt/ericsson/sck/bin/ist_run
+
+while getopts "h:c:i:k:" opt; do
+
+	case $opt in
+		h)
+			usage
+			exit 0
+		;;
+		c)
+			G_CONFIGTYPE="$OPTARG"
+		;;
+		i)
+			G_INST_TYPE="$OPTARG"
+		;;
+		k)
+			G_KICKSTART="$OPTARG"
+		;;
+		?)      # Print usage and exit error
+			printf "${SCRIPTNAME}: ERROR: Invalid option: '${OPTARG}'.\n"
+			usage
+			exit 1
+		;;
+
+	esac
+done
+
+if [ ! -s $G_PACKAGE_TGZFILE ]; then
+	echo "Error - failed to find file $G_PACKAGE_TGZFILE or file empty"
+	exit 1
+fi
+
+
+if [ -z "$G_CONFIGTYPE" ]; then
+	echo "Error config type of server not specified"
+	exit 1
+fi
+
+if [ -z "$G_INST_TYPE" ]; then
+	echo "Error inst type of server not specified"
+	exit 1
+fi
+
+cd $G_TMP_DIR
+
+gzip -cd $G_PACKAGE_TGZFILE | tar xvf - > /dev/null || {
+	echo "Error - failed to unpack $G_PACKAGE_TGZFILE"
+	exit 1
+}
+
+if [ "$G_CONFIGTYPE" = system ]; then
+	# install new smrs package
+	if [ -f $G_TMP_DIR/$SMRS_PKGNAME ]; then
+		echo "** installing package $SMRS_PKGNAME **"
+		$IST_RUN -d $G_TMP_DIR/$SMRS_PKGNAME -auto -pa -force || {
+			echo "Error installation of $SMRS_PKGNAME on $( hostname ) failed"
+			exit 1
+		}
+	else
+		echo "Unable to find smrs package $SMRS_PKGNAME on $( hostname )"
+	fi
+	if [ -f $G_COMINF_SOFTWARE_LOCATION/$G_COMINF_TEST_HARNESS_TGZ ]; then
+		echo "Unpacking cominf test harness tarball on $( hostname )"
+		cd /
+		gzip -cd $G_COMINF_SOFTWARE_LOCATION/$G_COMINF_TEST_HARNESS_TGZ | /usr/sfw/bin/gtar xvf - > /dev/null  
+		if [ $? -eq 1 ]; then
+			echo "Error - failed to unpack cominf test harness tarball on $( hostname )"
+			exit 1
+		fi
+			
+	else
+		echo "Unable to find cominf test harness tarball on $( hostname ) at $G_COMINF_SOFTWARE_LOCATION/$G_COMINF_TEST_HARNESS_TGZ"
+	fi
+fi
+if [[  "$G_CONFIGTYPE" = om_serv_master ||  "$G_CONFIGTYPE" = om_serv_slave ]]; then
+	if [ ! -s $G_JENKINS_REPOFILE ]; then
+		echo "Error - failed to find file $G_JENKINS_REPOFILE or file empty"
+		exit 1
+	fi
+	cp $G_JENKINS_REPOFILE $G_YUM_REPODIR || {
+		echo "Error - failed to copy file $G_JENKINS_REPOFILE to $G_YUM_REPODIR"
+		exit 1
+	}
+
+	# unmount and remount install media to prevent errors
+	umount /tmp/eric_mnt /tmp/OM /tmp/APP
+	/ericsson/config/upgrade/upgrade_mount.bsh
+
+	G_COMINF_CORE_PACKAGE_RPM=$(cd $G_COMINF_SOFTWARE_LOCATION; ls -t COMInf_CORE* | tail -1 )
+	G_COMINF_LDAP_PACKAGE_RPM=$(cd $G_COMINF_SOFTWARE_LOCATION; ls -t COMInf_LDAP* | tail -1 )
+	G_COMINF_OPENDJ_PACKAGE_RPM=$(cd $G_COMINF_SOFTWARE_LOCATION; ls -t OpenDJ* | tail -1 )
+	G_COMINF_JRE_PACKAGE_RPM=$(cd $G_COMINF_SOFTWARE_LOCATION; ls -t jre* | tail -1 )
+
+	# clean yum cache data
+	yum clean all && yum clean metadata && yum clean dbcache && yum makecache
+
+	# remove cominf package group if already installed
+	#yum groupremove -y "$G_YUM_COMINF_APPGROUP" || {
+	#	echo "Error occured removing yum group $G_YUM_COMINF_APPGROUP"
+	#	exit 1
+	#}
+	# shane - added PACKAGE_LIST, check for G_KICKSTART and altered for loop to work with an array
+	PACKAGE_LIST=($G_COMINF_SOFTWARE_LOCATION/$G_COMINF_CORE_PACKAGE_RPM $G_COMINF_SOFTWARE_LOCATION/$G_COMINF_LDAP_PACKAGE_RPM $G_COMINF_SOFTWARE_LOCATION/$G_COMINF_JRE_PACKAGE_RPM $G_COMINF_SOFTWARE_LOCATION/$G_COMINF_OPENDJ_PACKAGE_RPM $G_COMINF_SOFTWARE_LOCATION/$G_COMINF_TEST_HARNESS_RPM)
+	if [ "$G_KICKSTART" = "TRUE" ]
+	then
+		PACKAGE_LIST=($G_COMINF_SOFTWARE_LOCATION/$G_COMINF_TEST_HARNESS_RPM)
+	fi
+
+	for package in ${PACKAGE_LIST[@]}
+	do
+		echo "Upgrading package $package"
+		rpm -Uvh --force $package || {
+			echo "Error - Failed to upgrade package $package"
+			exit 1
+		}
+	done
+	
+	# unmount install media
+	umount /tmp/eric_mnt /tmp/OM /tmp/APP
+
+	# restart opendj
+	if [ "$G_KICKSTART" != "TRUE" ]; then
+		if [[ "$G_CONFIGTYPE" = om_serv_master || "$G_CONFIGTYPE" = om_serv_slave ]]; then
+			echo "Restarting OpenDJ on $( hostname )"
+			service opendj restart || {
+				echo "Error - failed to restart opendj service"
+				exit 1
+			}
+		fi
+	fi
+fi
+
+exit 0
+
+
+
+

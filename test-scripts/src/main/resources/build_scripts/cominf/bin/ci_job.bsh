@@ -1,0 +1,681 @@
+#!/bin/bash
+
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/04/2012    edavmax         First version
+
+usage() {
+cat << EOF
+
+Usage:  ${G_SCRIPTNAME} -f <Test env file> [-b <job build number>] [-j <job name>] [-h] [-k] [-n]
+
+-f path to env file
+-b ci job build number - only need if script not called by jenkins ci
+-j ci job name - only need if script not called by jenkins ci
+-k perform kickstart/jumpstart of servers in env file
+-n do not start the test harness
+
+This script is called by the Jenkins server. It performs the following actions:
+
+-Copies software to servers defined in <Test env file>
+-Installs software on servers defined in <Test env file>
+-Kicks off test harness on OM Services Primary
+-Copies test results from OM Services Primary to Jenkins server.
+
+
+EOF
+
+return 0
+
+}
+
+cleanupOnExit() {       # Don't call exit here to avoid recursion!
+        echo "Cleaning up."
+
+}
+
+
+# function to read server env file
+
+read_envfile() {
+	unset CI_SERVER_HOSTNAME
+	unset CI_SERVER_IP
+	unset CI_SERVER_INST_TYPE
+	unset CI_SERVER_CONFIG
+	if [ ! -s "$G_CIBUILDENVFILE" ]; then
+		echo "Error - failed to find test env file"
+		return 1
+	fi
+	echo "Parsing $G_CIBUILDENVFILE"
+	. $G_CIBUILDENVFILE
+	local l_reqpars="G_REMOTE_TEST_HARNESS_COMMAND"
+	for par in $l_reqpars; do
+		[ -z "$(eval echo \$$par)" ] && {
+			log_error "Required parameter $par not specified or invalid in $G_USERCONFIGFILE"
+			l_missing=TRUE
+		}
+	done
+
+	[[ ${#CI_SERVER_HOSTNAME[@]} -eq 0 || ${#CI_SERVER_IP[@]} -eq 0 || ${#CI_SERVER_INST_TYPE[@]} -eq 0 || ${#CI_SERVER_CONFIG[@]} -eq 0 ]]  && l_missing=TRUE
+
+	if [ "$l_missing" = TRUE ]; then
+		echo "Error - required param missing from file $G_CIBUILDENVFILE"
+		return 1
+	fi
+	return 0
+
+}
+
+# function to determine on which server the harness will be started
+
+get_harness_host() {
+	local l_count=0
+	G_HARNESS_HOST=""
+	G_HARNESS_HOST_ROOTPW=""
+	G_HARNESS_HOST_SSH_NAT_PORT=""
+	G_HARNESS_HOST_CONFIGTYPE=""
+	while [ $l_count -lt ${#CI_SERVER_IP[@]} ]; do
+		if [ "${CI_SERVER_HARNESS_HOST[$l_count]}" = TRUE ]; then
+			G_HARNESS_HOST=${CI_SERVER_IP[$l_count]}
+			G_HARNESS_HOST_ROOTPW=${CI_SERVER_ROOTPW[$l_count]}
+			G_HARNESS_HOST_SSH_NAT_PORT="-oPort=${CI_SERVER_SSH_NAT_PORT[$l_count]}"
+			G_HARNESS_HOST_CONFIGTYPE=${CI_SERVER_CONFIG[$l_count]}
+			break
+		fi
+		let l_count+=1
+	done
+	[ -z "$G_HARNESS_HOST" ] && return 1
+	return 0
+
+}
+
+get_harness_script_server() {
+        local l_count=0
+        G_CLOUD_SCRIPT_SERVER=""
+        G_CLOUD_SCRIPT_SERVER_IP=""
+        G_CLOUD_SCRIPT_SERVER_ROOTPW=""
+        while [ $l_count -lt ${#CI_SERVER_IP[@]} ]; do
+                if [ "${CI_SERVER_CONFIG[$l_count]}" = scripting_server ]; then
+                        G_CLOUD_SCRIPT_SERVER=${CI_SERVER_HOSTNAME[$l_count]}
+                        G_CLOUD_SCRIPT_SERVER_IP=${CI_SERVER_IP[$l_count]}
+                        G_CLOUD_SCRIPT_SERVER_ROOTPW=${CI_SERVER_ROOTPW[$l_count]}
+                        break
+                fi
+                let l_count+=1
+        done
+        [ -z "$G_CLOUD_SCRIPT_SERVER" ] && return 1
+        return 0
+
+}
+
+get_om_serv_server() {
+        local l_count=0
+	local l_type=$1
+        eval G_OMSERV_${l_type}=""
+        eval G_OMSERV_${l_type}_IP=""
+        eval G_OMSERV_${l_type}_ROOTPW=""
+        while [ $l_count -lt ${#CI_SERVER_IP[@]} ]; do
+                if [ "${CI_SERVER_CONFIG[$l_count]}" = $l_type ]; then
+                        eval G_OMSERV_${l_type}=\${CI_SERVER_HOSTNAME[$l_count]}
+                        eval G_OMSERV_${l_type}_IP=\${CI_SERVER_IP[$l_count]}
+                        eval G_OMSERV_${l_type}_ROOTPW=\${CI_SERVER_ROOTPW[$l_count]}
+                        eval G_OMSERV_${l_type}_SSHNATPORT=\${CI_SERVER_SSH_NAT_PORT[$l_count]}
+                        break
+                fi
+                let l_count+=1
+        done
+	eval test -z \$G_OMSERV_${l_type} && return 1
+        return 0
+
+}
+
+
+
+# Function to install cominf software on the test servers
+install_software() {
+	l_kick_arg=""
+	l_ssh_nat_port=""
+	if [ ! -s $G_COMINF_SOFTWARE_TGZ ]; then
+		echo "Error unable to locate cominf software tarball"
+		return 1
+	fi
+	local l_count=0
+	while [ $l_count -lt ${#CI_SERVER_IP[@]} ]; do
+		echo "Copying cominf software and installer to ${CI_SERVER_HOSTNAME[$l_count]}"
+		[ "${CI_SERVER_CONFIG[$l_count]}" = scripting_server ] && {
+			let l_count+=1
+			continue
+		}
+		# copy software to remote server
+		if [ -n "${CI_SERVER_SSH_NAT_PORT[$l_count]}" ]; then
+			l_ssh_nat_port="-oPort=${CI_SERVER_SSH_NAT_PORT[$l_count]}"
+		fi
+			
+		$G_SSH_SETUPSCRIPT scp "$l_ssh_nat_port $G_COMINF_SOFTWARE_TGZ root@${CI_SERVER_IP[$l_count]}:/$G_TMP_DIR" ${CI_SERVER_ROOTPW[$l_count]} > /dev/null 2>&1 || {
+			echo "Error - failed to copy cominf software to ${CI_SERVER_HOSTNAME[$l_count]}"
+			return 1
+		}
+		# if OSS master copy the SMRS package
+		if [ "${CI_SERVER_CONFIG[$l_count]}" = system ]; then
+			$G_SSH_SETUPSCRIPT scp "$l_ssh_nat_port $G_COMINF_SOFTWARE_LOCATION/$G_SMRS_PKGNAME root@${CI_SERVER_IP[$l_count]}:/$G_TMP_DIR" ${CI_SERVER_ROOTPW[$l_count]} > /dev/null 2>&1 || {
+				echo "Error - failed to copy smrs software package $G_SMRS_PKGNAME to ${CI_SERVER_HOSTNAME[$l_count]}"
+				return 1
+			}
+		fi
+		# copy the installer script
+		$G_SSH_SETUPSCRIPT scp "$l_ssh_nat_port $G_REMOTEINSTALLSCRIPT $G_ETCDIR/ci.env root@${CI_SERVER_IP[$l_count]}:/$G_TMP_DIR" ${CI_SERVER_ROOTPW[$l_count]} > /dev/null 2>&1 || {
+			echo "Error - failed to copy cominf installer script to ${CI_SERVER_HOSTNAME[$l_count]}"
+			return 1
+		}
+		# start the installer on the remote server
+		if [ "$G_KICKSTART" = TRUE ]; then
+			l_kick_arg="-k"
+		fi
+		$G_SSH_SETUPSCRIPT ssh "$l_ssh_nat_port root@${CI_SERVER_IP[$l_count]} $G_TMP_DIR/$G_REMOTEINSTALLSCRIPTNAME $l_kick_arg" ${CI_SERVER_ROOTPW[$l_count]} || {
+			echo "Error - cominf installer script failed on server ${CI_SERVER_HOSTNAME[$l_count]}"
+			return 1
+		}
+		let l_count+=1
+	done
+	return 0
+}
+
+# Function to start the test harness on the OM Services Primary
+start_test_harness() {
+	# start the harness on the remote server
+	get_harness_host || {
+		echo "Error failed to find test harness host"
+		return
+	}
+	if [[ "$G_HARNESS_HOST_CONFIGTYPE" = system || "$G_HARNESS_HOST_CONFIGTYPE" = appserv ]]; then
+		G_REMOTE_TEST_HARNESS_DIR=/var/tmp/opt/ericsson/cominf_test
+	else
+		G_REMOTE_TEST_HARNESS_DIR=/opt/ericsson/cominf_test
+	fi
+		
+	if [ -z "$G_HARNESS_HOST" ]; then	
+		echo "Unable to determine server on which to start harness"
+		return 1
+	fi
+	echo "starting test harness on $G_HARNESS_HOST!"
+	[ ! -z $G_GLOBAL_EXPORTS ] && {
+		G_REMOTE_TEST_HARNESS_COMMAND="$G_REMOTE_TEST_HARNESS_COMMAND -e $G_GLOBAL_EXPORTS"
+	}
+	# note when calling harness on remote server we redirect stdout and stdin to files
+	# to prevent remote ssh session hanging see http://www.snailbook.com/faq/background-jobs.auto.html
+	$G_SSH_SETUPSCRIPT ssh "-T $G_HARNESS_HOST_SSH_NAT_PORT root@$G_HARNESS_HOST $G_REMOTE_TEST_HARNESS_COMMAND < /dev/null > /tmp/harness.log 2>&1" $G_HARNESS_HOST_ROOTPW
+	G_HARNESS_RETCODE=$?
+	/bin/rm -f /tmp/harness.log > /dev/null 2>&1
+	$G_SSH_SETUPSCRIPT scp "$G_HARNESS_HOST_SSH_NAT_PORT  root@$G_HARNESS_HOST:/tmp/harness.log /tmp" $G_HARNESS_HOST_ROOTPW &&
+	cat /tmp/harness.log
+
+	return $retcode
+	
+	
+}
+
+# function to copy the results of the test harness back to the CI server
+copy_test_results() {
+	# make directory for harness results if needed
+	echo "copying results of test harness to CI server dir=$G_RESULTS_DIR"
+	# copy test harness results back to CI server
+	$G_SSH_SETUPSCRIPT scp "$G_HARNESS_HOST_SSH_NAT_PORT root@$G_HARNESS_HOST:/$G_REMOTE_TEST_HARNESS_RESULTS_TGZ $G_RESULTS_DIR" $G_HARNESS_HOST_ROOTPW > /dev/null 2>&1 || {
+		echo "Error - Failed to copy test harness results from $G_HARNESS_HOST to CI server"
+		return 1
+	}
+	# expand test results
+	cd $WORKSPACE
+	tar -zxvf "$G_RESULTS_DIR/$G_TEST_HARNESS_RESULTS_TARBALL" > /dev/null 2>&1 || {
+		echo "Error - failed to unpack file $G_RESULTS_DIR/$G_TEST_HARNESS_RESULTS_TARBALL"
+		return 1
+	} 
+	# remove the tar file
+	/bin/rm -f "$G_RESULTS_DIR/$G_TEST_HARNESS_RESULTS_TARBALL" || {
+		echo "warning - unable to delete local results tarball $G_RESULTS_DIR/$G_TEST_HARNESS_RESULTS_TARBALL"
+	}
+
+	return 0
+
+}
+
+# get OM Server Primary details
+ci_env_get_om_server_param() {
+	local l_param_name=$1
+	local l_param_value_varname=$2
+
+	eval unset \$l_param_value_varname
+
+	if [[ -z "$l_param_name" || -z "$l_param_value_varname" ]]; then
+		echo "Error - required parameter missing"
+		return 1
+	fi
+	local l_count=0
+	while [ $l_count -lt ${#CI_SERVER_IP[@]} ]; do
+		if [[ ${CI_SERVER_INST_TYPE[$l_count]} = cominf &&\
+			${CI_SERVER_CONFIG[$l_count]} = om_serv_master ]]; then
+			case $l_param_name in
+				ip)
+					eval $l_param_value_varname=${CI_SERVER_IP[$l_count]}
+					;;
+				hostname)
+					eval $l_param_value_varname=${CI_SERVER_HOSTNAME[$l_count]}
+					;;
+				rootpw)
+					eval $l_param_value_varname=${CI_SERVER_ROOTPW[$l_count]}
+					;;
+				*)
+					echo "unrecognised param $l_param_name !"
+					return 1
+					;;
+			esac
+				
+			return 0
+		fi
+		let l_count+=1
+			
+	done
+	echo "OM Services primary details not found"
+	return 1
+}
+
+########################################################
+### Function: valid_ip ##########################
+# Purpose : Check that the given IP is valid IP or not.#
+# Arguments :                                          #
+# $1 - IP address, mandatory                           #
+########################################################
+valid_ip()
+{
+        local L_IP=$1
+        local L_STAT=1
+        echo $L_IP | grep "^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$" > /dev/null && {
+                OIFS=$IFS
+                IFS='.'
+                set -f
+                set -- $L_IP
+                [[ $1 -le 255 && $2 -le 255 && $3 -le 255 && $4 -le 254 ]]
+                L_STAT=$?
+                IFS=$OIFS
+                set +f
+        }
+
+        return $L_STAT
+}
+
+#
+# Function to kickstart Cominf servers running linux
+#
+
+jump_servers() {
+	local l_client_mws_profile
+	local l_cloud_media_cfg_template=$G_ETCDIR/oss_cloud_install_media_config.template
+	local l_cloud_cfg_template=$G_ETCDIR/oss_cloud_install_config.template
+	local l_cloud_rollout_template=$G_ETCDIR/oss_cloud_rollout_config.template
+	local l_scriptsrv_cfgdir=/export/scripts/CLOUD/configs/ta_specific/COMINF_CI
+	local l_cominf_media_path
+	local l_shipment
+
+	if [ ! -s "$G_OMSERVICES_MEDIA_INFOFILE" ]; then
+		echo "Error unable to find media info file $G_OMSERVICES_MEDIA_INFOFILE"
+		return 1
+	fi
+
+	l_shipment=$( cat $G_OMSERVICES_MEDIA_INFOFILE | grep "^SHIPMENT=" | awk -F= '{ print $2 }' )
+	if [ -z "$l_shipment" ]; then
+		echo "Error shipment info not found in $G_OMSERVICES_MEDIA_INFOFILE"
+		return 1
+	fi
+	l_cominf_media_path=/JUMP/COMINF_MEDIA/${l_shipment}_CI
+
+	
+
+	get_harness_script_server || {
+		echo "Error - OSS cloud scripting server not specified in env file"
+		return 1
+	}
+
+	# OSS Cloud install requires our MWS to use external DHCP server atdhcpx1
+	$G_SSH_SETUPSCRIPT ssh "root@$G_MWS_IP test -f /ericsson/jumpstart/etc/remote_dhcp_jump.cfg" > /dev/null 2>&1 || {
+		$G_SSH_SETUPSCRIPT scp "$G_ETCDIR/remote_dhcp_jump.cfg root@$G_MWS_IP:/ericsson/jumpstart/etc" || {
+			echo "Error - failed to copy MWS DHCP file to MWS"
+			return 1
+		}
+	}
+
+	# copy cloud config files to cloud script server
+	local l_configfile=$( basename ${l_cloud_cfg_template%.template} )
+	$G_SSH_SETUPSCRIPT scp "$l_cloud_cfg_template root@$G_CLOUD_SCRIPT_SERVER_IP:$l_scriptsrv_cfgdir/$l_configfile" $G_CLOUD_SCRIPT_SERVER_ROOTPW > /dev/null 2>&1 || {
+		echo "Error - failed to copy config file to scripting server"
+		return 1
+	}
+	local l_rollout_configfile=$( basename ${l_cloud_rollout_template%.template} )
+	$G_SSH_SETUPSCRIPT scp "$l_cloud_rollout_template root@$G_CLOUD_SCRIPT_SERVER_IP:$l_scriptsrv_cfgdir/$l_rollout_configfile" $G_CLOUD_SCRIPT_SERVER_ROOTPW > /dev/null 2>&1 || {
+		echo "Error - failed to copy rollout config file to scripting server"
+		return 1
+	}
+	local l_mediaconfigfile=$( basename ${l_cloud_media_cfg_template%.template} )
+	sed "s,##COMINF_MEDIA##,$l_cominf_media_path,g" $l_cloud_media_cfg_template > /tmp/$l_mediaconfigfile
+	$G_SSH_SETUPSCRIPT scp "/tmp/$l_mediaconfigfile root@$G_CLOUD_SCRIPT_SERVER_IP:$l_scriptsrv_cfgdir" $G_CLOUD_SCRIPT_SERVER_ROOTPW > /dev/null 2>&1 || {
+		echo "Error - failed to copy updated config file to scripting server"
+		return 1
+	}
+
+	rm -f /tmp/$l_mediaconfigfile > /dev/null 2>&1
+
+	$G_SSH_SETUPSCRIPT ssh "root@$G_CLOUD_SCRIPT_SERVER_IP /bin/rm -f /tmp/install.log  < /dev/null > /dev/null  2>&1" $G_CLOUD_SCRIPT_SERVER_ROOTPW
+	echo "Starting building of OSS Cloud Private Testbox on $G_CLOUD_VAPP. This will take a while...."
+	# note when calling harness on remote server we redirect stdout and stdin to files
+	# to prevent remote ssh session hanging see http://www.snailbook.com/faq/background-jobs.auto.html
+	if [ "$G_FULL_ROLLOUT" = TRUE ]; then
+		$G_SSH_SETUPSCRIPT ssh "root@$G_CLOUD_SCRIPT_SERVER_IP $G_CLOUD_MASTER_SCRIPT -c $l_scriptsrv_cfgdir/$l_configfile:$l_scriptsrv_cfgdir/$l_mediaconfigfile -g $G_CLOUD_VAPP -f full_rollout < /dev/null > /tmp/install.log 2>&1" $G_CLOUD_SCRIPT_SERVER_ROOTPW 
+	else
+		$G_SSH_SETUPSCRIPT ssh "root@$G_CLOUD_SCRIPT_SERVER_IP $G_CLOUD_MASTER_SCRIPT -c $l_scriptsrv_cfgdir/$l_configfile:$l_scriptsrv_cfgdir/$l_mediaconfigfile:$l_scriptsrv_cfgdir/$l_rollout_configfile -g $G_CLOUD_VAPP -f rollout_config < /dev/null > /tmp/install.log 2>&1" $G_CLOUD_SCRIPT_SERVER_ROOTPW 
+	fi
+	retcode=$?
+	/bin/rm -rf /tmp/install.log > /dev/null 2>&1
+	$G_SSH_SETUPSCRIPT scp "root@$G_CLOUD_SCRIPT_SERVER_IP:/tmp/install.log /tmp"  $G_CLOUD_SCRIPT_SERVER_ROOTPW && 
+	cat /tmp/install.log 
+	if [ $retcode -ne 0 ]; then
+		echo "Error -  building of OSS Cloud Private Testbox on $G_CLOUD_VAPP failed"
+		return 1
+	fi
+	
+
+	vapp_post_install_config || {
+		echo "Error - failed to perform post config steps on vApp VMS"
+		return 1
+	}
+
+
+
+	return 0
+		
+
+
+}
+
+#
+# perform post-install config steps on vApp Vms
+#
+vapp_post_install_config() {
+	local l_ssh_master_natport
+	local l_ssh_slave_natport
+	local l_configfile=config.ini
+	echo "Doing post install steps on OM Services.."
+	get_om_serv_server om_serv_master ||  {
+		echo "Error unable to get om_serv_master details"
+		return 1
+	}
+	get_om_serv_server om_serv_slave ||  {
+		echo "Error unable to get om_serv_slave details"
+		return 1
+	}
+	# temporary fix to enable DHCP in OM Serv
+	if [ -n "$G_OMSERV_om_serv_master_SSHNATPORT" ]; then
+		l_ssh_master_natport="-oPort=$G_OMSERV_om_serv_master_SSHNATPORT"
+	fi
+	if [ -n "$G_OMSERV_om_serv_slave_SSHNATPORT" ]; then
+		l_ssh_slave_natport="-oPort=$G_OMSERV_om_serv_slave_SSHNATPORT"
+	fi
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_master_natport root@$G_OMSERV_om_serv_master_IP:/ericsson/config/$l_configfile /tmp/$l_configfile" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+		echo "Error - failed to copy config file from OM Services master"
+		return 1
+	}
+	sed -e 's/DHCP_CONF=N\/A/DHCP_CONF=yes/g' -e 's/DHCP6_CONF=N\/A/DHCP6_CONF=yes/g' /tmp/$l_configfile >  /tmp/$l_configfile.$$
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_master_natport  /tmp/$l_configfile.$$ root@$G_OMSERV_om_serv_master_IP:/ericsson/config/$l_configfile" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+		echo "Error - failed to copy updated config file to OM Services master"
+		return 1
+	}
+	for script in setup_isc_dhcp.sh create_bsim.sh; do
+		$G_SSH_SETUPSCRIPT ssh "$l_ssh_master_natport root@$G_OMSERV_om_serv_master_IP /ericsson/ocs/bin/$script" $G_OMSERV_om_serv_master_ROOTPW 
+	done
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_slave_natport root@$G_OMSERV_om_serv_slave_IP:/ericsson/config/$l_configfile /tmp/$l_configfile" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+		echo "Error - failed to copy config file from OM Services slave"
+		return 1
+	}
+	sed -e 's/DHCP_CONF=N\/A/DHCP_CONF=yes/g' -e 's/DHCP6_CONF=N\/A/DHCP6_CONF=yes/g' /tmp/$l_configfile >  /tmp/$l_configfile.$$
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_slave_natport  /tmp/$l_configfile.$$ root@$G_OMSERV_om_serv_slave_IP:/ericsson/config/$l_configfile" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+		echo "Error - failed to copy updated config file to OM Services slave"
+		return 1
+	}
+
+	# setup password-less login between OM Services
+	# master => slave
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_master_natport $G_SCRIPTDIR/ssh_keygen.sh root@$G_OMSERV_om_serv_master_IP:/tmp" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to copy ssh-keygen to om serv master"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT ssh "$l_ssh_master_natport root@$G_OMSERV_om_serv_master_IP /tmp/ssh_keygen.sh" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to generate ssh rsa keys on OM serv master"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_master_natport root@$G_OMSERV_om_serv_master_IP:/.ssh/id_rsa.pub /tmp" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to copy rsa key from OM serv master"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_slave_natport /tmp/id_rsa.pub root@$G_OMSERV_om_serv_slave_IP:/tmp/id_rsa.pub" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to copy rsa key to OM serv slave"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT ssh "$l_ssh_slave_natport root@$G_OMSERV_om_serv_slave_IP cat /tmp/id_rsa.pub >> /.ssh/authorized_keys" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to update /.ssh/authorized_keys on OM Serv slave"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT ssh "$l_ssh_slave_natport root@$G_OMSERV_om_serv_slave_IP chmod 0600 /.ssh/authorized_keys" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to set permissions of /.ssh/authorized_keys on OM serv slave"
+                return 1
+        }
+	echo "StrictHostKeyChecking no" > /tmp/ssh_config
+	echo "UserKnownHostsFile=/dev/null" >> /tmp/ssh_config
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_master_natport /tmp/ssh_config root@$G_OMSERV_om_serv_master_IP:/.ssh/config" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to copy ssh config file to OM serv master"
+                return 1
+        }
+	# slave => master
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_slave_natport $G_SCRIPTDIR/ssh_keygen.sh root@$G_OMSERV_om_serv_slave_IP:/tmp" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to copy ssh-keygen to om serv slave"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT ssh "$l_ssh_slave_natport root@$G_OMSERV_om_serv_slave_IP /tmp/ssh_keygen.sh" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to generate ssh rsa keys on OM serv slave"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_slave_natport root@$G_OMSERV_om_serv_slave_IP:/.ssh/id_rsa.pub /tmp" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to copy rsa key from OM serv slave"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_master_natport /tmp/id_rsa.pub root@$G_OMSERV_om_serv_master_IP:/tmp/id_rsa.pub" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to copy rsa key to OM serv master "
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT ssh "$l_ssh_master_natport root@$G_OMSERV_om_serv_master_IP cat /tmp/id_rsa.pub >> /.ssh/authorized_keys" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to update /.ssh/authorized_keys on OM Serv master"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT ssh "$l_ssh_master_natport root@$G_OMSERV_om_serv_master_IP chmod 0600 /.ssh/authorized_keys" $G_OMSERV_om_serv_master_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to set permissions of /.ssh/authorized_keys on OM serv master"
+                return 1
+        }
+	$G_SSH_SETUPSCRIPT scp "$l_ssh_slave_natport /tmp/ssh_config root@$G_OMSERV_om_serv_slave_IP:/.ssh/config" $G_OMSERV_om_serv_slave_ROOTPW > /dev/null 2>&1 || {
+                echo "Error - failed to copy ssh config file to OM serv slave"
+                return 1
+        }
+	
+	return 0
+}
+
+
+
+#MAIN
+
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_ETCDIR=$( dirname $G_SCRIPTDIR )/etc
+. $G_ETCDIR/ci.env
+G_SCRIPTNAME=$(/bin/basename $0)
+G_BUILD_ROOTDIR=$( /usr/bin/dirname $( /usr/bin/dirname $G_SCRIPTDIR ))
+G_WORKSPACEDIR=$G_BUILD_ROOTDIR/workspace
+G_INST_TYPE=cominf
+G_PACKAGEBUILDSCRIPT=$G_SCRIPTDIR/build_packages.bsh
+G_SSH_SETUPSCRIPT=$G_SCRIPTDIR/ssh_setup.sh
+G_REMOTEINSTALLSCRIPTNAME=ci_job_remote_install.bsh
+G_REMOTE_TEST_HARNESS_DIR="/opt/ericsson/cominf_test"
+G_REMOTE_TEST_RESULTS_DIR="/var/tmp/reports/ci"
+G_LOCAL_TEST_HARNESS_RESULTS_DIR=$G_WORKSPACEDIR/results
+G_REMOTEINSTALLSCRIPT=$G_SCRIPTDIR/$G_REMOTEINSTALLSCRIPTNAME
+G_KICKSTARTSCRIPT=$G_SCRIPTDIR/kickstart_server.bsh
+G_TMP_DIR=/var/tmp
+G_HARNESS_HOST=""
+G_HARNESS_HOST_ROOTPW=""
+G_HARNESS_RETCODE=0
+G_KICKSTART=FALSE
+G_INSTALL_SOFTWARE=FALSE
+G_JENKINS_WORKSPACE=$HOME/workspace
+G_COMINF_SOFTWARE_LOCATION=$G_JENKINS_WORKSPACE/$G_JENKINS_BUILD_JOBNAME
+G_COMINF_SOFTWARE_TGZ=$G_COMINF_SOFTWARE_LOCATION/cominf_software.tar.gz
+G_CLOUD_MASTER_SCRIPT=/export/scripts/CLOUD/bin/master.sh
+G_CLOUD_INSTALL_CONFIGFILE=/export/scripts/CLOUD/configs/ta_specific/COMINF_CI/variables_sfs.txt
+G_CLOUD_INSTALL_MEDIAFILE=/export/scripts/CLOUD/configs/ta_specific/COMINF_CI/ci_jump.txt
+G_CLOUD_VAPP=atvts700
+G_OMSERVICES_MEDIA_INFOFILE=$G_COMINF_SOFTWARE_LOCATION/media_info
+G_START_TEST_HARNESS=TRUE
+G_FULL_ROLLOUT=TRUE
+
+
+trap 'cleanupOnExit' EXIT
+
+echo -e "\n\n** Job started **\n\n"
+
+while getopts "hb:f:j:kn" opt; do
+
+	case $opt in
+		b)
+			G_JENKINSBUILDNUMBER=$OPTARG
+		;;
+		f)
+			G_CIBUILDENVFILE=$OPTARG
+		;;
+		j)
+			G_JENKINSJOBNAME=$OPTARG
+		;;
+		k)
+			G_KICKSTART=TRUE
+		;;
+		n)
+			G_START_TEST_HARNESS=FALSE
+		;;
+		h)
+			usage
+			exit 0
+		;;
+		?)      # Print usage and exit error
+			printf "${SCRIPTNAME}: ERROR: Invalid option: '${OPTARG}'.\n"
+			usage
+			exit 1
+		;;
+
+	esac
+done
+
+if [ ! -s "$G_CIBUILDENVFILE" ]; then
+	echo "Error - unable to find env file or file empty"
+	usage
+	exit 1
+fi
+
+if [ -z "$WORKSPACE" ]; then
+        # script called outside jenkins env
+        if [ -z "$G_JENKINSJOBNAME" ]; then
+                echo "** Error - jenkins job name must be specified if script not run from jenkins"
+                exit 1
+        else
+                WORKSPACE=$HOME/workspace/$G_JENKINSJOBNAME
+        fi
+fi
+
+if [ ! -d "$WORKSPACE" ]; then
+        echo "** Error - workspace dir \"$WORKSPACE\" does not exist"
+        exit 1
+
+fi
+
+if [ -z "$BUILD_NUMBER" ]; then
+	if [ -z "$G_JENKINSBUILDNUMBER" ]; then
+		echo "** Error - CI job build number must be specified if script not run through jenkins **"
+		exit 1
+	else
+		BUILD_NUMBER=$G_JENKINSBUILDNUMBER
+	fi
+fi
+
+G_RESULTS_DIR=$WORKSPACE/$BUILD_NUMBER
+G_TEST_HARNESS_RESULTS_TARBALL=${BUILD_NUMBER}_report.tar.gz
+G_REMOTE_TEST_HARNESS_RESULTS_TGZ="$G_REMOTE_TEST_RESULTS_DIR/$G_TEST_HARNESS_RESULTS_TARBALL"
+if [ -d $G_RESULTS_DIR ]; then
+	echo "** Error $G_RESULTS_DIR already exists **"
+	exit 1
+else
+	mkdir $G_RESULTS_DIR || {
+		echo "** Error - failed to create $G_RESULTS_DIR"
+		exit 1
+	}
+fi
+
+# empty jenkins known_hosts
+> $HOME/.ssh/known_hosts
+
+# add Gerrit SSH host key
+echo "[eselivm2v238l.lmera.ericsson.se]:29418,[150.132.181.143]:29418 ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA37bYdj0bLVyuOL36TyeA0OqzWOE5gpFcKikb5RqtpHFqRo6175yfz6LZv83XSzq2dckS4Ja7wFjoXDu35LdwnCUsWCQU4vRLgLaMDoO6TxpIndi3K9yifcVODlbj66PmXBm0QhxqzzQIU0joJeG6JrqIsXJHXO9jcIZslyY9bnpk1L8toOKtW+N2fkgxDUBIr2cdFZ/UpvH00SmtvMJv1uAxvsDP+IzvqarLxt4quhRIB3y6ejUmbWXB+4ACxjkptUEaDA/2dwriBdWFpFuNCZmBLVVPZG/UU5aPRZ24eiiGKL0mN8hIwRlagCki5nBxkOe7yTo03vGmzqKUp3mAVw==" >> $HOME/.ssh/known_hosts
+
+# add MWS SSH host key
+echo "$G_MWS_IP ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAIEA82p4kUftWChjjGNAewP/zOJnYgIc9rHFI+tjK1gg7BJETC1oM34bUpJeVaQ5+uHPWVZaLOagEmrBzRuj+KRzR3ECzNduLVB1XbC4jZgeCLdJBBIaE74FqEJsIkyChW8n2M/l2EvE0Ia07va6gqziw7zReNxju9ryxtWxEaBm5Sc="  >> $HOME/.ssh/known_hosts
+
+# empty roots known_hosts file
+$G_SSH_SETUPSCRIPT ssh "root@localhost > /root/.ssh/known_hosts" shroot || {
+	echo "Error Failed to clear file  /root/.ssh/known_hosts"
+	exit 1
+}
+
+
+read_envfile || exit 1
+
+if [ "$G_KICKSTART" = TRUE ]; then
+	jump_servers || exit 1
+fi
+
+
+if [ "$G_START_TEST_HARNESS" = TRUE ]; then
+	install_software || exit 1 
+	start_test_harness 
+
+	copy_test_results || exit 1
+
+	if [ $G_HARNESS_RETCODE -ne 0 ]; then
+		echo "** Test harness returned non-zero error code $G_HARNESS_RETCODE **"
+		echo "** Job failed **"
+		exit 1
+	else
+		echo -e "\n\n** Job completed successfully **\n\n"
+	fi
+fi
+
+exit 0
+
+
+
+
+
+

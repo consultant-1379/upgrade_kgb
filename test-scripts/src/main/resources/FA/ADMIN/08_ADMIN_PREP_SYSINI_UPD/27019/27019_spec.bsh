@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Tuesday 15th of April 2014 12:05:48
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="ADMIN"
+SPEC_UC_NAME="08_ADMIN_PREP_SYSINI_UPD"
+SPEC_TC_ID=27019
+SPEC_TC_SLOGAN="Admin_prepare_for_system_ini_updates accept all defaults / suggestions file not already existing (manual)"
+SPEC_TC_TYPE="FT"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="high"
+SPEC_TC_AUTOMATED=0
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=300
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xkriski"
+SPEC_TC_AUTOMATOR="xkriski"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+# logon as orcha user on MWS
+# ensure no pre-existing orc_system_ini_updates file exists in orch_depot config directory
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+# Run /ericsson/orchestrator/bin/admin_prepare_for_system_ini_updates.bsh supplying correct orch_depot and ip address of target admin node
+# Accept all defaults offered
+# If default rejected then enter suggested value
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+# expect success
+# expect orc_system_ini_updates file to be created in orch_depot config directory
+# expect entries to be as per accepted values.
+
+# END_POST_CONDITIONS

@@ -1,0 +1,76 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set ADMIN1 [lindex $argv 0]
+set release [lindex $argv 1]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$ADMIN1.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+expect "#"
+send -- "mkdir -p /ossrc/upgrade/sentinel_license\r"
+expect "#"
+send -- "cd /ossrc/upgrade/sentinel_license\r"
+set a2 [split $release "_"]
+set release1 [lindex $a2 0]
+puts "->$release1"
+send -- "sftp ossread@159.107.220.96\r"
+
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+
+                "assword" {
+                        send "ossread\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+expect "sftp>"
+send "cd sentinel/$release1\r"
+expect {
+	"No such file or directory" {
+                #send -- "cd /\r"
+                #send -- "rm -rf /ossrc/upgrade/sentinel_license\r"
+                send -- "bye\r"
+                expect "#"
+                puts "ERROR: Sentinel directory not found on remote license server."
+                exit 1
+                }
+	"sftp>" {
+		send -- "get sentinel_license_full\r"
+		expect "sftp>"
+		send -- "bye\r"
+		expect "#"
+		}
+	}
+sleep 10

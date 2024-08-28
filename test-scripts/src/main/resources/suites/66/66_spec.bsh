@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TEST SUITE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Friday 12th of July 2013 16:46:56
+#
+SPEC_TS_NAME=X86_CLUSTER_INSTALL
+SPEC_TS_ID=66
+SPEC_TS_SLOGAN="Initial install of X86 Admin Cluster"
+SPEC_TS_TIMEOUT=36000
+SPEC_TS_AUTHOR="edavmax"
+SPEC_TS_INDEPENDENT=0
+SPEC_TS_TC_IDS=(943 952 944 1022)

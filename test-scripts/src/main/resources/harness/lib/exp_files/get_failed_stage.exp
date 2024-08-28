@@ -1,0 +1,47 @@
+#!./expect -- 
+
+
+set timeout 120 
+#exp_internal 1
+log_user 0
+
+set SERVER [lindex $argv 0]
+set TYPE [lindex $argv 1]
+
+spawn ssh -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+set timeout 100
+expect "#"
+send -- "bash\r"
+expect "#"
+ set dont_need $expect_out(buffer)
+send -- "cat /ericsson/config/next_stage || echo unknown\r"
+expect "root@"
+ set e1 $expect_out(buffer)
+        set e2 [split $e1 "\r\n"]
+        set result [lindex $e2 4]
+send -- "exit\r"
+send -- "exit\r"
+send_user "$result"

@@ -1,0 +1,739 @@
+#!/bin/bash
+# Tests function orc_check_arp_disabled
+# Precondition: Must be run on admin server node which is isolated
+#
+source /opt/ericsson/sck/lib/admin_common_functions.lib
+DEBUG=TRUE
+RES=0
+NO_OF_ERRORS=0
+CP_STATUS_FILE="/var/opt/ericsson/sck/data/cp.status"
+CP_STATUS_FILE_TMP="/var/opt/ericsson/sck/data/cp.status_tmp"
+HOST=`${HNAMECMD}`
+
+################################################################################
+# Test 1: Positive run of admin_compare_local_and_remote_cp_info with lower shipment version
+# on local server
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#Back up CP status file
+mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+    
+#Set up "Known" CP status file values
+echo "CP_STATUS OSSRC_O14_4_Shipment_14.3.8 AOM_901110 R2H_EU05" > $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to setup ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+
+$SSH $SSH_OPTS $G_REM_PRIV "echo \"CP_STATUS OSSRC_O14_4_Shipment_14.4.8 AOM_901110 R2H_EU05\" > $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to set up remote cp.status file"
+    exit 1
+fi
+
+#############Test ########################################################
+
+admin_compare_local_and_remote_cp_info "shipment"
+
+RES=$?
+if [ $RES -eq 0 ] && [ ${CP_STATUS} = "LOCAL_LOWER" ]
+then
+    echo "###########Positive test of admin_compare_local_and_remote_cp_info with local revision lower than remote revision was successful######"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "###########Positive test of admin_compare_local_and_remote_cp_info with local revision lower than remote revision failed#############"
+fi
+
+
+#############Test 1: End ########################################################
+
+#############Test1:  clean up########################################################
+#Revert status files
+mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+
+#############Test 1: clean up ########################################################
+
+################################################################################
+# Test 2: Positive run of admin_compare_local_and_remote_cp_info with higher shipment version
+# on local server
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#Back up CP status file
+mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+    
+#Set up "Known" CP status file values
+echo "CP_STATUS OSSRC_O14_4_Shipment_14.5.8 AOM_901110 R2H_EU05" > $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to setup ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+
+$SSH $SSH_OPTS $G_REM_PRIV "echo \"CP_STATUS OSSRC_O14_4_Shipment_14.4.8 AOM_901110 R2H_EU05\" > $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to set up remote cp.status file"
+    exit 1
+fi
+
+#############Test 2########################################################
+
+admin_compare_local_and_remote_cp_info "shipment"
+
+RES=$?
+if [ $RES -eq 0 ] && [ ${CP_STATUS} = "LOCAL_HIGHER" ]
+then
+    echo "##########Positive test of admin_compare_local_and_remote_cp_info with local revision higher than remote revision was successful#######"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "#########Positive test of admin_compare_local_and_remote_cp_info with local revision higher than remote revision failed###########"
+fi
+
+
+#############Test 2: End ########################################################
+
+#############Test2:  clean up########################################################
+#Revert status files
+mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+
+#############Test 2: clean up ########################################################
+
+################################################################################
+# Test 3: Positive run of admin_compare_local_and_remote_cp_info with shipment versions
+# equal on remote & local server
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#Back up CP status file
+mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+    
+#Set up "Known" CP status file values
+echo "CP_STATUS OSSRC_O14_5_Shipment_14.5.8 AOM_901110 R2H_EU05" > $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to setup ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+
+$SSH $SSH_OPTS $G_REM_PRIV "echo \"CP_STATUS OSSRC_O14_5_Shipment_14.5.8 AOM_901110 R2H_EU05\" > $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to set up remote cp.status file"
+    exit 1
+fi
+
+#############Test 3########################################################
+
+admin_compare_local_and_remote_cp_info "shipment"
+
+RES=$?
+if [ $RES -eq 0 ] && [ ${CP_STATUS} = "EQUAL" ]
+then
+    echo "###########Positive test of admin_compare_local_and_remote_cp_info with equal revisions was successful#########"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "############Positive test of admin_compare_local_and_remote_cp_info with equal revisions was successful########"
+fi
+
+
+#############Test 3: End ########################################################
+
+#############Test3:  clean up########################################################
+#Revert status files
+mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+
+#############Test 3: clean up ########################################################
+
+
+################################################################################
+# Test 4: Positive run of admin_compare_local_and_remote_cp_info with lower rstate version
+# on local server
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#Back up CP status file
+mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+    
+#Set up "Known" CP status file values
+echo "CP_STATUS OSSRC_O14_4_Shipment_14.3.8 AOM_901110 R1H_EU01" > $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to setup ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+
+$SSH $SSH_OPTS $G_REM_PRIV "echo \"CP_STATUS OSSRC_O14_4_Shipment_14.4.8 AOM_901110 R2H_EU05\" > $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to set up remote cp.status file"
+    exit 1
+fi
+
+#############Test 4 ########################################################
+
+admin_compare_local_and_remote_cp_info "rstate"
+
+RES=$?
+if [ $RES -eq 0 ] && [ ${CP_STATUS} = "LOCAL_LOWER" ]
+then
+    echo "###########Positive test of admin_compare_local_and_remote_cp_info with local rstate lower than remote rstate was successful######"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "###########Positive test of admin_compare_local_and_remote_cp_info with local rstate lower than remote rstate failed#############"
+fi
+
+
+#############Test 4: End ########################################################
+
+#############Test4:  clean up########################################################
+#Revert status files
+mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+
+#############Test 4: clean up ########################################################
+
+
+################################################################################
+# Test 5: Positive run of admin_compare_local_and_remote_cp_info with higher rstate version
+# on local server
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#Back up CP status file
+mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+    
+#Set up "Known" CP status file values
+echo "CP_STATUS OSSRC_O14_4_Shipment_14.5.8 AOM_901110 R4H_EU05" > $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to setup ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+
+$SSH $SSH_OPTS $G_REM_PRIV "echo \"CP_STATUS OSSRC_O14_4_Shipment_14.4.8 AOM_901110 R4H\" > $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to set up remote cp.status file"
+    exit 1
+fi
+
+#############Test 5########################################################
+
+admin_compare_local_and_remote_cp_info "rstate"
+
+RES=$?
+if [ $RES -eq 0 ] && [ ${CP_STATUS} = "LOCAL_HIGHER" ]
+then
+    echo "##########Positive test of admin_compare_local_and_remote_cp_info with local rstate higher than remote revision was successful#######"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "#########Positive test of admin_compare_local_and_remote_cp_info with local rstate higher than remote revision failed###########"
+fi
+
+
+#############Test 5: End ########################################################
+
+#############Test5:  clean up########################################################
+#Revert status files
+mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+
+#############Test 5: clean up ########################################################
+
+################################################################################
+# Test 6: Positive run of admin_compare_local_and_remote_cp_info with rstate versions
+# equal on remote & local server
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#Back up CP status file
+mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+    
+#Set up "Known" CP status file values
+echo "CP_STATUS OSSRC_O14_5_Shipment_14.5.8 AOM_901110 R2H_EU05" > $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to setup ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+
+$SSH $SSH_OPTS $G_REM_PRIV "echo \"CP_STATUS OSSRC_O14_5_Shipment_14.5.8 AOM_901110 R2H_EU05\" > $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to set up remote cp.status file"
+    exit 1
+fi
+
+#############Test 6########################################################
+
+admin_compare_local_and_remote_cp_info "rstate"
+
+RES=$?
+if [ $RES -eq 0 ] && [ ${CP_STATUS} = "EQUAL" ]
+then
+    echo "###########Positive test of admin_compare_local_and_remote_cp_info with equal rstates was successful#########"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "############Positive test of admin_compare_local_and_remote_cp_info with equal rstates was successful########"
+fi
+
+
+#############Test 6: End ########################################################
+
+#############Test6:  clean up########################################################
+#Revert status files
+mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+
+#############Test 6: clean up ########################################################
+
+################################################################################
+# Test 7: Negative run of admin_compare_local_and_remote_cp_info with invalid
+# arguments
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#############Test 7########################################################
+
+admin_compare_local_and_remote_cp_info 
+
+RES=$?
+if [ $RES -eq 1 ] 
+then
+    echo "###########Negative test of admin_compare_local_and_remote_cp_info with invalid args was successful#########"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "############Negative test of admin_compare_local_and_remote_cp_info with invalid args failed########"
+fi
+
+
+#############Test 7: End ########################################################
+
+#############Test7:  clean up########################################################
+
+#############Test 7: clean up ########################################################
+
+################################################################################
+# Test 9: Negative run of admin_compare_local_and_remote_cp_info with CP status file missing
+# on local server
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#Back up CP status file
+mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+    
+
+#############Test 9########################################################
+
+admin_compare_local_and_remote_cp_info "rstate"
+
+RES=$?
+if [ $RES -eq 1 ]
+then
+    echo "###########Negative test of admin_compare_local_and_remote_cp_info with local cp.status file missing was successful#########"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "############Negative test of admin_compare_local_and_remote_cp_info with local cp.status file missing was successful########"
+fi
+
+
+#############Test 9: End ########################################################
+
+#############Test9:  clean up########################################################
+#Revert status files
+mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE
+    
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move local ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+#############Test 9: clean up ########################################################
+
+################################################################################
+# Test 11: Negative run of admin_compare_local_and_remote_cp_info with cp.status file
+# missing on remote server
+#
+###############################################################################
+
+#############Pre-condition - ##########################
+#Set up cp.status files on local and remote servers
+###############################################################################
+
+test -f $CP_STATUS_FILE
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: ${CP_STATUS_FILE} doesn't exist"
+    exit 1
+fi
+    
+#Back up status file on remote server
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE $CP_STATUS_FILE_TMP"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE} to ${CP_STATUS_FILE_TMP}"
+    exit 1
+fi
+
+
+#############Test 6########################################################
+
+admin_compare_local_and_remote_cp_info "rstate"
+
+RES=$?
+if [ $RES -eq 1 ] 
+then
+    echo "###########Negative test of admin_compare_local_and_remote_cp_info remote cp.status file missing was successful#########"
+else
+    ((NO_OF_ERRORS=NO_OF_ERRORS+1))
+    echo "############Negative test of admin_compare_local_and_remote_cp_info with remote cp.status file missing failed########"
+fi
+
+
+#############Test 6: End ########################################################
+
+#############Test6:  clean up########################################################
+#Revert status files
+orc_get_remote_private_hostname  $HOST
+$SSH $SSH_OPTS $G_REM_PRIV "mv $CP_STATUS_FILE_TMP $CP_STATUS_FILE"
+RES=$?
+if [ $RES -ne 0 ]
+then
+    echo "ERROR: Failed to move remote ${CP_STATUS_FILE_TMP} to ${CP_STATUS_FILE}"
+    exit 1
+fi
+
+
+#############Test 6: clean up ########################################################
+
+##################Results summary ####################################################
+if [ $NO_OF_ERRORS -eq 0 ] 
+then
+    echo "############admin_compare_local_and_remote_cp_info tests executed successfully############"
+    exit 0
+else
+    echo "############admin_compare_local_and_remote_cp_info tests failed with ${NO_OF_ERRORS}############"
+    exit 1
+fi 
+
+##################Results summary ####################################################
+

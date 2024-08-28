@@ -1,0 +1,120 @@
+#!./expect -- 
+
+#Return 1 if serious problem don't continue
+#Return 2 no mirrors defined, do nothing proceed with upgrade
+#Return 3 in sync, do nothing proceed with upgrade
+#Return 4 boot from detach and sync
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set results(DEFINED) "1"
+set results(INSYNC) "1"
+set results(WARNING) "0"
+set results(SMTOOL) "0"
+set results(INSTALL) "0"
+set D1 "\$1" 
+set D2 "\$2" 
+set D "\$" 
+set PIPESTATUS "\${PIPESTATUS\[0\]}" 
+set FILTER "\[\{,\},\"\]" 
+
+#main
+
+spawn ssh -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+set timeout 10800
+
+send -- "/ericsson/dmr/bin/dmtool de b\r"
+expect "Continue (y/n) or more (h)help"
+send -- "y\r"
+while 1 {
+        expect {
+                "Do you wish to reboot the system now" {
+                        send "y\r"
+			break}
+                "Use _m2 snapshots (y/n)?" {
+                        send "y\r"}
+                }
+        }
+
+sleep 5
+send "exit\r"
+expect eof 
+sleep 1800
+spawn ssh -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 30
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "login: " {
+                        send "root\r"}
+
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                eof {
+                        puts "warning: timed out"
+
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+expect "#"
+set timeout 60
+
+send -- "/ericsson/dmr/bin/dmtool s p\r"
+while 1 {
+        expect {
+
+                "Mirror 2: disknmirr  RUNNING" {
+                        break}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+set timeout 10800
+send -- "/ericsson/dmr/bin/dmtool sy\r"
+expect "The synchronization can take some time"
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "<-"
+sleep 600
+send -- "/ericsson/dmr/bin/dmtool m 2\r"
+expect "#"
+sleep 1200
+send "rm -rf /ossrc/upgrade/R*\r"
+expect "#"
+send "exit\r"
+expect "#"

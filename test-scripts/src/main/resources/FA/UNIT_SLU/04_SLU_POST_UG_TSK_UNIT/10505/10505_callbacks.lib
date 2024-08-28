@@ -1,0 +1,174 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+    # Coded to fail in case TC_AUTOMATED=1 before automation completed
+	# Change return code as required
+    source /var/tmp/Liveupgrade/slu_common_functions.lib
+    LOGFILE=/tmp/slu_update_crontab
+    DEBUG=TRUE
+    TMP_CRON_FILE="/tmp/temp_cron_file"
+    
+    mkdir $TMP_CRON_FILE
+    
+	return 0
+    
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+    
+    TMP_CRON_FILE="/tmp/temp_cron_file"
+   
+    if ! [ -d $TMP_CRON_FILE ]
+    then
+        echo "ERROR: directory $TMP_CRON_FILE doesn't exist"
+        return 1
+    fi
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+    
+    source /var/tmp/Liveupgrade/slu_common_functions.lib
+    LOGFILE=/tmp/slu_update_crontab
+    DEBUG=TRUE
+    MOUNT_POINTS=""
+    ALTERNATE_BOOT_ENV=""
+    
+    slu_get_be_info
+    ALTERNATE_BOOT_ENV=$($ECHO $BEINFO | $NAWK -F, '{print$3}')
+        
+    slu_update_crontab
+    
+    RES=$?
+    
+    if [ $RES -eq 1 ]
+    then
+        echo "Negative test of function slu_update_crontab (cannot create file /tmp/temp_cron_file) completed successfully."
+    else
+        echo "ERROR:Negative test of function slu_update_crontab (cannot create file /tmp/temp_cron_file) failed "
+        return 1
+    fi
+       
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	# Coded to fail in case TC_AUTOMATED=1 before automation complete.
+	# Change return code as required
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+    
+    TMP_CRON_FILE="/tmp/temp_cron_file"
+    LOGFILE="/tmp/slu_update_crontab"
+    
+    rm $LOGFILE
+    rmdir $TMP_CRON_FILE
+    
+	return 0
+
+}

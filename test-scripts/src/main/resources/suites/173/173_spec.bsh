@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TEST SUITE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Thursday 13th of November 2014 15:54:41
+#
+SPEC_TS_NAME=X86_ORCHA_SLU
+SPEC_TS_ID=173
+SPEC_TS_SLOGAN="ORCHA SLU upgrade on Admin Server "
+SPEC_TS_TIMEOUT=2400
+SPEC_TS_AUTHOR="eolikil"
+SPEC_TS_INDEPENDENT=0
+SPEC_TS_TC_IDS=(7100 8100 9100 10100 11100)

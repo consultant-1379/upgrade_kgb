@@ -1,0 +1,38 @@
+#!/bin/bash
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+TEMP_DIR=/var/tmp
+RSTATESFILE=$TEMP_DIR/rstates
+if [ -s $RSTATESFILE ]; then
+	. $RSTATESFILE
+else
+	echo "Error - File $RSTATESFILE not found"
+	exit 1
+fi
+TEMP_MNT_DIR=/tmp/cominf_ci_iso
+[ ! -d $TEMP_MNT_DIR ] && mkdir -p $TEMP_MNT_DIR
+CI_SERVER=10.45.201.63
+ISO_FILE=19089-CXP9022929_${COMINF_OM_LINUX_MEDIA_REV}.iso
+fuser -k $TEMP_MNT_DIR
+umount $TEMP_MNT_DIR > /dev/null 2>&1
+scp root@$CI_SERVER:/var/lib/jenkins/cominf_build/workspace/$ISO_FILE $TEMP_DIR || {
+	echo "error - failed to copy media from CI server"
+	exit 1
+}
+dev=$(lofiadm -a $TEMP_DIR/$ISO_FILE)
+[ -z "$dev" ] && exit 1 
+mount -F hsfs $dev $TEMP_MNT_DIR || exit 1
+ci_media=$( $TEMP_DIR/get_ci_media_exp.bsh | grep 'COMINF BASE SW' | head -1 | awk '{ print $1 }' | sed -e 's/\[//g' -e 's/\]//g')
+
+if [ -n "$ci_media" ]; then
+	# media aleady cached - we must remove it first
+	$TEMP_DIR/remove_existing_media_exp.bsh $ci_media
+fi
+
+# cache new media
+$TEMP_DIR/cache_new_media_exp.bsh $TEMP_MNT_DIR || {
+	echo "error - failed to cache new media"
+	exit 1
+}
+umount $TEMP_MNT_DIR > /dev/null 2>&1 &&
+lofiadm -d $dev &&
+rm -f $TEMP_DIR/$ISO_FILE

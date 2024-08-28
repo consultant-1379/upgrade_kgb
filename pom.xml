@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Each team will need to update the following section to reflect the
+        correct parent for their test cases -->
+    <parent>
+        <groupId>com.ericsson.oss</groupId>
+        <artifactId>integration</artifactId>
+        <version>1.0.110</version>
+    </parent>
+
+    <!-- Each team will need to update the following section with the correct
+        information -->
+    <groupId>com.ericsson.oss.orchestrator</groupId>
+    <artifactId>orchestrator_taf</artifactId>
+    <version>1.0.1102-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <properties>
+        <taf_version>2.5.23</taf_version>
+	<allure.version>1.4.4</allure.version>
+	<aspectj.version>1.8.3</aspectj.version>
+        <taf_oss_operators_version>${taf_version}.1.18</taf_oss_operators_version>
+    </properties>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.ericsson.oss.taf</groupId>
+        <artifactId>taf-oss-operators-bom</artifactId>
+        <version>${taf_oss_operators_version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+	<plugins>
+	<plugin>
+	    <groupId>com.ericsson.cifwk.taf</groupId>
+	       <artifactId>taf-allure-maven-plugin</artifactId>
+	       <version>${taf_version}</version>
+	       </plugin>
+	       <plugin>
+	       <groupId>com.ericsson.cifwk.taf</groupId>
+	       <artifactId>taf-allure-old-maven-plugin</artifactId>
+	       <version>${taf_version}</version>
+	    </plugin>
+                <plugin>
+                    <groupId>com.ericsson.cifwk.taf</groupId>
+                    <artifactId>taf-maven-plugin</artifactId>
+                    <version>${taf_version}</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>clean</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>com.ericsson.cifwk.taf</groupId>
+                <artifactId>taf-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+  <scm>
+    <tag>ERICtaf_util-2.1.10</tag>
+  </scm>
+  <modules>
+    <module>ERICTAForch_operators</module>
+    <module>ERICTAForch_CXP9031018</module>
+    <module>test-scripts</module>
+    <module>test-pom-orchestrator_taf</module>
+  </modules>
+</project>
+

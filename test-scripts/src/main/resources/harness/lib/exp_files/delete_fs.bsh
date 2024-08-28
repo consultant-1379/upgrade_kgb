@@ -1,0 +1,130 @@
+#!/bin/bash
+# *****************************************************************************
+# Script Name:   delete_fs
+# Author:        edavmax
+# Function:      setup MWS to receive shipment
+#
+# History:       07-10-11 by Rob Blee
+#               24-05-13 edavmax refactored for infra team
+# *****************************************************************************
+
+
+# usage function
+usage () {
+cat << EOF
+
+Deletes existing filesystems belonging to cluster from SFS.
+This script is designed to be run from the MWS
+
+Usage:  ${SCRIPTNAME} -p <pre inirate file>
+
+EOF
+    return 0
+}
+
+
+#
+# cleanup script
+#
+cleanupOnExit() {
+        echo "cleaning up.."
+
+
+}
+
+# process cmd line options
+while getopts ":p:h" opt; do
+        case $opt in
+                p)      PREINIFILE=$OPTARG
+                        ;;
+                h)      usage
+                        exit 0
+                        ;;
+                ?)
+                        echo "invalid option \"$opt\""
+                        usage
+                        exit 1
+                        ;;
+        esac
+done
+shift `expr $OPTIND - 1`
+
+SFS_SUPPORT_USERNAME=support
+SFS_SUPPORT_PASSWD=symantec
+SFS_MASTER_USERNAME=master
+SFS_MASTER_PASSWD=master
+EXPECT=/usr/local/bin/expect
+DATETIME=`date +%d-%m-%Y_%H-%M-%S`
+SCRIPTNAME=$(basename $0)
+LOGDIR=/var/tmp/${SCRIPTNAME}_log
+LOG=${LOGDIR}/${SCRIPTNAME}_${DATETIME}.log
+SCRIPTDIR=$(cd $(dirname $0); pwd)
+
+
+if [ ! -s "$PREINIFILE" ]; then
+	echo "Error - preini file \"$PREINIFILE\" does not exist or is empty"
+	exit 1
+fi
+
+# get nasconsole IP
+NASCONSOLEIP=$( /usr/xpg4/bin/egrep '^[:space:]*nasServConn=' $PREINIFILE | awk -F= '{print $2}')
+[ -z "$NASCONSOLEIP" ] && {
+	echo "Error - unable to get nasconsole IP from preini file"
+	exit 1
+}
+
+# get OSS FS ID
+OSSFSID=$( /usr/xpg4/bin/egrep '^[:space:]*OssIDD=' $PREINIFILE | awk -F= '{print $2}')
+[ -z "$OSSFSID" ] && {
+	echo "Error - unable to get OssIDD from preini file"
+	exit 1
+}
+
+CLUSTER_FS_LIST=$($EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "$SFS_SUPPORT_USERNAME@$NASCONSOLEIP su - $SFS_MASTER_USERNAME -c 'storage fs list'" $SFS_SUPPORT_PASSWD | /usr/xpg4/bin/egrep "^${OSSFSID}[ab]" | awk '{ print $1 }')
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+	echo "Error occured querying SFS for list of file systems for cluster with id ${OSSFSID}"
+	exit 1
+fi
+[ -z "$CLUSTER_FS_LIST" ] && {
+	echo "No filesystems exist on SFS for cluster with ID ${OSSFSID}"
+	exit 0
+}
+
+# delete shares for the cluster file systems
+/bin/rm -f /tmp/shares.* > /dev/null 2>&1
+$EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "$SFS_SUPPORT_USERNAME@$NASCONSOLEIP su - $SFS_MASTER_USERNAME -c 'nfs share show'" $SFS_SUPPORT_PASSWD | /usr/xpg4/bin/egrep "/vx/${OSSFSID}[ab]" | awk '{ printf("%s %s\n", $1 ,$2) }' > /tmp/shares.$$
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+	echo "Error occured querying SFS for list of NFS shares"
+	exit 1
+fi
+[ ! -s /tmp/shares.$$  ] && {
+	echo "No shares exist for cluster with id ${OSSFSID}"
+}
+while read line; do
+	echo "Deleting share $line"
+	$EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "$SFS_SUPPORT_USERNAME@$NASCONSOLEIP su - $SFS_MASTER_USERNAME -c 'nfs share delete $line'" $SFS_SUPPORT_PASSWD || {
+		echo "Error - failed to delete share $line"
+		continue
+	}
+done < /tmp/shares.$$
+
+# offline and destroy the file systems
+for fs in $CLUSTER_FS_LIST; do
+	# double check we are only removing FS for this cluster !!
+	if [[ "$fs" =~ ^${OSSFSID}[ab] ]]; then
+		echo "Offlining and destroying fs $fs"
+		$EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "$SFS_SUPPORT_USERNAME@$NASCONSOLEIP su - $SFS_MASTER_USERNAME -c 'storage fs offline $fs'" $SFS_SUPPORT_PASSWD || {
+			echo "Error failed to offline fs \"$fs\"" 
+			continue
+		}
+		$EXPECT $SCRIPTDIR/ssh_setup2.sh ssh "$SFS_SUPPORT_USERNAME@$NASCONSOLEIP su - $SFS_MASTER_USERNAME -c 'storage fs destroy $fs'" $SFS_SUPPORT_PASSWD || {
+			echo "Error failed to destroy fs \"$fs\"" 
+			continue
+		}
+	fi
+done
+exit 0
+
+
+
+

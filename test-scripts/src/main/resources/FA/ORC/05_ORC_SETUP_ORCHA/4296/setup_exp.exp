@@ -1,0 +1,37 @@
+#!/usr/local/bin/expect
+
+set O_INPFILE [lindex $argv 0]
+set timeout 60
+
+spawn su - orcha -c "/ericsson/orchestrator/bin/setup_orcha_user.bsh -p 'Orch@12A' -f $O_INPFILE"
+
+# Now process the host interactions - all will be automatic except the password prompts for the ADMIN and UAS servers.
+# Note that these will be prompted in the order they are in the hosts file.
+
+expect {
+        "Enter password for root user on host ossmaster" {send_user "sending ossmaster password\n"; send "shroot\r" }
+        eof {send_user "eof detected waiting for root password prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password prompt\n"; exit 99}
+}
+expect {
+        "Enter password for root user on host uas1" {send_user "sending uas1 password\n"; send "shroot\r" }
+        eof {send_user "eof detected waiting for root password prompt\n"; exit 98}
+        timeout {send_user "timeout detected waiting for root password prompt\n"; exit 99}
+}
+
+# Since this is file-based, there is no "is this list ok" prompt
+
+# No more prompts, so give it 10 minutes to set up users etc
+set timeout 600
+
+# No loop required - we are now waiting for the process to complete
+expect {
+        eof {send_user "eof detected as expected\n"}
+        timeout {send_user "timeout detected waiting for script to finish\n"; exit 99}
+}
+
+catch "wait -i $spawn_id" reason
+# return status code of spawned process
+set retstatus [ lindex $reason 3 ]
+send_user "returning status code of spawned process: $retstatus\n"
+exit [ lindex $reason 3 ]

@@ -1,0 +1,163 @@
+#!/usr/local/bin/expect
+
+set O_SERVER [lindex $argv 0]
+set LDAP_PWD [lindex $argv 1]
+set BSIM_PWD [lindex $argv 2]
+set COM_PWD [lindex $argv 3]
+set IPSEC_PWD [lindex $argv 4]
+set ADMIN_PWD [lindex $argv 5]
+set OMSAS_ADDR [lindex $argv 6]
+set MYSQL_PWD [lindex $argv 7]
+set SMRS_INST [lindex $argv 8]
+set SMRS_ROOT [lindex $argv 9]
+set SMRS_FTP [lindex $argv 10]
+
+set timeout 120 
+send_user "Server is $O_SERVER and password is $LDAP_PWD\n"
+
+spawn su - orcha -c "/ericsson/orchestrator/bin/orc_prepare_tss_for_upgrade.bsh $O_SERVER"
+
+# Send mismatched passwords - will be rejected
+expect {
+    "Password for LDAP proxy agent" { send_user "sending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+expect {
+    "Confirm password for LDAP proxy agent" { send_user "resending modified password Bad$LDAP_PWD\n"; send "Bad$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Now send correct ones
+expect {
+    "Password for LDAP proxy agent" { send_user "sending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+expect {
+    "Confirm password for LDAP proxy agent" { send_user "resending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# and repeat for directory manager user, but get wrong twice
+# (to verify that error count applies to a single password, not across whole script)
+
+expect {
+    "Password for LDAP Directory Manager" { send_user "sending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+expect {
+    "Confirm password for LDAP Directory Manager" { send_user "resending modified password Bad$LDAP_PWD\n"; send "Bad$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+expect {
+    "Password for LDAP Directory Manager" { send_user "sending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+expect {
+    "Confirm password for LDAP Directory Manager" { send_user "resending modified password Bad$LDAP_PWD\n"; send "Bad$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Now send correct ones
+expect {
+    "Password for LDAP Directory Manager" { send_user "sending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+expect {
+    "Confirm password for LDAP Directory Manager" { send_user "resending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+	"Password for LDAP Maintenance account" { send_user "sending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+expect {
+	"Confirm password for LDAP Maintenance account" { send_user "resending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+
+# Continue with the remainder of the script
+
+# May or may not get bsim prompt - if user already exists it won't ask
+expect {
+    "Retrieved password of existing bsimuser" { send_user "Already have bsimuser - go on to next prompt\n" }
+    # After password prompt, continue waiting for confirmation one
+    "Password for BSIM User" { send_user "sending password $BSIM_PWD\n"; send "$BSIM_PWD\r"; exp_continue }
+    "Confirm password for BSIM User" { send_user "resending password $BSIM_PWD\n"; send "$BSIM_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Now process COM user
+expect {
+    # After password prompt, continue waiting for confirmation one
+    "Password for COM User" { send_user "sending password $COM_PWD\n"; send "$COM_PWD\r"; exp_continue }
+    "Confirm password for COM User" { send_user "resending password $COM_PWD\n"; send "$COM_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Now process ipsecsmrs UNIX user
+expect {
+    # After password prompt, continue waiting for confirmation one
+    "Password for ipsecsmrs UNIX User" { send_user "sending password $IPSEC_PWD\n"; send "$IPSEC_PWD\r"; exp_continue }
+    "Confirm password for ipsecsmrs UNIX User" { send_user "resending password $IPSEC_PWD\n"; send "$IPSEC_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Now process root password on ADMIN server(s)
+expect {
+    # After password prompt, continue waiting for confirmation one
+    "Password for root user password on ADMIN server" { send_user "sending password $ADMIN_PWD\n"; send "$ADMIN_PWD\r"; exp_continue }
+    "Confirm password for root user password on ADMIN server" { send_user "resending password $ADMIN_PWD\n"; send "$ADMIN_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Now process the mysql password
+expect {
+    "Please enter the OMSAS IP Address" { send_user "sending OMSAS address $OMSAS_ADDR\n"; send "$OMSAS_ADDR\r"; exp_continue }
+    # After password prompt, continue waiting for confirmation one
+    "Password for sqladmin mysql User" { send_user "sending password $MYSQL_PWD\n"; send "$MYSQL_PWD\r"; exp_continue }
+    "Confirm password for sqladmin mysql User" { send_user "resending password $MYSQL_PWD\n"; send "$MYSQL_PWD\r" }
+	"file is valid - will be stored in orcha_mysql" { send_user "no need to enter password\n"; }
+	"Default MySQL password is valid - will be stored in orcha_mysql" { send_user "no need to enter password\n"; }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Now process the optional BISMRS question and subsequent section
+expect {
+    "Will BI-SMRS upgrade be carried out as part of this upgrade" { send_user "sending $SMRS_INST for SMRS install\n"; send "$SMRS_INST\r"; exp_continue }
+    "Password for root user password on SMRS Master server" { send_user "sending $SMRS_ROOT for SMRS install\n"; send "$SMRS_ROOT\r"; exp_continue }
+    "Confirm password for root user password on SMRS Master server" { send_user "resending password $SMRS_ROOT\n"; send "$SMRS_ROOT\r"; exp_continue }
+    "Password for SMRS ftpservice" { send_user "sending $SMRS_FTP for SMRS install\n"; send "$SMRS_FTP\r"; exp_continue }
+    "Confirm password for SMRS ftpservice" { send_user "resending password $SMRS_FTP\n"; send "$SMRS_FTP\r"; exp_continue }
+    eof {}
+    timeout { send_user "Error: timed out waiting for process to finish\n"; exit 99}
+}
+
+# Got EOF, so return exit code of script
+catch wait result
+set value [lindex $result 3]
+
+send_user "Script exited with value $value\n"
+sleep 0.2
+
+exit $value
+

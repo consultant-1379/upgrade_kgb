@@ -1,0 +1,29 @@
+#!./expect -- 
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set SERVER2 [lindex $argv 1]
+set mws [lindex $argv 2]
+set mws_rootpw [lindex $argv 3]
+
+
+spawn ssh -ostricthostkeychecking=no root@$mws
+expect -timeout 10 "Are you sure you want to continue connecting" {send "yes\r"; exp_continue}
+expect "Password:"
+send "$mws_rootpw\r"
+expect "\/#"
+sleep 2
+	send -- "/ericsson/jumpstart/bin/manage_pks_rootcerts.bsh -a add -r /JUMP/MWS_add_client_files/rootcer/rootca.cer.$SERVER\r"
+	expect "Enter the Fully Qualified Host Name for the LDAP Server"
+	send -- "$SERVER\r"
+	expect "Enter the IP address of the LDAP server that this certificate authenticates"
+	send -- "\r"
+	expect -timeout 30 "Do you want to configure a secondary LDAP server?" {send "Yes\r"; exp_continue}
+	expect -timeout 30 "Enter the Fully Qualified Host Name for the Secondary LDAP Server" 
+	send -- "$SERVER2\r"
+	expect "Enter the IP address of the secondary LDAP server that this certificate authenticates"
+	send -- "\r"
+	expect -timeout 30 "Are you sure you wish to add the rootcert specified?" {send "Yes\r"; exp_continue}
+sleep 30
+send "exit\r"

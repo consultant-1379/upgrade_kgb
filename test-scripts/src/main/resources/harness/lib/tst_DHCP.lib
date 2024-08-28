@@ -1,0 +1,343 @@
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+# Date        Signum   Details
+# 2012-05-15  XAMAMCG  Initial script
+#
+#   Provides a set of library functions related to DCHP
+#   Functions provided:
+#     DHCP_SERVER_INSTALLED
+#     DHCP_SERVER_RUNNING
+#     DHCP6_SERVER_RUNNING
+#     DHCP_NETWORK_EXISTS
+#     DHCP_SUBNET_EXISTS
+#     DHCP6_SUBNET_EXISTS
+#     DHCP_GET_SUBNET
+#     DHCP6_GET_SUBNET
+#     DHCP_CLIENT_IN_CONFIG
+#     DHCP6_CLIENT_IN_CONFIG
+#
+#  Note that there is no need for a DHCP6_SERVER_INSTALLED function,
+#  because the same binary is used for IPv4 and IPv6 DHCP servers.
+#
+
+
+### Function DHCP_SERVER_INSTALLED
+#
+# Check if the DHCP Server is installed on this box
+#
+# Arguments:
+# none
+#
+# Return Values:
+# 0		if installed
+# 1		if not installed
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# none
+#
+function DHCP_SERVER_INSTALLED()
+{
+	pkginfo EXTRdhcp | grep "application EXTRdhcp ISC DHCP" > /dev/null 2>&1
+	return $?
+}
+
+
+### Functions DHCP_SERVER_RUNNING and DHCP6_SERVER_RUNNING
+#
+# Check if the DHCP Server is running on this box for each IP version
+#
+# Arguments:
+# none
+#
+# Return Values:
+# 0		if running
+# 1		if does not understand dhcpd service (e.g. its not installed)
+# 3		if dhcpd service is stopped
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# none
+#
+function DHCP_SERVER_RUNNING()
+{
+	if [ -r /var/run/dhcpd.pid ]
+	then
+		pid=$(cat /var/run/dhcpd.pid) 
+		echo $pid 
+		kill -0 $pid
+		return $?
+	else
+		return 1
+	fi
+}
+
+function DHCP6_SERVER_RUNNING()
+{
+	if [ -r /var/run/dhcpd6.pid ]
+	then
+		pid=$(cat /var/run/dhcpd6.pid) 
+		echo $pid 
+		kill -0 $pid
+		return $?
+	else
+		return 1
+	fi
+}
+
+
+
+### Functions DHCP_SUBNET_EXISTS and DHCP6_SUBNET_EXISTS
+#
+# Returns if the specified subnet exists
+#
+# Arguments:
+# $1	subnet IP address
+#
+# Return Values:
+# 0		if exists
+# 1		if not exist
+# 2		if dhcpd.conf does not exist 
+# 3		if incorrect args
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# none
+#
+function DHCP_SUBNET_EXISTS()
+{
+	[ -z "$1" ] && return 3
+	[ ! -r /etc/dhcp/dhcpd.conf ] && return 2
+	grep -q "^[[:space:]]*subnet $1" /etc/dhcp/dhcpd.conf
+	[ $? -eq 0 ] 
+	return $?
+}
+
+function DHCP6_SUBNET_EXISTS()
+{
+	[ -z "$1" ] && return 3
+	[ ! -r /etc/dhcp/dhcpd6.conf ] && return 2
+	grep -q "^[[:space:]]*subnet $1" /etc/dhcp/dhcpd6.conf
+	[ $? -eq 0 ] 
+	return $?
+}
+
+DHCP_NETWORK_EXISTS() {
+	# Determine if a network exists in the DHCP config file
+	# Parameters: $Network address
+	# Return code
+	# 0		Network exists
+	# 1		Network not present
+	grep -w "$1" /usr/local/etc/dhcpd.conf_subnet
+	return $?
+}
+
+### Functions DHCP_GET_SUBNET and DHCP6_GET_SUBNET
+#
+# Outputs to screen the configuration for the subnet
+#
+# Arguments:
+# $1	subnet IP address
+#
+# Return Values:
+# 0		if success
+# 1		if not success (error or subnet does not exist)
+#
+# Standard output:
+# 1st line: DHCP_GET_SUBNET: <SUCCESS|ERROR>
+# 2nd line: Error reason if ERROR, else 2nd and subsequent lines are the 
+# subnet lines taken from the dhcpd.conf for subnet
+# NB. No formatting is done on this data, it is taken as is from dhcpd.conf
+# 
+# Example 1, subnet does not exist:
+# DHCP_GET_SUBNET: ERROR
+# SUBNET does not exist
+#
+# Example 2,  subnet exists
+# DHCP_GET_SUBNET: SUCCESS
+# subnet 192.168.3.0 netmask 255.255.255.0    {
+#        option routers                  192.168.3.254;
+#        option subnet-mask              255.255.255.0;
+#        option domain-search              "example.com";
+#        option domain-name-servers       192.168.3.1;
+#        option time-offset              -18000;     # Eastern Standard Time
+#	range 192.168.3.10 192.168.3.100;}
+#
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# none
+#
+function DHCP_GET_SUBNET()
+{
+	if test -z "$1"; then 
+		echo "DHCP_GET_SUBNET: ERROR"
+		echo "Incorrect parameters"
+		return 1
+	fi
+	if ! test -r /etc/dhcp/dhcpd.conf; then
+		echo "DHCP_GET_SUBNET: ERROR"
+		echo "No dhcpd.conf"
+		return 1
+	fi
+	awk -v SUBNET=$1 '
+			BEGIN {in_subnet = 0;}
+			$1 ~ /^#/ {next}
+			/^[ \t]*subnet[ \t]/ { 
+				t=match($0,"subnet[ \t]+" SUBNET)
+				if (t!=0){found_sub=1; in_subnet=1}
+				}
+			/{/ { if (in_subnet==1){level++}}
+			{ if (in_subnet==1){subnet_cfg=subnet_cfg $0;subnet_cfg=subnet_cfg "\n"}}
+			/\}/ {if (in_subnet==1){level--; if (level==0) in_subnet=0}}
+			END {if (found_sub==1) {printf ("DHCP_GET_SUBNET: SUCCESS\n%s\n", subnet_cfg)} 
+				 else {print "DHCP_GET_SUBNET: ERROR\nSubnet does not exist\n";exit 1}}
+		' /etc/dhcp/dhcpd.conf
+	[ $? -eq 0 ] 
+	return $?
+}
+
+function DHCP6_GET_SUBNET()
+{
+	if test -z "$1"; then 
+		echo "DHCP6_GET_SUBNET: ERROR"
+		echo "Incorrect parameters"
+		return 1
+	fi
+	if ! test -r /etc/dhcp/dhcpd6.conf; then
+		echo "DHCP6_GET_SUBNET: ERROR"
+		echo "No dhcpd6.conf"
+		return 1
+	fi
+	awk -v SUBNET=$1 '
+			BEGIN {in_subnet = 0;}
+			$1 ~ /^#/ {next}
+			/^[ \t]*subnet[ \t]/ { 
+				t=match($0,"subnet[ \t]+" SUBNET)
+				if (t!=0){found_sub=1; in_subnet=1}
+				}
+			/{/ { if (in_subnet==1){level++}}
+			{ if (in_subnet==1){subnet_cfg=subnet_cfg $0;subnet_cfg=subnet_cfg "\n"}}
+			/\}/ {if (in_subnet==1){level--; if (level==0) in_subnet=0}}
+			END {if (found_sub==1) {printf ("DHCP_GET_SUBNET: SUCCESS\n%s\n", subnet_cfg)} 
+				 else {print "DHCP_GET_SUBNET: ERROR\nSubnet does not exist\n";exit 1}}
+		' /etc/dhcp/dhcpd6.conf
+	[ $? -eq 0 ] 
+	return $?
+}
+
+### Functions DHCP_CLIENT_IN_CONFIG and DHCP6_CLIENT_IN_CONFIG
+#
+# Returns if the specified MACaddr exists in a host definition in dhcp file
+#
+# Arguments:
+# $1	MAC address
+#
+# Return Values:
+# 0		if exists
+# 1		if not exist
+# 2		if dhcpd.conf does not exist 
+# 3		if incorrect args
+#
+# Input globals accessed by this function
+# none
+#
+# Output globals set by this function
+# none
+#
+function DHCP_CLIENT_IN_CONFIG(){
+
+	# This function will take a client identifier and ip address and determine if this client exists already in DHCP
+	# $1 is the client identifier, $2 is the ip address of the client
+	[ -z "$1" ] && return 3
+	[ -z "$2" ] && return 3
+	[ ! -r /usr/local/etc/dhcpd.conf ] && return 2
+	
+	IDENTIFIER=$1
+	IP=$2
+	# Extract the configuration file data of the client from the client identifier, $1
+	/usr/xpg4/bin/awk -v param1="\<#START of "$IDENTIFIER"\>" -v param2="\<#END of "$IDENTIFIER"\>" '{ 
+			if($0 ~ param1){output="on"; print ;next} 
+			if($0 ~ param2){output="off"; print; next} 
+			if(output == "on"){print}
+			 }' /usr/local/etc/dhcpd.conf_static > client.tmp || {
+		echo "Could not copy client configuration data form /usr/local/etc/dhcpd.conf_static"
+		return 3
+	}
+
+        # Check the ip address of the client
+        grep -w $IP client.tmp  || {
+        	echo "Could not find ip address in config file, this client doesn't exist with this ip address"
+                return 4
+        }
+	# Check and make sure the valid paramters are created for the client
+        grep -w "option dhcp-client-identifier"  client.tmp  || {
+        	echo "Could not find option dhcp-client-identifier field in config file"
+                return 4
+        }
+        grep -w "fixed-address" client.tmp  || {
+        	echo "Could not find fixed-address field in config file"
+                return 4
+        }
+        grep -w "option tftp-server-name"  client.tmp  || {
+        	echo "Could not find option tftp-server-name field in config file"
+                return 4
+        }
+        grep -w "option bootfile-name" client.tmp  || {
+        	echo "Could not find option bootfile-name in config file"
+                return 4
+        }
+	
+	rm client.tmp
+        return 0
+}
+
+function DHCP6_CLIENT_IN_CONFIG(){
+	[ -z "$1" ] && return 3
+	[ ! -r /etc/dhcp/dhcpd6.conf ] && return 2
+	# Use awk to search for the lines:
+	# hardware ethernet <MAC address>
+	# Do not match on lines that have comments in
+	# Only match on hardware ethernet that are within host blocks
+	# Awk script outputs the number of matches
+	mac=`echo ":$1:"` 
+	# Add 0? in front of any single digits, needs twice to remove adjacent single digits
+	mac=`echo $mac | sed -e 's/:\([^:]\):/:0?\1:/g' -e 's/:\([^:]\):/:0?\1:/g'`
+	# Replace :: by :0?0?:
+	mac=`echo $mac | sed -e 's/::/:0?0?:/g' -e 's/::/:0?0?:/g'`
+	# Replace :0.: by :0?.:
+	mac=`echo $mac | sed -e 's/:0\([^:]\):/:0?\1:/g' -e 's/:0\([^:]\):/:0?\1:/g'`
+	mac=`echo $mac | sed -e 's/^:\(.*\):$/\1/'`
+
+	return $(awk -v MAC=$mac '
+			$1 ~ /^#/ {next}
+			/host/ {in_host=1; }
+			/\{/ {if (in_host==1) then level++; }
+			/hardware[ \t]+ethernet/ {if (in_host==1) {
+				t=match($0,"hardware[ \t]+ethernet[ \t]" MAC)
+				if (t!=0) then num_found++; }}
+			/\}/ {if (in_host==1) then level--; if (level==0) in_host=0}
+			END {printf ("%d", num_found==0)};
+		' /etc/dhcp/dhcpd6.conf)
+}
+
+BSIM_USER=bsim

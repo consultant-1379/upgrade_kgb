@@ -1,0 +1,73 @@
+set force_conservative 1
+set server [lindex $argv 0]
+set ilom [lindex $argv 1]
+set prompt "^.*-> $"
+set prompt_dm "> $"
+set state 0
+set timeout 5400
+set status 0
+if { [ catch { exec ping -c 30 $ilom } results] } {
+   if {[lindex $::errorCode 0] eq "CHILDSTATUS"} {
+      set status [lindex $::errorCode 2]
+   } else {
+	puts "Error - unexpected failure"
+   }
+}
+
+if { $status != 0 } {
+	spawn /usr/bin/telnet atrcx1089.athtem.eei.ericsson.se
+	expect "login:"
+	send "root\r"
+	expect "assword:"
+	send "dmbld23\r"
+	expect "#"
+	send "bash\r"
+	expect "#"
+	send "ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no Administrator@$ilom\r"
+	while 1 {
+		expect {
+ 		"Are you sure you want to continue connecting" {send "yes\r"}
+ 		"assword" {
+                		send "shroot12\r"
+                		break }
+ 		timeout        {exit 1}
+ 		}
+	}
+} else {
+	spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no Administrator@$ilom
+	while 1 {
+	expect {
+ 		"Are you sure you want to continue connecting" {send "yes\r"}
+ 		"assword" {
+                		send "shroot12\r"
+                		break }
+ 		timeout        {exit 1}
+ 		}
+	}
+
+}
+sleep 20
+expect -re $prompt 
+send "set /system1/bootconfig1/bootsource5 bootorder=1\r"
+sleep 60
+send_user "Initiating Network Connection...\n"
+expect -re $prompt 
+send "reset /system1\r"
+exec sleep 360
+expect -re $prompt
+send "set /system1/bootconfig1/bootsource3 bootorder=1\r"
+expect -re $prompt
+send "stop /system1/oemhp_vsp1\r"
+expect -re $prompt
+send "vsp\r"
+set timeout 25200
+while 1 {
+expect {
+ "Enter disks for first Plex of ossdg" {send "\r"}
+ "Entering ERIC Bootstrap Stage cleanup" {break}
+ timeout	{
+	puts "Timed out!"
+	exit 1}
+ }
+}
+exec sleep 600

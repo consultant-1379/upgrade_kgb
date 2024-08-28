@@ -1,0 +1,126 @@
+#!/bin/bash
+
+###################################################################
+# Call master_wrapper for initial install
+# Then execute Jenkins jobs after installation
+###################################################################
+
+	CI_SERVER="selid1a029.lmera.ericsson.se"
+	WRAPPER_PATH="/view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/bin"	
+	WRAPPER_SCRIPT="master_wrapper"
+	
+#  Source environment file
+	env_file=$1
+	env_path="${WORKSPACE}/SOURCES/build_scripts/infrastructure/etc"
+	[[ ! -f ${env_path}/${env_file} ]] && echo "Error:Please specify valid env filename" && exit 1
+	.  ${env_path}/${env_file}
+	[[ $? -ne 0 ]] && echo "Error: Problem sourcing env file" && exit 1
+
+
+
+# Setup SSH keys for user if not already setup
+	myid=`whoami`
+
+/usr/bin/expect<<EOF2
+set timeout 120
+spawn ssh -ostricthostkeychecking=no ossrcci@${CI_SERVER}
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Enter Windows password:" {
+                        send "Ericsson1\r"
+                        break}
+		">" {
+			exit 2}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+send "exit\r"
+EOF2
+
+
+	case $? in
+		0)
+			echo -e "\nSetting up ssh keys on ${CI_SERVER} for user ${myid}"
+
+/usr/bin/expect<<EOF3
+	       	 	spawn scp ~${myid}/.ssh/id_rsa.pub ossrcci@${CI_SERVER}:/tmp/${myid}_id_rsa.pub 
+        		expect "Enter Windows password:"
+        		send "Ericsson1\r"
+        		expect
+EOF3
+
+/usr/bin/expect<<EOF4
+			set timeout 120
+			spawn ssh -ostricthostkeychecking=no ossrcci@${CI_SERVER}
+        		expect "Enter Windows password:"
+        		send "Ericsson1\r"
+			expect ">"
+			send "cat /tmp/${myid}_id_rsa.pub >> .ssh/authorized_keys \r"
+			expect ">"
+			send "exit/r"
+EOF4
+			;;
+		1)
+			echo "Timeout contacting ${CI_SERVER}"
+			exit 1
+			;;
+		2)
+			echo -e "\nssh keys already defined on ${CI_SERVER} for user ${myid}"
+			;;
+		*)
+			echo "Unexpected value"
+			exit 1
+			;;
+	esac
+
+
+
+# Start Master Wrapper
+
+	echo -e "\n############################################################\n"
+	echo -e "Starting master_wrapper at `date` "
+	echo -e "\nLogs for master_wrapper are available on "
+	echo -e "${CI_SERVER} in directory:"
+	echo -e "/proj/ossrcci/logs/${CI_TYPE}/${CI_RELEASE}/${CI_SHIPMENT} "
+        echo -e "\n############################################################\n"
+
+	if [[ -z ${CI_ADMIN2} ]]; then
+
+		ssh -ostricthostkeychecking=no ossrcci@${CI_SERVER} ${WRAPPER_PATH}/${WRAPPER_SCRIPT} -r ${CI_RELEASE} -s ${CI_SHIPMENT} -t ${CI_TYPE} -p ${CI_PLATFORM} -m ${CI_MACHINE} -d ${CI_DMR} -e ${CI_ENVIRONMENT} -l ${CI_BUILD_TYPE} -k ${CI_MWS_JUMP} -i ${CI_PRE_INI} -x NO 
+
+	else
+
+                ssh -ostricthostkeychecking=no ossrcci@${CI_SERVER} ${WRAPPER_PATH}/${WRAPPER_SCRIPT} -r ${CI_RELEASE} -s ${CI_SHIPMENT} -t ${CI_TYPE} -p ${CI_PLATFORM} -m ${CI_MACHINE} -d ${CI_DMR} -e ${CI_ENVIRONMENT} -l ${CI_BUILD_TYPE} -k ${CI_MWS_JUMP} -i ${CI_PRE_INI} -x NO -q ${CI_ADMIN2}
+
+	fi
+
+
+# If Master wrapper successful then start Jenkins joba
+
+	if [[ $? -eq 0 ]];then
+        	echo -e "\n###########################################################\n"
+		echo -e "Installation using master_wrapper script was successful"
+		echo -e "Starting Jenkins Jobs at `date` "
+	        echo -e "\n###########################################################\n"
+		${WORKSPACE}/SOURCES/build_scripts/infrastructure/ci_job.bsh -f ${env_path}/${env_file}
+
+	else 
+                echo -e "\n##################################################################\n"
+		date
+		echo -e "Error: Installation using master_wrapper script was not successful"
+		echo -e "Jenkins Jobs will not be executed"
+                echo -e "\n##################################################################\n"
+		exit 1
+	fi
+		
+	date
+	echo -e  "\nThis jenkins server is ${HOSTNAME}"
+
+	exit 0

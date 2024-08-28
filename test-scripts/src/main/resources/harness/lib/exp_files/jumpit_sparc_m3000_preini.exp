@@ -1,0 +1,85 @@
+set force_conservative 1
+set timeout -1
+
+set ilom [lindex $argv 0] 
+set softpath [ lindex $argv 1 ]
+set ompath [ lindex $argv 2 ]
+set vmlickey [ lindex $argv 3 ]
+set user [ lindex $argv 4 ]
+set core [lindex $argv 5]
+set gran [lindex $argv 6]
+set wran [lindex $argv 7]
+set option [lindex $argv 8]
+set preini_path [ lindex $argv 9 ]
+set boot_device [ lindex $argv 10 ]
+
+
+set prompt "^.*> $"
+set timeout 5400
+
+proc exit1 {} {
+exit 1
+}
+set status 0
+if { [ catch { exec ping -c 30 $ilom } results] } {
+   if {[lindex $::errorCode 0] eq "CHILDSTATUS"} {
+      set status [lindex $::errorCode 2]
+   } else {
+	puts "Error - unexpected failure"
+   }
+}
+
+if { $status != 0 } {
+	spawn /usr/bin/telnet atrcx1089.athtem.eei.ericsson.se
+	expect "login:"
+	send "root\r"
+	expect "assword:"
+	send "dmbld23\r"
+	expect "#"
+	send "bash\r"
+	expect "#"
+	send "/usr/bin/ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root12@$ilom\r"
+	expect -timeout 10 "Are you sure you want to continue connecting (yes/no)" {send "yes\r"; exp_continue}
+	expect_after timeout exit1
+	expect "password:"
+	send "shroot12\r"
+} else {
+	spawn /usr/bin/ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root12@$ilom
+	expect -timeout 10 "Are you sure you want to continue connecting (yes/no)" {send "yes\r"; exp_continue}
+	expect_after timeout exit1
+	expect "password:"
+	send "shroot12\r"
+
+}
+set main_spawn_id $spawn_id
+expect -re $prompt
+send "reset -d0 xir\r"
+expect "Continue"
+send "y\r"
+exec sleep 5
+expect -re $prompt
+send "console -d 0 -f\r"
+expect "DomainID "
+send "y\r"
+if { $boot_device != "unknown" } {
+	expect "ok"
+	exec sleep 5
+	send "setenv boot-device $boot_device\r"
+}
+exec sleep 5
+expect "ok"
+if { $option == "YES" } { 
+	send "boot net:dhcp - install inst_type=ossrc config=system ossrc_sw_locate=$softpath om_sw_locate=$ompath rmirr label_disks\r"
+} else {
+	send "boot net:dhcp - install inst_type=ossrc config=system ossrc_sw_locate=$softpath om_sw_locate=$ompath label_disks\r"
+}
+set timeout 25600
+while 1 {
+expect {
+ "Please Specify the exact location of preinirate file"  {send "$preini_path\r"}
+ "Successfully executed core" {break}
+ timeout        {exit 1}
+ }
+}
+exec sleep 600  
+

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TEST SUITE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Tuesday 21st of October 2014 9:18:51
+#
+SPEC_TS_NAME=X86_POSTINSTALL
+SPEC_TS_ID=169
+SPEC_TS_SLOGAN="Perform post-install steps on X86 cluster"
+SPEC_TS_TIMEOUT=4500
+SPEC_TS_AUTHOR="eolikil"
+SPEC_TS_INDEPENDENT=1
+SPEC_TS_TC_IDS=(1459 641 642 689 637 643 690 672 686 674 687 688)

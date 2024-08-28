@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+if [ $# -ne 2 ]; then
+    echo "Usage: setup_test_cases [START VALUE] [END VALUE]"
+    exit 1
+fi
+
+START=$1
+END=$2
+
+if [ ${END} -lt ${START} ]; then
+    echo "End value (${END}) must be greater than start value (${START})."
+    exit 2
+fi
+
+# get the functional area name
+CURDIR=$(pwd)
+cd ../../../useful
+USEDIR=$(pwd)
+cd ${CURDIR}
+SPECTEMP="${USEDIR}/spec.bsh.temp"
+cd ../
+NEWDIR=$(pwd)
+FA_NAME=$(basename ${NEWDIR})
+cd ${CURDIR}
+UC_NAME=$(basename ${CURDIR})
+
+CURRENT=${START}
+while [ ${CURRENT} -le ${END} ]; do
+    mkdir ${CURRENT} || {
+        echo "Error while performing \'mkdir ${CURRENT}\'"
+        exit 3
+    }
+    #touch ${CURRENT}/${CURRENT}_spec.bsh
+    cat ${SPECTEMP} | sed -e "/^\;/!s/##FA_NAME##/${FA_NAME}/g" \
+                    -e "s/##UC_NAME##/${UC_NAME}/g" \
+                    -e "s/##SPEC_ID##/${CURRENT}/g" > ${CURRENT}/${CURRENT}_spec.bsh
+    touch ${CURRENT}/${CURRENT}_callbacks.lib
+    git add ${CURRENT} || {
+        echo "Error while performing \'git add ${CURRENT}\'"
+        exit 4
+    }
+    ((CURRENT++))
+done
+
+git commit -am "Added TC's ${START} to ${END}" || {
+    echo "Error while performing \'git commit -am\'"
+    exit 5
+}
+
+git pull || {
+    echo "Error while performing \'git pull\'"
+    exit 6
+}
+
+git push || {
+    echo "Error while performing \'git push\'"
+    exit 7
+}

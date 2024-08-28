@@ -1,0 +1,340 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 09/10/2013    edavmax         First version
+
+usage() {
+cat << EOF
+
+Usage:  ${SCRIPTNAME} [-h]
+	${SCRIPTNAME} -m <om|ossrc> [ -d <om media directory> [ -a <i386|sparc|common> ] [ -b ] [ -l <location> ] -p <pkg file> -v <pkg version> -c <clearcase config spec file> -t <ci team> -s <ci shipment> [ -z ]
+
+Logs into clearcase server as user ossrcci using view ossrcci_view and copies specified package to MWS in the specified shipment directory. The new package will then be included in when that shipment is next cached. The config spec to apply to the view ossrcci_view is stored in a file which is given to the script on the command line.
+
+This script should be called on the MWS.
+
+The -b and -l option are mutually exclusive.
+
+Usecase #1: Build package in clearcase view and copy it to shipment test package upload area for required media.
+
+Example #1: Build ERICblade package and copy to 14.1.5.daily OM media
+
+$SCRIPTNAME -m om -d Blade -b -p ERICblade.pkg -v R1A01 -c /var/tmp/ericblade.cs  -t infra -s O14_1/14.1.5.daily
+
+Example #2: Build ERICsck package and copy to 14.1.5 daily OSSRC media
+
+$SCRIPTNAME -m ossrc -a common -b -p ERICsck.pkg -v R1A01 -c /var/tmp/ericsck.cs  -t infra -s O14_1/14.1.5.daily
+
+Usecase #2: Copying existing package from clearcase view to shipment test package upload area on MWS for required media. 
+
+-l : remote location of package in clearcase vob
+
+Example #3: Copy existing patch tarball from clearcase view to 14.1.5.daily media on MWS
+
+$SCRIPTNAME -m om -d Patches -l /vobs/oss_sck/build/Patches_R1A01.tar.gz -v R1A01 -c /var/tmp/patches.cs  -t infra -s O14_1/14.1.5.daily
+
+If the -z option is given the package will be compressed using 7z.
+
+This script should be run on the MWS.
+
+Assumes passwordless SSH login setup for ossrcci user between MWS and clearcase server.
+
+EOF
+
+return 0
+
+}
+
+#
+# Function to check command line arguments
+#
+check_args() {
+	if [[ "$BUILD_PACKAGE" = TRUE && -n "$PACKAGE_LOCATION" ]]; then
+		echo "Error -b and -l options are mutually exclusive"
+		return 1
+	fi
+	if [[ -n "$PACKAGE_FILE" && -n "$PACKAGE_LOCATION" ]]; then
+		echo "Error -p and -l options are mutually exclusive"
+		return 1
+	fi
+	if [ -n "$PACKAGE_LOCATION" ]; then
+		PACKAGE_FILE=$( basename $PACKAGE_LOCATION )
+	fi
+	if [[ "$BUILD_PACKAGE" = FALSE && -z "$PACKAGE_LOCATION" ]]; then
+		echo "Error - package location must be specified if package is not being built"
+		return 1
+	fi
+	if [[ "$MEDIA" != ossrc && "$MEDIA" != om ]]; then
+		echo "Error - no media specified or media invalid"
+		return 1
+	fi
+	if [ "$MEDIA" = ossrc ]; then
+		if [[ "$ARCH" != i386 && "$ARCH" != sparc && "$ARCH" != common ]]; then
+			echo "Architecture not specified or invalid architecture"
+			return 1
+		fi
+	fi
+	if [[ "$MEDIA" = om && -z "$OM_MEDIA_DIRECTORY" ]]; then
+		echo "Error  - OM media directory not specified."
+		return 1
+	fi
+	if [[ "$MEDIA" = om && "$COMPRESS_PACKAGE" = TRUE ]]; then
+		echo "Error  - cannot compress packages on OM media"
+		return 1
+	fi
+	if [ -z "$PACKAGE_FILE" ] ; then
+		echo "Error - package name not specified"
+		return 1
+	fi
+	if [ -z "$PACKAGE_VERSION" ] ; then
+		echo "Error - package version not specified"
+		return 1
+	fi
+	if [[ "$BUILD_PACKAGE" = TRUE && ! -s "$CLEARCASE_CSFILE" ]]; then
+		echo "Error - clearcase config spec file does not exist or is empty"
+		return 1
+	fi
+	if [[ -z "$CI_TEAM" || -z "$CI_SHIPMENT" ]] ; then
+		echo "Error - unable to determine shipment - check team and shipment args"
+		return 1
+	fi
+	if [ "$MEDIA" = ossrc ]; then
+		dir=ossrc_base_sw
+		PKG_DROP_AREA=/export/jumpstart/teams/$CI_TEAM/OSSRC_${CI_SHIPMENT}/test_packages/$dir/$ARCH
+	else
+		dir=$MEDIA
+		PKG_DROP_AREA=/export/jumpstart/teams/$CI_TEAM/OSSRC_${CI_SHIPMENT}/test_packages/$dir
+	fi
+   
+	if [ ! -d "$PKG_DROP_AREA" ]; then
+		echo "Error - unable to locate shipment test package drop dir - check team and shipment args"
+		return 1
+	fi
+
+	[ -z "$CLEARCASE_VIEW" ] && {
+		echo "No clearcase view specified - setting to ossrcci_view"
+		CLEARCASE_VIEW=ossrcci_view
+	}
+	return 0
+
+
+}
+
+#
+# Function to create Makefile for building package on clearcase server
+#
+create_makefiles() {
+	pkgname=${PACKAGE_FILE%.pkg}
+	cat << EOF > /var/tmp/Makefile.$pkgname
+PKG=$pkgname
+PKGFILE=\$(PKG).pkg
+PKGSOURCES:=\$(shell find /vobs/oss_sck/build/\$(PKG))
+PKGVERSION:=\$(shell /var/tmp/Makefile.$pkgname.bsh $pkgname)
+/vobs/oss_sck/build/$PACKAGE_FILE: \$(PKGSOURCES)
+	cd /vobs/oss_sck/build && \
+	yes | /vobs/oss_sck/build/pkgit -f -r \$(PKGVERSION) \$(PKG)
+EOF
+
+	cat << EOF > /var/tmp/Makefile.$pkgname.bsh
+#!/bin/bash
+pkg=\$1
+init_version=$PACKAGE_VERSION
+init_version_base=\$( echo \$init_version |  sed 's/[0-9]*$//' )
+new_version=\$( perl -ne 'if(/^(VERSION=.*)(\d{2})\$/){\$a=\$2;\$_=printf("\${1}%02d\n",++\$a);}' /vobs/oss_sck/build/\$pkg/install/pkginfo | awk -F= '{print \$2}' )
+new_version_base=\$( echo \$new_version |  sed 's/[0-9]*$//' )
+if [ "\$init_version_base" != "\$new_version_base" ]; then
+        echo \$init_version
+else
+        echo \$new_version
+fi
+
+EOF
+	chmod +x /var/tmp/Makefile.$pkgname.bsh
+
+
+
+}
+
+
+#
+# Function to build package in clearcase vob
+# and copy to MWS
+#
+build_package() {
+	pkgname=${PACKAGE_FILE%.pkg}
+	# remove existing package if it exists
+	if [ -f $PKG_DROP_AREA/$PACKAGE_FILE ]; then
+		/bin/rm -f $PKG_DROP_AREA/$PACKAGE_FILE || {
+			echo "Error - failed to remove existing test package"
+			exit 1
+		}
+	fi
+	if [ -f $PKG_DROP_AREA/${PACKAGE_FILE}.7z ]; then
+		/bin/rm -f $PKG_DROP_AREA/${PACKAGE_FILE}.7z || {
+			echo "Error - failed to remove existing test package"
+			exit 1
+		}
+	fi
+	if [ -f $PKG_DROP_AREA/${OM_MEDIA_DIRECTORY}_${PACKAGE_VERSION}.tar.gz ]; then
+		/bin/rm -f $PKG_DROP_AREA/${OM_MEDIA_DIRECTORY}_${PACKAGE_VERSION}.tar.gz || {
+			echo "Error - failed to remove existing test package"
+			exit 1
+		}
+	fi
+	if [ "$BUILD_PACKAGE" = TRUE ]; then
+		pkg=$PACKAGE_FILE
+		create_makefiles || {
+			echo "Error - failed to created makefile"
+			return 1
+		}
+		# copy the script and clearcase file to clearcase server
+		$EXPECT /var/tmp/ssh_setup2.sh scp "${SCRIPTDIR}/${REMOTE_SCRIPT} ${CLEARCASE_CSFILE} /var/tmp/Makefile.$pkgname /var/tmp/Makefile.$pkgname.bsh ${CLEARCASE_USER}@${CLEARCASE_HOST}:/var/tmp" $CLEARCASE_PASSWD > /dev/null || {
+			echo "Error -failed to copy required files to clearcase server"
+			return 1
+		} 
+		# call script on clearcase server
+		$EXPECT /var/tmp/ssh_setup2.sh ssh "${CLEARCASE_USER}@${CLEARCASE_HOST} /var/tmp/${REMOTE_SCRIPT} $BUILD_PACKAGE $CLEARCASE_VIEW $CLEARCASE_CSFILE $CLEARCASE_VOB_LOC $pkg $PACKAGE_VERSION" $CLEARCASE_PASSWD || {
+			echo "Error - error occured running ${REMOTE_SCRIPT} on ${CLEARCASE_HOST}"
+			return 1
+		}
+		dest_path=/var/tmp/$( basename $pkg )
+	else
+		pkg=$PACKAGE_LOCATION
+		dest_path=$PACKAGE_LOCATION
+	fi
+
+	# copy package from clearcase server
+	echo "Copying $dest_path from clearcase view to media location $PKG_DROP_AREA"
+	$EXPECT /var/tmp/ssh_setup2.sh scp "${CLEARCASE_USER}@${CLEARCASE_HOST}:$dest_path $PKG_DROP_AREA" $CLEARCASE_PASSWD > /dev/null || {
+       		echo "Error failed to copy new package $dest_path from clearcase server to MWS"
+       		exit 1
+	}
+	cd $PKG_DROP_AREA
+	if [ "$BUILD_PACKAGE" = TRUE ]; then
+		current_pkg_version=$( pkgparam -d ./${PACKAGE_FILE} $pkgname VERSION )
+		echo "Version of $pkgname is now:"
+		banner $current_pkg_version
+	fi
+	
+	if [ "$COMPRESS_PACKAGE" = TRUE ]; then
+		$P7ZIP ${PACKAGE_FILE} || {
+			echo "Error failed to compress package ${PACKAGE_FILE}"
+			return 1
+		}
+	fi
+	#if [ "$MEDIA" = om ]; then
+		#existing_cxp_file=/export/jumpstart/teams/$CI_TEAM/OSSRC_${CI_SHIPMENT}/om/$OM_MEDIA_DIRECTORY/cxp_info
+		#if [ ! -s $existing_cxp_file ]; then
+			#echo "Error - unable to find existing cxp file in /export/jumpstart/teams/$CI_TEAM/OSSRC_${CI_SHIPMENT}/om/$OM_MEDIA_DIRECTORY"
+			#return 1
+		#fi
+		#sed "s/VERSION=.*$/VERSION=$PACKAGE_VERSION/" $existing_cxp_file > cxp_info
+		#tar cvf ${OM_MEDIA_DIRECTORY}_${PACKAGE_VERSION}.tar $PACKAGE_FILE cxp_info > /dev/null &&
+		#gzip ${OM_MEDIA_DIRECTORY}_${PACKAGE_VERSION}.tar || {
+			#echo "Error - failed to create package tar file"
+			#return 1
+		#}
+		#echo "Created file $PKG_DROP_AREA/${OM_MEDIA_DIRECTORY}_${PACKAGE_VERSION}.tar.gz"
+		#/bin/rm -f $PACKAGE_FILE cxp_info
+	#fi
+
+
+}
+
+
+
+#MAIN
+DATE=$( date "+%d%m%Y%H%I%S" )
+SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+SCRIPTNAME=$(/bin/basename $0)
+REMOTE_SCRIPT=build_package_remote.bsh
+CLEARCASE_HOST=selid1t010.lmera.ericsson.se
+CLEARCASE_USER=ossrcci
+CLEARCASE_PASSWD=Ericsson1
+CLEARCASE_VOB_LOC=/vobs/oss_sck/build
+BUILD_PACKAGE=FALSE
+COMPRESS_PACKAGE=FALSE
+PACKAGE_LOCATION=
+P7ZIP=/usr/bin/p7zip
+
+#commands
+if [ -x /usr/local/bin/expect ]; then
+        EXPECT=/usr/local/bin/expect
+elif [ -x /app/expect/5.40.1/bin/expect  ]; then
+        EXPECT=/app/expect/5.40.1/bin/expect
+fi
+
+
+#commands
+
+while getopts ":a:bl::m:o:d:p:v:c:u:t:s:zh" opt
+	do
+	case ${opt} in
+		a)
+			ARCH=$OPTARG
+			;;
+		b)
+			BUILD_PACKAGE=TRUE
+			;;
+		l)
+			PACKAGE_LOCATION=$OPTARG
+			;;
+		m)
+			MEDIA=$OPTARG
+			;;
+		o)
+			CLEARCASE_VIEW=$OPTARG
+			;;
+		d)
+			OM_MEDIA_DIRECTORY=$OPTARG
+			;;
+		p)
+			PACKAGE_FILE=$OPTARG
+			;;
+		v)
+			PACKAGE_VERSION=$OPTARG
+			;;
+		c)
+			CLEARCASE_CSFILE=$OPTARG
+			;;
+		t)
+			CI_TEAM=$OPTARG
+			;;
+		s)
+			CI_SHIPMENT=$OPTARG
+			;;
+		z)
+			COMPRESS_PACKAGE=TRUE
+			;;
+		h)      # Print help and exit OK
+			usage
+			exit 0
+		;;
+		*)      # Print usage and exit error
+			usage
+			exit 1
+		;;
+	esac
+done
+
+
+check_args || {
+	usage
+	exit 1
+}
+
+build_package || exit 1
+exit 0

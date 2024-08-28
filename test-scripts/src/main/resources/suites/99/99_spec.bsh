@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TEST SUITE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Thursday 26th of September 2013 13:48:33
+#
+SPEC_TS_NAME=3PP_JDK16_POSTINSTALL_x86
+SPEC_TS_ID=99
+SPEC_TS_SLOGAN="JDK 1.6 post-install check"
+SPEC_TS_TIMEOUT=300
+SPEC_TS_AUTHOR="edavioc"
+SPEC_TS_INDEPENDENT=0
+SPEC_TS_TC_IDS=(1053 1054 1058 1061 1068)

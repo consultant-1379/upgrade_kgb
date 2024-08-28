@@ -1,0 +1,37 @@
+#!./expect -- 
+
+
+set timeout 300 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+send "/opt/ericsson/sck/bin/remove_sparc_volume.bsh\r"
+expect "Removing polled"
+sleep 120

@@ -1,0 +1,169 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/04/2012    edavmax         First version
+
+
+usage() {
+cat << EOF
+
+Usage:  ${G_SCRIPTNAME} [-h] [-t]
+
+- builds cominf rpms 
+- creates tarball of Cominf software
+- creates iso file of Cominf software
+
+-t	include test harness rpm in tarball
+
+It assumes that GIT setup has already been done on the host running the script. 
+
+EOF
+
+return 0
+
+}
+
+#
+# Function to create a tar ball from supplied rpm
+# $1 test_rpm
+create_test_harness_tarball() {
+	echo "${G_SCRIPTNAME}: Creating cominf test harness tarball $1"
+	local tarfilename=$(basename $1)
+	#tarfilename=${tarfilename%.*}.tar.gz
+        echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}: tarfilename=$tarfilename"
+	#cd ${G_WORKSPACEDIR}/cominf_test/SOURCES || {
+	cd ${G_WORKSPACEDIR}/ || {
+		echo " cd ${G_WORKSPACEDIR}/cominf_test/SOURCES failed"
+		return 1
+	}
+	/proj/jkadm100/bin/lxb tar -zcvf $tarfilename  FA/DDC/ FA/SCK/ FA/TEMP FA/USCK harness/ suites/ > /dev/null || return 1
+	mv $tarfilename ${G_WORKSPACEDIR} || {
+		echo "${G_SCRIPTNAME}: Error - move of test harness tarball to tmp build area failed"
+		echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}:mv $tarfilename ${G_WORKSPACEDIR}"
+		return 1
+	}
+        if [ -f ${G_WORKSPACEDIR}/$tarfilename ]; then
+
+		echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}: ${G_WORKSPACEDIR}/$tarfilename exists "
+	else
+               echo "${G_SCRIPTNAME}${FUNCNAME} ${LINENO}: Error - ${G_WORKSPACEDIR}/$tarfilename does not exist "
+        fi
+
+}
+#
+# Function to cache media on MWS
+#
+cache_media_mws() {
+	printf "\n${G_SCRIPTNAME}: ** caching media on MWS **\n"
+	for file in $G_SCRIPTDIR/cache_new_media.bsh $G_SCRIPTDIR/get_ci_media_exp.bsh $G_SCRIPTDIR/remove_existing_media_exp.bsh $G_SCRIPTDIR/cache_new_media_exp.bsh; do
+		scp $file root@$G_MWS_IP:/var/tmp || return 1
+	done
+	ssh root@$G_MWS_IP /var/tmp/cache_new_media.bsh || return 1
+
+}
+
+setup_environment_Variables() {
+G_DEST_PACKAGEDIRNAME=packages
+G_DEST_PACKAGEDIR=$G_STAGINGDIR/$G_DEST_PACKAGEDIRNAME
+G_GIT_SERVER=eselivm2v238l.lmera.ericsson.se
+G_GIT_PORT=29418
+G_USER=edavmax
+}
+sourcevariables () {
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_SCRIPTNAME=$(/bin/basename $0)
+G_BUILD_ROOTDIR=$( /usr/bin/dirname $G_SCRIPTDIR )
+#G_BUILD_ROOTDIR=$( /usr/bin/dirname $( /usr/bin/dirname $G_SCRIPTDIR ))
+G_WORKSPACEDIR=$G_BUILD_ROOTDIR
+G_INST_TYPE=infrastructure_stageing
+G_STAGINGDIR=$G_WORKSPACEDIR/$G_INST_TYPE
+G_PACKAGE_TGZFILENAME=platform_test_harness.tar.gz
+G_PACKAGE_TGZFILE=$G_WORKSPACEDIR/$G_PACKAGE_TGZFILENAME
+G_PACKAGEBUILDSCRIPT=$G_SCRIPTDIR/hub_build_taf_tarball.bsh
+G_TEST_HARNESS_RESULTS_TARBALL=${G_BUILD_NUMBER}_report.tar.gz
+G_REMOTE_TEST_HARNESS_DIR="/var/tmp/platform_taf"
+G_REMOTE_TEST_RESULTS_DIR="/var/tmp/reports/ci"
+G_REMOTE_TEST_HARNESS_RESULTS_TGZ="$G_REMOTE_TEST_RESULTS_DIR/$G_TEST_HARNESS_RESULTS_TARBALL"
+G_LOCAL_TEST_HARNESS_RESULTS_DIR=$G_WORKSPACEDIR/results
+#G_LOCAL_TEST_HARNESS_RESULTS_DIR=/var/lib/jenkins/cominf_build/infrastructure_results/$BUILD_ID/results
+G_REMOTEINSTALLSCRIPTNAME=remote_install.bsh
+G_REMOTEINSTALLSCRIPT=$G_SCRIPTDIR/$G_REMOTEINSTALLSCRIPTNAME
+G_SSH_SETUPSCRIPT=$G_SCRIPTDIR/ssh_setup.sh
+G_TEST_HARNESS_SCRIPT="atcominf.bsh"
+G_TMP_DIR=/var/tmp
+G_HARNESS_RETCODE=0
+G_MWS_IP=159.107.220.55
+G_GIT_SERVER=eselivm2v238l.lmera.ericsson.se
+G_GIT_PORT=29418
+G_USER=edavmax
+G_TEST_HARNESS="cominf_test"
+G_REMOTE_TAF_LOCATION=$G_TMP_DIR/platform_taf
+G_RPACKAGE_TGZFILE=$G_REMOTE_TAF_LOCATION/$G_PACKAGE_TGZFILENAME
+G_JENKINS_REPOFILE=$G_REMOTE_TAF_LOCATION/cominf_apps_ci.repo
+#G_COMINF_TEST_HARNESS_TGZ=${G_COMINF_TEST_HARNESS_PREFIX}.tar.gz
+G_PLATFORM=$( uname -a )
+IST_RUN=/opt/ericsson/sck/bin/ist_run
+}
+
+
+#MAIN
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+#. ${G_SCRIPTDIR}/etc/script.env
+sourcevariables
+#commands
+
+while getopts ":h" opt
+	do
+	case ${opt} in
+		h)      # Print help and exit OK
+			usage
+			exit 0
+		;;
+		*)      # Print usage and exit error
+			usage
+			exit 1
+		;;
+	esac
+done
+
+
+# blow away staging dir
+if [ -d $G_STAGINGDIR ]; then
+	echo "${G_SCRIPTNAME}: Deleting staging dir $G_STAGINGDIR"
+	/bin/rm -rf $G_STAGINGDIR || {
+		echo "${G_SCRIPTNAME}: Unable to delete staging dir $G_STAGINGDIR"
+		exit 1
+	}
+fi
+
+pwd
+echo "G_WORKSPACEDIR = $G_WORKSPACEDIR pwd=$(pwd)"
+#create_test_harness_tarball  $G_WORKSPACEDIR/$repo_name/RPMS/noarch/$G_TEST_HARNESS_RPM || {
+create_test_harness_tarball  ${G_PACKAGE_TGZFILENAME} || {
+	echo "${G_SCRIPTNAME} ${LINENO}: Failed to create ${G_PACKAGE_TGZFILENAME}"
+	exit 1
+}
+exit 0
+cd $G_WORKSPACEDIR
+if tar -zcvf $G_PACKAGE_TGZFILE  $G_INST_TYPE > /dev/null 2>&1; then
+	echo "${G_SCRIPTNAME} ${LINENO}: COMInf software tarball $G_PACKAGE_TGZFILE created successfully"
+else
+	echo "${G_SCRIPTNAME} ${LINENO}: Error - failed to create $G_PACKAGE_TGZFILE"
+	exit 1
+fi
+
+exit 0
+

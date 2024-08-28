@@ -1,0 +1,76 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 600
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+send "ssh ${ADMIN2}-priv\r"
+expect "${ADMIN2}\{root\}"
+sleep 5
+
+        set timeout 1800
+        send "/opt/ericsson/nms_cif_sm/bin/smtool -progress\r"
+        while 1 {
+                expect {
+                        "root is not authorized to run this application" { sleep 20
+                                                  send "/opt/ericsson/nms_cif_sm/bin/smtool -progress\r"}
+                        "masterservice  done"   { puts "\nINFO: MC restart completed"
+                                                break }
+			"${ADMIN2}\{root\}"     { break }
+                        }
+                }
+
+        send "date\r"; expect "201"
+
+        set timeout 600
+
+
+send "/opt/ericsson/sck/bin/system_checks.bsh -a post_sys_upgrade\r"
+
+while 1 {
+        expect {
+                "Post Upgrade Checks Passed" {
+                        sleep 10
+                        break}
+                "One or more Post Upgrade Checks Failed" {
+                        sleep 10
+                        exit 0}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+send "exit\r"; expect "logout"
+send "exit\r"; expect "logout"
+

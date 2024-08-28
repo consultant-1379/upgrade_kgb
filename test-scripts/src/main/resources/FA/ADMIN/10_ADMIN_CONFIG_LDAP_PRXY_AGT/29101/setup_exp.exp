@@ -1,0 +1,50 @@
+#!/usr/local/bin/expect
+
+set O_SERVER [lindex $argv 0]
+set LDAP_PWD [lindex $argv 1]
+set timeout 30 
+send_user "Server is $O_SERVER and password is $LDAP_PWD\n"
+
+spawn su - orcha -c "/ericsson/orchestrator/bin/admin_prepare_for_ldap_client_update.bsh $O_SERVER"
+
+# Send an empty password - will be rejected
+expect {
+    "Password for LDAP proxy agent:" { send_user "sending empty password\n"; send "\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Send a too short password - will be rejected
+expect {
+    "Password for LDAP proxy agent:" { send_user "sending short password\n"; send "ab\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# Send mismatched passwords - will be rejected
+expect {
+    "Password for LDAP proxy agent:" { send_user "sending password $LDAP_PWD\n"; send "$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+expect {
+    "Confirm password for LDAP proxy agent:" { send_user "resending modified password Bad$LDAP_PWD\n"; send "Bad$LDAP_PWD\r" }
+    eof { send_user "Error: process ended early\n"; exit 98 }
+    timeout { send_user "Error: timed out waiting for prompt\n"; exit 99}
+}
+
+# no more attempts
+
+
+expect {
+    eof {}
+    timeout { send_user "Error: timed out waiting for process to finish\n"; exit 99}
+}
+
+# Got EOF, so return exit code of script
+catch wait result
+set value [lindex $result 3]
+
+send_user "Script exited with value $value\n"
+exit $value
+

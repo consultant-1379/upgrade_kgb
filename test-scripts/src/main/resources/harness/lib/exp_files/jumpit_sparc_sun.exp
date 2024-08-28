@@ -1,0 +1,104 @@
+set force_conservative 1
+set timeout -1
+set core [lindex $argv 4]
+set gran [lindex $argv 5]
+set wran [lindex $argv 6]
+set option [lindex $argv 7]
+set cifip [lindex $argv 8]
+set timeout 5400
+spawn /net/attembak3.athtem.eei.ericsson.se/adisk/sfw/scripts/console/conn.sh -s [lindex $argv 0] -i [lindex $argv 3]
+expect "Connected to" 
+send "\r\r"
+expect -timeout 10 "login" {send "root\r"; exp_continue}
+expect -timeout 10 "Password" {send "shroot\r"; exp_continue}
+expect -timeout 10 "#" {send "sync;sync;halt\r"; exp_continue}
+expect_after timeout exit
+expect "ok"
+exec sleep 5
+if { $option == "YES" } { 
+	send "boot net:dhcp - install inst_type=ossrc config=system ossrc_sw_locate=[lindex $argv 1] om_sw_locate=[lindex $argv 1] rmirr label_disks\r"
+} else {
+	send "boot net:dhcp - install inst_type=ossrc config=system ossrc_sw_locate=[lindex $argv 1] om_sw_locate=[lindex $argv 1] label_disks\r"
+}
+set timeout 25600
+while 1 {
+expect {
+ "Do you want to use Host-Based Mirroring"  {send "\r"}
+ "Please Specify the exact location of preinirate file"  {send "\r"}
+ "Enter disks for first Plex of ossdg"  {send "\r"}
+ "Enter disks for second Plex of ossdg"  {send "\r"}
+ "Total number of GSM Cells"  {send "100\r"}
+ "Total number of UTRAN Cells"  {send "100\r"}
+ "Total number of RNCs" {send "2\r"} 
+ "Total number of LTE Cells"  {send "100\r"}
+ "Total number of Core Nodes" {send "6\r"}
+ "Total number of  TDRAN Cells" {send "0\r"}
+ "How many AXD based nodes are to be supported (0-75)" {send "0\r"}
+ "How many AXD based nodes are to be supported" {send "0\r"}
+ "Will the TGR application be used" {send "YES\r"}
+ "How many TeS nodes" {send "0\r"}
+ "Will the one minute GPEH application be used" {send "YES\r"} 
+ "Will the cell trace application be used" {send "YES\r"} 
+ "Allocate space for SGW" {send "YES\r"}
+ "Allocate space for PMS" {send "YES\r"}
+ "Allocate space for EBSW" {send "YES\r"}
+ "Allocate space for RPMO"  {send "YES\r"}
+ "Allocate space for EBS-G"  {send "YES\r"}
+ "Allocate space for RTT"  {send "YES\r"}
+ "Setup RNO Database Export Interface"  {send "YES\r"}
+ "Allocate space for EBS-S" {send "YES\r"}
+ "Is 5 minute ROP collection Supported" {send "YES\r"}
+ "Please enter the number of sites that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the combined number of cells on all OSS-RC servers that will be audited by IRATHOM application" {send "0\r"}
+ "Please enter the number of STN nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of MGW nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of EPGSSR nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of SGSN nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of SGSN MME nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of GGSN nodes per OSS-RC" {send "0\r"}
+ "Please enter the number of 2G/3G SAUs per OSS-RC" {send "0\r"}
+ "Please enter the number of 4G SAUs per OSS-RC" {send "0\r"}
+ "Please enter the number of APG43 nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of windows based APG43 nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of Redback SmartEdge nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of SASN based nodes with SARA functionality that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of Redback Nodes which are EdgeRouter that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of IPROUTER nodes that the OSS-RC installation will support" {send "0\r"}
+ "Please enter the number of H2S nodes that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the number of HSS nodes that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the number of PICO WCDMA cells that the OSS-RC installation will support:" {send
+"0\r"}
+ "Please enter the number of PICO LTE cells that the OSS-RC installation will support:" {send "0
+\r"}
+ "Please enter the number of MTAS nodes that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the number of CSCF nodes that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the number of RNC's on 1MIN that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the number of MP's on 15MIN that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the GPEH FILE SIZE on 1 MINUTE that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the number of MP's on 1MIN that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the number of DSC nodes that the OSS-RC installation will support:" {send "0\r"}
+ "Please enter the number of WIFI Nodes that the OSS-RC installation will support:" {send "0\r"} 
+ " \\\[ii]" {send "ii\r"}
+ "The hostname of the OSS server" {send "\r"}
+ "Enter the Netgroup name" {send "\r"}
+ "The default password for the OSS-RC sybase users" {send "sybase11\r"}
+ "The timezone for your geographical region" {send "GB-Eire\r"} "defaultrouter IP address" {send "\r"}
+ "DNS-server's ip-address" {send "159.107.173.3\r"}
+ "DNS-domain" {send "athtem.eei.ericsson.se\r"}
+ "LDAP-domain" {send "athtem.eei.ericsson.se\r"}
+ "SLS server name" {send "\r"}
+ "Sentinel license file path " {send "\r"}
+ "Type of xml file installation" {send "\r"}
+ "The Veritas VM license key" {send "[lindex $argv 2]\r"}
+ "This is either GSM1900 " {send "\r"}
+ "Name of the network root" {send "ONRM_ROOT_MO\r"}
+ "The X29 suffix to be used" {send "\r"}
+ "The IP address of the WEBI server" {send "\r"}
+ "The IP address of the first Windows Application Server" {send "\r"}
+ "Are these values ok" {send "y\r"}
+ "Successfully executed core" {break}
+ timeout        {exit 1}
+ }
+}
+exec sleep 600
+send "exit\r"

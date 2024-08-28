@@ -1,0 +1,297 @@
+#!/bin/bash
+#################################################################################
+#
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#################################################################################
+
+
+# ATCOMINF Test Callback Library
+
+# Revision History
+# <date>	<signum>	<details>
+
+# Complete the callbacks in this library to automate the test case.
+#
+# Callbacks are stateless, it is not possible to set a global variable in one callback 
+# and access it it in another.
+#
+# Callbacks are called by the test harness in the following order:
+#
+# tc_setup() 		# Called only for independent TC execution mode to setup TC
+# tc_precon()		# Conditions that should exist before TC can run
+# tc_test()		# Runs the test for this TC
+# tc_postcon()		# Conditions that should/should not exist after successful TC 
+# tc_cleanup()		# Called only for independent TC execution mode to cleanup after TC
+
+# All callbacks must PASS for a TC PASS result
+
+#################################################################################
+#
+# CALLBACK: TC_SETUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_setup() {
+
+	return 0
+
+}
+#################################################################################
+
+#################################################################################
+#
+# CALLBACK: TC_PRECON
+#
+# This callback function checks the correct conditions exist to run the TC.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+ 
+tc_precon() {
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_TEST
+#
+# This callback function runs the test.
+# The harness compares the return code to the SPEC_TC_TEST_PASSCODE value set in the test spec.
+#
+# Return or exit codes:
+#    SPEC_TC_TEST_PASSCODE 	success
+# != SPEC_TC_TEST_PASSCODE 	failure
+ 
+tc_test() {
+
+        ##Configuring SSH for LDAP User Administration##
+        echo "Configuring SSH for LDAP User Administration"
+        echo "--------------------------------------------"
+
+        # Sourcing common variables
+	get_preini_param $(hostname) LDAPSERVERIP LDAPSERVERIP
+	if [ -z "$LDAPSERVERIP" ]; then
+		echo "Error - could not find determine ldap server ip"
+		return 1
+	fi
+
+        # 13.1.1 Configuring SSH in Upgrade or Multiple OSS Domains
+
+cat > /tmp/tmp_ldap_ssh_config.sh << EOF
+#!/bin/bash
+
+if [[ ! -f /.ssh/id_dsa || ! -f /.ssh/id_dsa.pub ]] ; then
+
+        # 13.1.2 Configuring SSH in Single OSS Domain
+        mkdir /.ssh
+        chmod 0700 /.ssh
+        cd /.ssh
+
+/usr/local/bin/expect << EEOF
+        spawn ssh-keygen -t dsa
+        expect "Enter file in which to save the key"
+        send "/.ssh/id_dsa\n"
+
+        expect "Enter passphrase :"
+        send "letmein\n"
+
+        expect "Enter same passphrase again:"
+        send "letmein\n"
+EEOF
+        exit \$?
+fi
+
+EOF
+
+        chmod +x /tmp/tmp_ldap_ssh_config.sh
+
+/usr/local/bin/expect << EEOF
+
+        spawn scp /tmp/tmp_ldap_ssh_config.sh ${LDAPSERVERIP}:/tmp/tmp_ldap_ssh_config.sh
+
+        expect "Are you sure you want to continue connecting" { send "yes\n" ; exp_continue } \
+        "Password:" { send "shroot\n" }
+
+EEOF
+
+
+/usr/local/bin/expect << EEOF
+        spawn ssh ${LDAPSERVERIP} /tmp/tmp_ldap_ssh_config.sh
+
+        expect "Are you sure you want to continue connecting " { send "yes\n" ; exp_continue } \
+               "Password: " { send "shroot\n" }
+EEOF
+
+        if [[ $? -ne 0 ]] ; then
+                echo "Failed to generate ssh keys on ${LDAPSERVERIP}"
+                return 1
+        fi
+
+        rm /tmp/tmp_ldap_ssh_config.sh
+
+        # 13.1.3 Configuring SSH for User comnfadm
+
+        # If the keys do not exist, they must be created on the OSS Admin Server
+
+        if [[ ! -f /home/comnfadm/.ssh/authorized_keys2 ]] ; then
+                [[ ! -d /home/comnfadm/.ssh ]] && su - comnfadm "mkdir -p /home/comnfadm/.ssh"
+
+
+                ADMIN_HOSTNAME=$(hostname)
+
+cat > /tmp/tmp_ldap_scp_config.sh << EOF
+#!/bin/bash
+
+/usr/local/bin/expect << EEOF
+
+        spawn scp /.ssh/id_dsa.pub ${ADMIN_HOSTNAME}:/home/comnfadm/.ssh/OMINFServer.pub
+
+        expect "Are you sure you want to continue connecting" { send "yes\n" ; exp_continue } \
+        "Password:" { send "shroot\n" }
+
+EEOF
+        retVal=\$?
+        chmod 0600 /.ssh
+
+        exit \${retVal}
+
+EOF
+                chmod +x /tmp/tmp_ldap_scp_config.sh
+
+/usr/local/bin/expect << EEOF
+
+        spawn scp /tmp/tmp_ldap_scp_config.sh ${LDAPSERVERIP}:/tmp/tmp_ldap_scp_config.sh
+
+        expect "Are you sure you want to continue connecting" { send "yes\n" ; exp_continue } \
+        "Password:" { send "shroot\n" }
+
+EEOF
+
+/usr/local/bin/expect << EEOF
+        spawn ssh ${LDAPSERVERIP} /tmp/tmp_ldap_scp_config.sh
+
+        expect "Are you sure you want to continue connecting " { send "yes\n" ; exp_continue } \
+               "Password: " { send "shroot\n" }
+EEOF
+                if [[ $? -ne 0 ]] ; then
+                        echo "ERROR: scp of id_dsa.pub from O&M Infra failed"
+                        return 1
+                fi
+
+                rm /tmp/tmp_ldap_scp_config.sh
+
+                cd /home/comnfadm/.ssh
+
+                cat OMINFServer.pub >> authorized_keys2
+
+                rm OMINFServer.pub
+
+                chown -R comnfadm:other /home/comnfadm/.ssh/
+
+                chmod -R 0700 /home/comnfadm/.ssh/
+        fi # End: If authorized_keys2 is not present
+
+cat > /tmp/tmp_ldap_ssh_test.sh << EOF
+#!/bin/bash
+
+/usr/local/bin/expect << EEOF
+
+        spawn ssh -l comnfadm ${ADMIN_HOSTNAME}
+
+        expect "Enter passphrase for key"
+        send "letmein\n"
+
+EEOF
+        retVal=\$?
+
+        exit \${retVal}
+
+EOF
+
+        chmod +x /tmp/tmp_ldap_ssh_test.sh
+
+/usr/local/bin/expect << EEOF
+
+        spawn scp /tmp/tmp_ldap_ssh_test.sh ${LDAPSERVERIP}:/tmp/tmp_ldap_ssh_test.sh
+
+        expect "Are you sure you want to continue connecting" { send "yes\n" ; exp_continue } \
+        "Password:" { send "shroot\n" }
+
+EEOF
+
+/usr/local/bin/expect << EEOF
+        spawn ssh ${LDAPSERVERIP} /tmp/tmp_ldap_ssh_test.sh
+
+        expect "Are you sure you want to continue connecting " { send "yes\n" ; exp_continue } \
+               "Password: " { send "shroot\n" }
+EEOF
+
+        if [[ $? -ne 0 ]] ; then
+                echo "ERROR: ssh configuration for comnfadm failed"
+                rm /tmp/tmp_ldap_ssh_test.sh
+                return 1
+        fi
+
+        rm /tmp/tmp_ldap_ssh_test.sh
+
+        return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_POSTCON
+#
+# This callback function checks expected results.
+#
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_postcon() {
+
+	return 0
+
+}
+#################################################################################
+
+
+#################################################################################
+#
+# CALLBACK: TC_CLEANUP
+#
+# This callback function is only called if the harness execution mode is 'AT_INDEPENDENT'
+# 
+# This callback restores the target system to the state it was in before the TC 
+# was run. It rolls back changes made by callbacks tc_setup() and tc_test()
+# 
+# Return or exit codes:
+#  0	success
+# >0 	failure
+
+tc_cleanup() {
+
+	return 0
+
+}

@@ -1,0 +1,79 @@
+#!./expect -- 
+
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+set timeout 600
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+send "ssh ${ADMIN2}-priv\r"
+expect "${ADMIN2}\{root\}"
+
+send "/opt/ericsson/sck/bin/system_upgrade_utils.bsh -v Set_default 1 1 1 1 1 0\r"
+expect "#"
+send "find /var/ericsson/ddc_data/ -name '*.gz' -exec rm {} \\; \r"
+expect "#"
+send "find /var/ericsson/ddc_data  -type d -mtime +0 -name '*2013' -exec rm -rf {} \\;  \r"
+expect "#"
+send "/opt/ericsson/nms_cif_sm/bin/smtool -offline fth_bootstrap -reason=upgrade -reasontext=upgrade\r"
+expect "#"
+sleep 20
+send "/opt/ericsson/nms_cif_sm/bin/smtool -offline fth_1 -reason=upgrade -reasontext=upgrade\r"
+expect "#"
+sleep 20
+send "/opt/ericsson/sck/bin/system_checks.bsh -d volume_checks\r"
+expect "Log File Location"
+sleep 5
+send "echo RES \$\?\r"
+expect {
+                "RES 0"     { puts "INFO: Volume checks OK" }
+                "RES 1"     { puts "ERROR: Problem with volume checks"
+                                exit 1}
+                timeout     { puts "ERROR: Unexpected timout"
+                                exit 1 }
+        }
+
+send "/opt/ericsson/sck/bin/system_checks.bsh -c pre_oss_upgrade\r"
+while 1 {
+        expect {
+                "No failed Pre Checks detected" {
+                        sleep 10
+                        break}
+                "One or more Pre Checks Failed" {
+                        sleep 10
+                        exit 1}
+                eof {
+                        puts "warning: timed out"
+                        exit 1}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+
+send "exit\r"; expect "logout"
+send "exit\r"; expect "logout"
+

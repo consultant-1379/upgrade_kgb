@@ -1,0 +1,317 @@
+info () {
+	local timestamp=`date +%d-%m-%Y_%H-%M-%S`
+	[ -z "$LOG" ] && {
+		echo "creating tmp log file /tmp/copy_jump.log.$$"
+		LOG=/tmp/copy_jump.log.$$
+	}
+	echo "Info: $*" | tee -a $LOG 1>&2
+	
+
+}
+
+error ()
+{
+	local timestamp=`date +%d-%m-%Y_%H-%M-%S`
+	[ -z "$LOG" ] && {
+		echo "creating tmp log file /tmp/copy_jump.log.$$"
+		LOG=/tmp/copy_jump.log.$$
+	}
+        echo "Error: $*" | tee -a $LOG 1>&2
+}
+
+warning ()
+{
+	local timestamp=`date +%d-%m-%Y_%H-%M-%S`
+	[ -z "$LOG" ] && {
+		echo "creating tmp log file /tmp/copy_jump.log.$$"
+		LOG=/tmp/copy_jump.log.$$
+	}
+        echo "Warning: $*" | tee -a $LOG 1>&2
+}
+
+#
+# Function to check that the DM server NFS mount is healthy
+#
+check_dm_server() {
+	local l_waittime=5
+	local l_maxtries=10
+	local l_count=0
+	local l_ls_pid
+
+	while [ $l_count -lt $l_maxtries ]; do
+		info "Checking DM NFS mount $DM_SHIPMENTLOCATION ($( expr $l_count + 1)/$l_maxtries)"
+		ls $DM_SHIPMENTLOCATION > /dev/null &
+		l_ls_pid=$!
+		sleep $l_waittime
+		while true; do
+			kill -0 $l_ls_pid 2>/dev/null
+			if [ $? -ne 0 ]; then
+				#process is dead
+				wait $l_ls_pid
+				if [ $? -eq 0 ]; then
+					info "DM NFS mount is OK"
+					return 0
+				else
+					error "DM NFS mount is not OK"
+				fi
+			else
+				# process still alive
+				kill -9 $l_ls_pid > /dev/null 2>&1
+				let l_count+=1
+				break
+			fi
+		done
+	done
+	# if we get here listing timed out
+	error "DM NFS mount is not OK"
+}
+
+#
+# function to check a shipment
+#
+check_shipment () {
+	local l_shipment=$1
+	local l_checkbuildok=$2
+	if [ -z "$l_shipment" ]; then
+		warning "No shipment arg to $FUNCNAME"
+		return 1
+	fi
+	if [ ! -d $DM_SHIPMENTLOCATION/$l_shipment ]; then
+		warning "Unable to find shipment \"$l_shipment\" on DM server"
+		return 1
+	fi
+	if [[ "$l_checkbuildok" = TRUE && "$l_shipment" =~ daily ]]; then
+		for flag in $II_BUILD_COMPLETEFLAGS; do
+			if [ ! -f $DM_SHIPMENTLOCATION/$l_shipment/$flag  ]; then
+				warning "Unable to build-ok flag $flag on DM server for shipment \"$l_shipment\""
+				return 1
+			fi
+		done
+	fi
+}
+
+#
+# read the media and package info file
+#
+AWK=/usr/bin/awk
+CAT=/bin/cat
+CHMOD=/bin/chmod
+CLEAR=/usr/bin/clear
+CP=/bin/cp
+CT=/usr/atria/bin/cleartool
+DATE=/bin/date
+DF=/bin/df
+DFSHARES=/usr/sbin/dfshares
+DOMAINNAME=/bin/domainname
+DTCONFIG=/usr/dt/bin/dtconfig
+ECHO=/bin/echo
+EGREP=/bin/egrep
+EJECT=/usr/bin/eject
+ENV=/usr/bin/env
+ERICBINDIR=/ericsson/smrs/bin
+ERICETCDIR=/ericsson/smrs/etc
+EXPR=/usr/bin/expr
+FIND=/usr/bin/find
+FUSER=/usr/sbin/fuser
+GETENT=/usr/bin/getent
+GETTEXT=/usr/bin/gettext
+GREP=/bin/grep
+GTAR=/usr/sfw/bin/gtar
+GZCAT=/usr/bin/gzcat
+HEAD=/usr/bin/head
+HOSTNAME=/bin/hostname
+ID=/usr/bin/id
+INIT=/usr/sbin/init
+KILL=/usr/bin/kill
+LS=/bin/ls
+LXB="/proj/jkadm100/bin/lxb sol10u10sparc"
+MD5SUM=/usr/bin/md5sum
+MKDIR=/bin/mkdir
+MKISOFS=/usr/bin/mkisofs
+MORE=/bin/more
+MOUNT=/usr/sbin/mount
+MV=/bin/mv
+MY_SLAVES=/ericsson/smrs/etc/my_slaves
+NAWK=/usr/bin/nawk
+PATCHRM=/usr/sbin/patchrm
+PERL=/usr/bin/perl
+PGREP=/usr/bin/pgrep
+PING=/usr/sbin/ping
+PKGADD=/usr/sbin/pkgadd
+PKGINFO=/usr/bin/pkginfo
+PKGMK=/bin/pkgmk
+PKGPARAM=/usr/bin/pkgparam
+PKGRM=/usr/sbin/pkgrm
+PKGTRANS=/bin/pkgtrans
+PRTCONF=/usr/sbin/prtconf
+PWD=/bin/pwd
+RM=/bin/rm
+SED=/usr/bin/sed
+SHOWREV=/usr/bin/showrev
+SLEEP=/usr/bin/sleep
+SORT=/usr/bin/sort
+SU=/bin/su
+SVCADM=/usr/sbin/svcadm
+SVCCFG=/usr/sbin/svccfg
+SVCS=usr/bin/svcs
+SYNC=/sbin/sync
+TAIL=/usr/bin/tail
+TEE=/usr/bin/tee
+TOUCH=/usr/bin/touch
+TPUT=/usr/bin/tput
+TR=/usr/bin/tr
+TTY=/usr/bin/tty
+UADMIN=/usr/sbin/uadmin
+UMOUNT=/usr/sbin/umount
+UNAME=/bin/uname
+VOLCHECK=/usr/bin/volcheck
+VOLD=/usr/sbin/vold
+WC=/usr/bin/wc
+XPGAWK=/usr/xpg4/bin/awk
+XPGGREP=/usr/xpg4/bin/egrep
+XPGSED=/usr/xpg4/bin/sed
+XPGTR=/usr/xpg4/bin/tr
+ZIP=/usr/bin/zip
+
+read_pkg_info() {
+	unset PKGINFO_NAME
+	unset PKGINFO_ARCH
+	unset PKGINFO_FILENAME
+	unset PKGINFO_RSTATE
+	unset PKGINFO_CXC
+	unset PKGINFO_PROTO_DIR
+	unset PKGINFO_BUILD_SCRIPT
+	unset PKGINFO_PACKAGE_DEST_DIR
+	unset PKGINFO_CONFIG_SPEC
+	unset PKGINFO_CLEARCASEVIEW
+        unset PKGINFO_PACKAGE_SOURCE
+        unset PKGINFO_BUILD
+
+	local l_pkg_info_file=$1
+
+
+	info "Reading $l_pkg_info_file"
+	local stdout=$( $GREP -v "^#" $l_pkg_info_file )
+	local l_pkgrec=FALSE
+	local l_mediarec=FALSE
+	while read line; do
+		if $ECHO $line | egrep '^[:space:]*\[[:space:]*package[:space:]*\][:space:]*$' > /dev/null; then	
+			#start of package record
+			l_pkgrec=TRUE
+			if [ -z "$l_count" ]; then
+				# first package in file
+				l_count=0
+			else
+				let l_count+=1
+			fi
+		fi
+		if [ "$l_pkgrec" = TRUE ]; then
+			if [[ "$line" =~ ^[:space:]*NAME= ]]; then
+				PKGINFO_NAME[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*ARCH= ]]; then
+				PKGINFO_ARCH[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*PROTO_DIR= ]]; then
+				PKGINFO_PROTO_DIR[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*CXC= ]]; then
+				PKGINFO_CXC[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*FILENAME= ]]; then
+				PKGINFO_FILENAME[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*RSTATE= ]]; then
+				PKGINFO_RSTATE[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*BUILD_SCRIPT= ]]; then
+				PKGINFO_BUILD_SCRIPT[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*CONFIGSPECFILE= ]]; then
+				PKGINFO_CONFIG_SPEC[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*PACKAGE_DEST_DIR= ]]; then
+				PKGINFO_PACKAGE_DEST_DIR[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+			if [[ "$line" =~ ^[:space:]*CLEARCASEVIEW= ]]; then
+				PKGINFO_CLEARCASEVIEW[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+			fi
+                         if [[ "$line" =~ ^[:space:]*SOURCE_DIR= ]]; then
+                                PKGINFO_PACKAGE_SOURCE[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+                        fi
+                        if [[ "$line" =~ ^[:space:]*BUILD= ]]; then
+                                PKGINFO_BUILD[$l_count]=$( $ECHO $line | awk -F= '{ print $2 }' )
+                        fi
+
+		fi
+		# blank line separates records
+		if [[ "$line" =~ ^[[:space:]]*$ ]]; then
+			if [ "$l_pkgrec" = TRUE ]; then
+				l_pkgrec=FALSE
+			fi
+		fi
+	done <<EOF
+$stdout
+EOF
+	# perform checks
+	l_count=0
+	while [[ $l_count -lt ${#PKGINFO_NAME[@]} ]]; do
+		if [ -z "${PKGINFO_NAME[$l_count]}" ]; then
+			error "Invalid or blank package name \"${PKGINFO_NAME[$l_count]}\""
+			return 1
+		fi
+		if [ -z "${PKGINFO_ARCH[$l_count]}" ]; then
+			error "Invalid or blank package architecture \"${PKGINFO_NAME[$l_count]}\""
+			return 1
+		fi
+		if [ -z "${PKGINFO_FILE[$l_count]}" ]; then
+			error "Invalid package info file  \"${PKGINFO_FILE[$l_count]}\" for package ${PKGINFO_NAME[$l_count]}"
+			return 1
+		fi
+                if [ -z "${PKGINFO_CONFIG_SPEC[$l_count]}" ]; then
+                        error "Invalid Config Spec  \"${PKGINFO_CONFIG_SPEC[$l_count]}\" for package ${PKGINFO_NAME[$l_count]}"
+                        return 1
+                fi
+                
+                 if [ -z "${PKGINFO_RSTATE[$l_count]}" ]; then
+                        error "Invalid Rstate \"${PKGINFO_RSTATE[$l_count]}\" for package ${PKGINFO_NAME[$l_count]}"
+                        return 1
+                fi
+                if [ -z "${PKGINFO_PROTO_DIR[$l_count]}" ]; then
+                        error "Invalid protodir  \"${PKGINFO_PROTO_DIR[$l_count]}\" for package ${PKGINFO_NAME[$l_count]}"
+                        return 1
+                fi
+
+                if [ -z "${PKGINFO_PACKAGE_DEST_DIR[$l_count]}" ]; then
+                        error "Invalid dest dir  \"${PKGINFO_DEST_DIR_SCRIPT[$l_count]}\" for package ${PKGINFO_NAME[$l_count]}"
+                        return 1
+                fi
+                if [ -z "${PKGINFO_CLEARCASEVIEW[$l_count]}" ]; then
+                        error "Invalid clearcase view \"${PKGINFO_CLEARCASEVIEW[$l_count]}\" for package ${PKGINFO_NAME[$l_count]}"
+                        return 1
+                fi
+                if [ -z "${PKGINFO_PACKAGE_SOURCE[$l_count]}" ]; then
+                        error "Invalid clearcase view \"${PKGINFO_PACKAGE_SOURCE[$l_count]}\" for package ${PKGINFO_NAME[$l_count]}"
+                        return 1
+                fi
+
+ 
+                
+
+#echo "more checks for other fields"
+		#if [[ "${PKGINFO_BUILD_SCRIPT[$l_count]}" = standard && -z "${PKGINFO_PROTO_DIR[$l_count]}" ]] ; then
+			#log_error "Build script set to standard for package ${PKGINFO_NAME[$l_count]} but package prototype dir not specified"
+			#return 1
+		#fi
+		#if [[ -n "${PKGINFO_BUILD_SCRIPT[$l_count]}" && "${PKGINFO_BUILD_SCRIPT[$l_count]}" != standard && ! -x ${PKGINFO_BUILD_SCRIPT[$l_count]} && "$l_media_build" = TRUE ]]; then
+			#log_error "Build script for package ${PKGINFO_NAME[$l_count]} \"${PKGINFO_BUILD_SCRIPT[$l_count]}\" does not exist or is not executable"
+			#return 1
+		#fi
+		#if [[ -n "${PKGINFO_BUILD_SCRIPT[$l_count]}" && "${PKGINFO_BUILD_SCRIPT[$l_count]}" != standard && -z ${PKGINFO_PACKAGE_DEST_DIR[$l_count]} ]]; then
+			#log_error "Non standard build script used for package ${PKGINFO_NAME[$l_count]} so PACKAGE_DEST_DIR parameter must be specified"
+			#return 1
+		#fi
+		let l_count+=1
+	done
+	return 0
+}

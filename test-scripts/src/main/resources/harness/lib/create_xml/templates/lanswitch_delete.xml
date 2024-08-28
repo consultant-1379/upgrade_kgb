@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_0.dtd">
+<Model version="1" importVersion="6.0">
+   <Delete>
+	<Object fdn="SubNetwork=BSC,ManagedElement=STN-PICO-1281"/>
+   </Delete>
+</Model>

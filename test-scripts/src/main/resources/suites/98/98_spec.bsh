@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# TEST SUITE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Tuesday 20th of August 2013 16:07:25
+#
+SPEC_TS_NAME=DI_PatchTest_PostInstall_X86
+SPEC_TS_ID=98
+SPEC_TS_SLOGAN="Post install config and stamping incl. patch testing"
+SPEC_TS_TIMEOUT=36000
+SPEC_TS_AUTHOR="eeidle"
+SPEC_TS_INDEPENDENT=1
+SPEC_TS_TC_IDS=(641 642 637 643 689 690 672 686 674 768 762 783 784 785 754 656 765 606 1037)

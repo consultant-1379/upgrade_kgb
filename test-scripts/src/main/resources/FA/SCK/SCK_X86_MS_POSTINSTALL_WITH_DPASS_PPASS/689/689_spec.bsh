@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Friday 2nd of January 2015 10:47:32
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="SCK"
+SPEC_UC_NAME="SCK_X86_MS_POSTINSTALL_WITH_DPASS_PPASS"
+SPEC_TC_ID=689
+SPEC_TC_SLOGAN="Defining Mirror using DMR"
+SPEC_TC_TYPE="KGB"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="high"
+SPEC_TC_AUTOMATED=1
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=4800
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xjithbv"
+SPEC_TC_AUTOMATOR="xjithbv"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+#None
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#The following procedure describes the steps to define the mirror definition on
+#Admin Server as user root
+##cd /ericsson/dmr/bin
+## ./dmtool
+#Note: Disk device names in the following sections are examples from a test
+#site and must be adapted to the local site-specific configuration.
+#When DMR is started for the first time it asks for a mirror definition. The steps
+#are described in Example 33.
+#Example 33 DMR Steps
+## cd /ericsson/dmr/bin
+## ./dmtool
+#---------------< D M R >-----------------
+#-----------< Define mirrors >------------
+#NO MIRROR DEFINITION FOUND!
+#PLEASE PAY ATTENTION!
+#THE DEFINTION WILL BE USED FROM NOW ON.
+#How many mirrors should be defined (1-n) [2]:
+#Mirror 1 Mirror 2
+#------------ ------------ ------------ -----------
+#d11 c0t0d0s2 d12 c0t1d0s2
+#disk2 c1t44d0s2 disk2mirr c2t44d0s2
+#disk3 c1t44d1s2 disk3mirr c2t44d1s2
+#Is this a good mirror definition (y/n)? [y] y
+#Note:
+#• If the slices are not included in the Disks implement the steps
+#described in Section 16.7.8 on page 143
+#• EFI disks and EBN disks don’t have ’s2’, so it’s not an error if they
+#don’t. But the root disks always have ’s2’.
+#Finally check dm_define that it contains disks found in vxdisk list:
+## cat /ericsson/dmr/etc/dm_define
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+#metastat command should show the mirrors defined
+# END_POST_CONDITIONS

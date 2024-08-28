@@ -1,0 +1,255 @@
+#!/bin/bash
+TODAY=`/bin/date +"%d_%m_%Y"`
+mkdir -p ~/drops/DROP_${TODAY}
+PUSH="FALSE"
+BUILD="FALSE"
+OCS="FALSE"
+SMRS="FALSE"
+export JAVA_HOME=/proj/cdsadm100/tools/jdk/7/jdk1.7.0_21
+export M2_HOME=/proj/cdsadm100/tools/apache-maven-3.0.5
+export GIT_HOME=/proj/cdsadm100/tools/git/1.8.1.4
+export PATH=$JAVA_HOME/bin:$M2_HOME/bin:$GIT_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$GIT_HOME/lib64
+
+shipment=O16.0
+NEW_VERSION=""
+preliminary_flag=0
+SOURCE="${BASH_SOURCE[0]}"
+RDIR="$( dirname "$SOURCE" )"
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+
+function get_new_ver {
+    pattern='^R([0-9]*)([a-zA-Z])([0-9]*)$'
+    [[ $UPG_VER =~ $pattern ]]
+    MAJOR=${BASH_REMATCH[1]}
+    SEP=${BASH_REMATCH[2]}
+    MINOR=${BASH_REMATCH[3]}
+    NEW=`expr $MINOR + 1`
+	NEW_VERSION="R${MAJOR}${SEP}${NEW}"
+}
+
+function increment_bismrs_state(){
+	
+	if [ ${UPG_VER} = "R1A01_PA01" ] 
+	then
+		NEW_VERSION="R99A01"
+	fi 
+	
+	sed "s/VERSION=.*/VERSION=${NEW_VERSION}/" < /vobs/cominf_bismrsmc/src/com/ericsson/nms/cominf/dm/pkg_template/pkginfo > /tmp/ericbismrspkginfo.$$
+	cp /tmp/ericbismrspkginfo.$$ /vobs/cominf_bismrsmc/src/com/ericsson/nms/cominf/dm/pkg_template/pkginfo
+	rm -f /tmp/ericbismrspkginfo.$$
+	
+	cd /vobs/cominf_bismrsmc/src/com/ericsson/nms/cominf/dm/pkg_template/
+	VERSION=`sed -n 's/VERSION=//p' pkginfo`
+	echo "VERSION ${VERSION}"
+
+
+}
+
+
+function parse_supplied_params()
+{
+
+# Parse the optional parameters
+	echo "Attempting to parse inputs"
+  # while getopts ":f:d" ARG
+  while getopts ":pbos" ARG
+  do 
+    case ${ARG} in
+      p)    PUSH="TRUE"
+			echo "Push is set to true:"
+            ;;
+      b)    BUILD="TRUE"
+			echo "BUILD is set to true:"
+            ;;		
+	  o)	OCS="TRUE"
+			echo "OCS is set to true:"
+            ;;	
+	  s)	SMRS="TRUE"
+			echo "SMRS is set to true:"
+            ;;	
+      *)    echo "ERROR: Invalid option ${OPTARG} supplied"
+            exit 1
+            ;;
+    esac
+  done
+  
+  return 0
+}
+
+function set_config_spec()
+{
+	echo "CS is: sck_dev-o16.0_orchestrator_cominf.cs"
+	/usr/atria/bin/cleartool setcs /view/sck/vobs/oss_sck/tools/cs/sck_dev-o16.0_orchestrator_cominf.cs
+	
+
+	#/usr/atria/bin/cleartool catcs | grep ".../orch_upgrade*"
+	return $?
+}
+
+
+function build_ericocs()
+{
+	RES=0
+	# Create latest ERICocs
+	# Get current version
+	ericocs_upg_ver=$(cat /vobs/ocs_design/src/com/ericsson/oss/ocs_x86/dm/pkginfo | grep "VERSION=")
+	echo "Current revision ${ericocs_upg_ver}"
+	mkdir -p ~/drops/DROP_$TODAY/
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed to make directory ~/drops/DROP_${TODAY}/"
+		exit 1
+	fi
+	echo "Script created/reused directory ~/drops/DROP_${TODAY}/"
+	buildtext=$(echo "yes" | /vobs/cominf_media/media_build/bin/make_package.bsh -n ERICocs -c 19089-CXC1731203 -d /vobs/ocs_design/src/com/ericsson/oss/ocs_x86/dm -f ERICocs_orcha.pkg)
+	RES=$?
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed to build ERICocs exiting"
+		echo "${buildtext}"
+		exit 1
+	fi
+	echo "==============================="
+	echo ""
+	echo "${buildtext}"
+	echo ""
+	echo "==============================="
+	
+	ericocs_upg_ver=$(cat /vobs/ocs_design/src/com/ericsson/oss/ocs_x86/dm/pkginfo | grep "VERSION=")
+	echo "Current revision ${ericocs_upg_ver}"
+	
+	ERICocs_Zip=$(echo "$buildtext" | grep 19089-CXC1731203 | grep .zip | awk {'print $6'})
+	ls /vobs/ocs_design/src/com/ericsson/oss/ocs_x86/dm/pkg/${ERICocs_Zip}
+	RES=$?
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed to find ERICocs zip file"
+		exit 1
+	fi
+	
+	rm -rf "~/drops/DROP_$TODAY/19089-CXC1731203*"
+	echo "Copying ${ERICocs_Zip} to ~/drops/DROP_$TODAY/"
+	cp /vobs/ocs_design/src/com/ericsson/oss/ocs_x86/dm/pkg/${ERICocs_Zip} ~/drops/DROP_$TODAY/
+	RES=$?
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed to copy file"
+		exit 1
+	fi
+	
+	ls ~/drops/DROP_$TODAY/${ERICocs_Zip}
+
+
+
+
+
+}
+
+function build_bismrc_mc()
+{
+	echo "==============================="
+	echo ""
+	echo "BUILDING BISMRSMC"
+	echo ""
+	echo "==============================="
+	#/usr/atria/bin/cleartool setcs /home/xdhiilm/clearcase/sck_dev-o16.0_orchestrator_smrs.cs 
+	UPG_VER=$(cat /vobs/cominf_bismrsmc/src/com/ericsson/nms/cominf/dm/pkg_template/ERICbismrsmc/pkginfo | /usr/bin/grep VERSION | awk -F= '{print $2}')
+	get_new_ver
+	increment_bismrs_state || exit 1
+	
+	label="ERICSBISMRS-${shipment}_${NEW_VERSION}"
+	
+	echo "        ==============================="
+	echo "        Old Version ${UPG_VER}"
+	echo ""
+	echo "        New Label will be ${label}"
+	echo ""
+	echo "        New Version ${NEW_VERSION}"
+	echo "        ==============================="
+	
+	export RANOSMAKEHOME=/vobs/wran_cm/wran_cm_makesystem/makesystem
+	export RANOS_NEW_DELIVERY_SCRIPTS=/vobs/wds/cc_support/ranos/release
+	export RANOS_DAILY_BUILD_HOME=/proj/vobadm100/RANOS_autobuild
+	cd /vobs/cominf_bismrsmc/src/com/ericsson/nms/cominf/dm/pkg_template/
+	./build_pkg.sh
+	if [ ${preliminary_flag} -eq 1 ]; then
+		echo "prelminary flag selected - no labelling will occur"
+	else
+        echo "Labelling the vob with $label ... "
+		/usr/atria/bin/cleartool mklbtype -nc $label > /dev/null 2>&1 
+		/usr/atria/bin/cleartool lstype -kind lbtype:$label -inv /vobs/cominf_bismrsmc/src/com/ericsson/nms/cominf/bismrsmc 1 >/dev/null 2>&1 
+        if [ $? -ne 0 ]; then
+                /usr/atria/bin/cleartool mklabel -replace -recurse $label /vobs/cominf_bismrsmc/src/com/ericsson/nms/cominf/bismrsmc >/dev/null
+        elif [ "$force" -eq 0 ]; then
+            error "Label $label already exists, use the -f flag if you're ABSOLUTELY 100% sure you want to reuse this r-state"
+		fi
+		
+	fi
+	
+	echo "==============================="
+	echo "Moving ERICbismrsmc_${NEW_VERSION}.pkg to ~/drops/DROP_$TODAY"
+	
+	cp /vobs/cominf_bismrsmc/src/com/ericsson/nms/cominf/dm/pkg_template/ERICbismrsmc_${NEW_VERSION}.pkg ~/drops/DROP_$TODAY/ERICbismrsmc.pkg
+
+	RES=$?
+	if [ $RES -ne 0 ]
+	then
+		echo "Script failed to copy file"
+		exit 1
+	fi
+	
+	ls ~/drops/DROP_$TODAY/ERICbismrsmc*
+	
+	echo "==============================="
+
+
+}	
+
+#*************************************************************************
+#
+# Step 1: Parse build options
+#
+#*************************************************************************
+
+parse_supplied_params "${@}" || exit 1
+
+#*************************************************************************
+#
+# Step 2: Set configuration specification 
+#
+#*************************************************************************
+
+set_config_spec || exit 1
+ 
+#*************************************************************************
+#
+# Step 3: Build 
+#
+#*************************************************************************
+
+
+	if [ "${BUILD}" = "TRUE" ] ; then
+		
+		if [ "${OCS}" = "TRUE" ] ; then
+			build_ericocs
+		fi
+		
+		if [ "${SMRS}" = "TRUE" ] ; then
+			build_bismrc_mc
+		fi
+	fi
+
+	#Push to MWS #1
+
+	#/usr/atria/bin/cleartool setcs /home/xdhiilm/clearcase/sck_dev-o16.0_orchestrator_smrs.cs
+
+	
+	if [ "${PUSH}" = "TRUE" ] ; then
+		echo "Going to push build to MWS#1"
+		cd ~/drops
+		tar cvf DROP_$TODAY.tar ./DROP_$TODAY
+		gzip -f DROP_$TODAY.tar
+		scp DROP_$TODAY.tar.gz root@10.44.234.130:/JUMP/UPGRADE_SW/daily_builds/
+	fi
+

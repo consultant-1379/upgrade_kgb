@@ -1,0 +1,112 @@
+#!/bin/tcsh -x
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 14/10/2013    edavmax         First version
+# 17/02/2014    epatnat
+
+
+#MAIN
+if ( $# != 10 ) then
+	echo "Error - incorrect # args"
+	exit 1
+endif
+
+
+set BUILD_PACKAGE=$1
+set CLEARCASE_VIEW=$2
+set CLEARCASE_CSFILE=$3
+set CI_PACKAGE_DEST_DIR=$4
+set PACKAGE_FILE=$5
+set PACKAGE_VERSION=$6
+set CI_SOURCE_DIR=$7
+set CI_PKG_ARCH=$8
+#set PKGIT=$VOB_LOCATION/pkgit
+#set NEW_PKG=`echo $CI_PKG_PATH | awk -F/ '{ print $NF }'`
+
+set PACKAGE_NAME=`echo $PACKAGE_FILE | awk -F. '{ print $1 }'` 
+echo $PACKAGE_NAME
+
+#apply config spec
+if ( ! -s $CLEARCASE_CSFILE ) then
+	echo "Error - failed to locate clearcase config spec file"
+	exit 1
+endif
+echo $CLEARCASE_CSFILE
+/usr/atria/bin/cleartool setview -exec "/usr/atria/bin/cleartool setcs $CLEARCASE_CSFILE" ${CLEARCASE_VIEW}
+if ( $? != 0 ) then
+	echo "Error - failed to set $CLEARCASE_VIEW config spec"
+	exit 1
+endif
+
+if ( "$BUILD_PACKAGE" == TRUE ) then
+	# delete old package
+	/bin/rm -f /var/tmp/${PACKAGE_FILE} >& /dev/null 
+	# rebuild package
+	/bin/rm -f /tmp/make.output
+        set package_loc=${CI_PACKAGE_DEST_DIR}/${PACKAGE_FILE}
+        /bin/rm -f /tmp/existing_rstate_base
+        /usr/atria/bin/cleartool setview -exec "test -f $package_loc" ${CLEARCASE_VIEW}
+        
+        if  ($? == 0 ) then 
+                /usr/atria/bin/cleartool setview -exec "pkgparam -f $package_loc VERSION" ${CLEARCASE_VIEW} | sed 's/[0-9]*$//' > /tmp/existing_rstate_base
+                /usr/atria/bin/cleartool setview -exec "pkgparam -f $package_loc VERSION" ${CLEARCASE_VIEW} > /tmp/full_rstate
+                set full_rstate=`cat /tmp/full_rstate` 
+		set existing_rstate_base=`cat /tmp/existing_rstate_base`
+                set new_rstate_base=`echo $PACKAGE_VERSION | sed 's/[0-9]*$//'`
+                if ( "$existing_rstate_base" != "$new_rstate_base" ) then
+                        echo "Force building package since new package version base ($new_rstate_base) is different to existing ($existing_rstate_base)"
+                         /usr/atria/bin/cleartool setview -exec "/bin/rm -f $package_loc" ${CLEARCASE_VIEW}
+                endif
+        endif
+ 
+        set res=`/usr/atria/bin/cleartool setview -exec "/usr/sfw/bin/gmake -f /var/tmp/Makefile.$PACKAGE_NAME" ${CLEARCASE_VIEW}`
+        set errorcode=$?
+	if ( $errorcode != 0 ) then
+		echo "Error - failed to build package"
+		exit 1
+	else
+	        echo $res | grep "is up to date" > /dev/null	
+		if ( $? == 0 ) then
+			echo "Package was not rebuilt since no code changed."
+                        #exit the script if package was not build
+                        #no need to copy unchanged package
+                        echo "No need to copy package over to MWS...SUCCESS"
+                        echo "RSTATE is: $full_rstate"
+                        exit 0
+		else
+			echo "Package $PACKAGE_FILE built successfully"
+	endif
+	#set package_loc=${VOB_LOCATION}/${PACKAGE_FILE}
+else
+	if ( ! -s $PACKAGE_FILE ) then
+		echo "Error - unable to locate $PACKAGE_FILE in clearcase view"
+		exit 1
+	endif
+	set package_loc=$PACKAGE_FILE
+endif
+
+# copy package to temp location
+/usr/atria/bin/cleartool setview -exec "/bin/cp -f $package_loc  /var/tmp" ${CLEARCASE_VIEW} 
+if ( $? != 0 ) then
+	echo "Error failed to copy package ${PACKAGE_FILE} from vob"
+	exit 1
+endif
+
+
+exit 0
+	
+
+

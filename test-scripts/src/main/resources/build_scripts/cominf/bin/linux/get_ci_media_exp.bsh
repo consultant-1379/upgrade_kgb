@@ -1,0 +1,57 @@
+#!/bin/bash
+#
+#          COPYRIGHT Ericsson AB 2007
+#
+#      The copyright to the computer program(s) herein is
+#      the property of Ericsson AB, Sweden. The program(s)
+#      may be used and/or copied only with the written
+#      permission from Ericsson AB or in accordance with
+#      the terms and conditions stipulated in the
+#      agreement/contract under which the program(s) have
+#      been supplied.
+#
+#      2009-04-28     edavmax       Initial version
+#
+#
+#
+#       run_script.sh : runs script in non-interactive mode
+#       args: 1=scriptname to run
+#             2=args to script
+#             3=inputs to script
+#
+# \
+PROCTYPE=`uname -p`; \
+if [ $PROCTYPE = "sparc" ]; then  \
+  INTERP=/opt/sfw/bin/expect; \
+else \
+  INTERP=/usr/local/bin/expect; \
+fi; \
+# the following line restarts using expect \
+exec $INTERP "$0" "$@"
+
+set timeout 600
+
+proc timedout {} {
+        send_error "The current command has timed out, exiting.\n"
+        exit 1
+}
+
+eval spawn /ericsson/jumpstart/bin/manage_nfs_media.bsh 
+set finished 0
+expect "Select number of the NFS Media you wish to manage*"
+send "2\r"
+expect "Select number of the Media action you wish to perform*"
+send "2\r"
+expect "Press return key to return to menu*"
+send "\r"
+expect "Select number of the Media action you wish to perform*"
+send "q\r"
+expect "Select number of the NFS Media you wish to manage*"
+send "q\r"
+interact
+
+
+catch "wait -i $spawn_id" reason
+
+# return status code of spawned process
+exit [ lindex $reason 3 ]

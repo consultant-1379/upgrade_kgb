@@ -1,0 +1,593 @@
+
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the content(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The content(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the content(s)  has been supplied.
+#
+#------------------------------------------------------------------------
+#
+# ========================================
+# tst_LDAP.lib #AT_ldap.sh
+# ========================================
+#
+# Provides functions:
+# LDAP_SERVER_UP
+# LDAP_GET_DOMAIN_DN_FORMAT
+# LDAP_DOMAIN_EXISTS
+# LDAP_DOMAIN_EMPTY
+# LDAP_DOMAIN_ISOLATED
+# LDAP_DOMAIN_REFERRAL
+# LDAP_USER_EXISTS
+# LDAP_GROUP_EXISTS
+# LDAP_GROUP_USER_EXISTS
+# LDAP_CREATE_DOMAIN # Need to be tested with OSS
+# LDAP_DELETE_DOMAIN # Need to be tested with OSS
+# LDAP_CREATE_USER
+# LDAP_DELETE_USER
+# LDAP_CREATE_GROUP
+# LDAP_DELETE_GROUP
+
+# TODO hostname, password and port number are all hard-coded at the moment
+#
+# General ldapsearch return codes:
+# 1		(Invalid syntax)
+# 32	No such entry
+# 34	Invalid DN Syntax
+# 48	Invalid credentials (bad bindDN or bad password)
+# 49	Invalid credentials (wrong password)
+# 50	Insufficient Access Rights (got this when using ldapcompare)
+# 89	(bad value to option)
+# 91	Connect Error (bad port)
+#http://docs.oracle.com/javase/tutorial/jndi/ldap/exceptions.html
+
+# LDAP COMMON VALUES
+HOSTNAME=$(hostname)
+LDAP_PORT=389
+LDAP_SUPERUSER_PASSWD="ldappass"
+set -o pipefail
+
+invalid_params() {
+	# General usage statement
+	echo -e "\033[44;36mInvalid parameters passed\033[0m"
+	echo "Usage: ${*}"
+}
+
+LDAP_SERVER_UP() {
+	# Determines whether the LDAP server is running or not
+	#
+	# Return codes:
+	# 0 LDAP running
+	# 1 LDAP not running (or missing)
+
+	#status=`/opt/opendj/bin/status -D "cn=Directory Manager" -w $LDAP_SUPERUSER_PASSWD 2>/dev/null|awk '/^Server/{print $4}'`
+	#[ "$status" == "Started" ]
+	#return $?
+	# simple search to see if it is running, so we can verify quickly like this:
+	/usr/bin/ldapsearch  -LLLx -b "" -s base "objectclass=*" namingcontexts >/dev/null 2>&1
+	[ $? -ne 0 ] && return 1
+	return 0
+}
+
+LDAP_GET_DOMAIN_DN_FORMAT() {
+        local domain_dot=$1
+        local domain_dn=""
+        local buffer
+        local dc
+
+        [[ -z "${domain_dot}" ]] && {
+                echo ""
+                return 1
+        }
+
+        buffer=$(echo ${domain_dot} | sed 's/\./ /g')
+        for dc in ${buffer}; do
+                if [ -z "${domain_dn}" ]; then
+                        domain_dn="dc=${dc}"
+                else
+                        domain_dn="${domain_dn},dc=${dc}"
+                fi
+        done
+        echo ${domain_dn}
+        return 0
+}
+
+LDAP_DOMAIN_EXISTS() {
+	# Determines if the given LDAP domain is present
+	# Parameters: domain
+	#
+	# Return codes
+	# 0		Domain exists
+	# 1		Domain does not exist
+	if [ $# -ne 1 ]; then
+		invalid_params $FUNCNAME domain
+		return 1
+	fi
+
+	local dmn=$(LDAP_GET_DOMAIN_DN_FORMAT $1)
+	/usr/bin/ldapsearch -D "cn=Directory Manager" -b "${dmn}" -s base -h $HOSTNAME -p $LDAP_PORT -w $LDAP_SUPERUSER_PASSWD "objectclass=*">/dev/null 2>&1
+	return $?
+}
+
+LDAP_DOMAIN_EMPTY() {
+	# Determines if the given LDAP domain contains users
+	# Parameters: domain
+	#
+	# Return codes
+	# 0     Domain has no users
+	# 1     Domain has users
+	# 2     Domain not found
+	if [ $# -ne 1 ]; then
+		invalid_params $FUNCNAME domain
+		return 1
+	fi
+	
+	LDAP_DOMAIN_EXISTS $1
+	[ $? -eq 0 ] || return 2
+
+	local dmn=$(LDAP_GET_DOMAIN_DN_FORMAT $1)
+	# We need to check in the ou=people container for users
+	dmn="ou=people,$dmn"
+	# POSIX User account entries
+	entries=`/usr/bin/ldapsearch -b "${dmn}" -s sub -h $HOSTNAME -p $LDAP_PORT -w $LDAP_SUPERUSER_PASSWD -D "cn=Directory Manager" "objectclass=posixAccount" uid | grep "^uid:" | wc -l`
+
+	# If entries is not set, set it to -1, otherwise check and see if it is less than or equal to zero
+	[ ${entries:- -1} -le 0 ] && return 0
+	return 1
+}
+
+LDAP_USER_EXISTS() {
+	# Determines if the user given exists
+	# Parameters: $domain $user
+	#
+	# Return codes
+	# 0	 User exists
+	# 1	 user does not exist
+	# 2	 Domain not found
+
+	if [ "$#" -ne 2 ]; then
+		invalid_params $FUNCNAME domain user
+		return 1
+	fi
+	LDAP_DOMAIN_EXISTS $1
+	[ $? -eq 0 ] || return 2
+
+	local dmn=$(LDAP_GET_DOMAIN_DN_FORMAT $1)
+	users=`/usr/bin/ldapsearch -b "$dmn" -s sub -h $HOSTNAME -p $LDAP_PORT -w $LDAP_SUPERUSER_PASSWD -D "cn=Directory Manager" "objectclass=posixAccount"|awk '/^uid:/{print $2}'`
+	[ $? -ne 0 ] && return $?
+
+	for user in $users; do
+		if [ "${user}" == "${2}" ]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+LDAP_GROUP_EXISTS() {
+	# Determines if a group exists
+	# Parameters: $domain $group
+	#
+	# Return codes
+	# 0		Group exists
+	# 1		Group does not exist
+	# 2		Domain not found
+	if [ $# -ne 2 ]; then
+		invalid_params $FUNCNAME domain group
+	fi
+	LDAP_DOMAIN_EXISTS $1
+	[ $? -eq 0 ] || return 2
+	local dmn=$(LDAP_GET_DOMAIN_DN_FORMAT $1)
+	# can select just the group we are searching for by using '-s base' here
+	/usr/bin/ldapsearch -b "cn=$2,ou=group,$dmn" -s base -h $HOSTNAME -p $LDAP_PORT -w $LDAP_SUPERUSER_PASSWD -D "cn=Directory Manager" "objectclass=posixGroup" 2&>1 > /dev/null
+	[ $? -eq 32 ] && return 1
+	return 0
+}
+
+LDAP_GROUP_USER_EXISTS() {
+        # $domain $group $user
+        #
+        # Return codes
+        # 0             User exists in group
+        # 1             User exists, but not in group
+        # 2             domain does not exist
+        # 3             Group does not exist
+        # 4             User does not exist
+        if [ "$#" -ne 3 ]; then
+                invalid_params $FUNCNAME domain group user
+        fi
+
+        # XXX These three functions cause LDAP_DOMAIN_EXISTS to be run thrice!!
+        LDAP_DOMAIN_EXISTS $1
+        [ $? -eq 0 ] || return 2
+        LDAP_GROUP_EXISTS $1 $2
+        [ $? -eq 0 ] || return 3
+        LDAP_USER_EXISTS $1 $3
+        [ $? -eq 0 ] || return 4
+
+        # Get GID of user
+	local dmn=$(LDAP_GET_DOMAIN_DN_FORMAT $1)
+        usergid=`/usr/bin/ldapsearch -b "uid=$3,ou=people,${dmn}" -s sub -h $HOSTNAME -p $LDAP_PORT -w $LDAP_SUPERUSER_PASSWD -D "cn=Directory Manager" "objectclass=*"|awk '/^gidNumber/{print $NF}'`
+        # and of group
+        groupgid=`/usr/bin/ldapsearch -b "cn=$2,ou=group,${dmn}" -s sub -h $HOSTNAME -p $LDAP_PORT -w $LDAP_SUPERUSER_PASSWD -D "cn=Directory Manager" "objectclass=*"|awk '/gidNumber/{print $NF}'`
+
+        [ "$usergid" == "$groupgid" ] || return 1
+        return 0
+}
+
+LDAP_CREATE_DOMAIN() {
+        # Create an LDAP domain
+        # Parameters: $domain $uniquename $vip $proxyagentPasswd $dataMaintenancePasswd $dataMigrationPasswd $dnsDomain
+        #
+        # Return codes
+	# 1		No domain argument specified
+	# 2		Domain already exists
+	# 3		Failed to create expect input file
+	# 4 		Failed to create expect output file from input
+	# 5		Error executing expect script
+	# 6 		Domain does not exist after completeion of expect script
+        local domain=$1
+        [ -z "$domain" ] && { echo "ERROR: [LDAP_CREATE_DOMAIN] requires domain argument"; return 1; }
+
+	# Check if domain already exists
+	LDAP_DOMAIN_EXISTS $domain && {
+		echo "Domain already exists"
+		return 2
+	}
+
+	# Variable declaration for expect file input
+        local superUserPasswd=${LDAP_SUPERUSER_PASSWD:-ldappass}
+        local uniqueName=${2:-ossmaster}
+        local vip=${3:-10.45.201.103}
+        local proxyagentPasswd=${4:-ldappass}
+        local dataMaintenancePasswd=${5:-ldappass}
+        local dataMigrationPasswd=${6:-ldappass}
+	local dns_domain=$(awk 'NR==1{print $2}' /etc/resolv.conf)
+	local dnsDomain=${7:-$dns_domain}
+        local filePrefix=createDomain
+
+# ----- START HERE DOCUMENT -----
+cat > ${filePrefix}.in << EOF || { echo "ERROR: failed to make input file ${filePrefix}.in" ; return 3; }
+DNS Domain Name <e.g. dns.companyname.com>: 
+$dnsDomain
+Enter a unique name for the masterservice of the OSS RC system using this LDAP domain:
+$uniqueName
+Enter IP address for the masterservice of the OSS RC system using this LDAP Domain:
+$vip
+New LDAP domain name <e.g. ldap.companyname.com>: 
+$domain
+LDAP Directory Manager password:
+$superUserPasswd
+LDAP name service data migration password:
+$dataMigrationPasswd
+Re-enter password:
+$dataMigrationPasswd
+LDAP name service data maintenence password:
+$dataMaintenancePasswd
+Re-enter password:
+$dataMaintenancePasswd
+LDAP name service proxyagent password:
+$proxyagentPasswd
+Re-enter password:
+$proxyagentPasswd
+Are the values ok*
+y
+EOF
+# ----- END HERE DOCUMENT -----
+        # Generate Expect script from input file
+        ${AT_BIN}/con_ex.bsh -d ${filePrefix}.in -o ${filePrefix}.exp -c "/ericsson/sdee/bin/prepSUNDS.sh -c" -r || {
+                echo "ERROR: [LDAP_CREATE_DOMAIN] Could not create expect output script from input file ${filePrefix}.in"
+                return 4
+        }
+        # Execute expect script to add domain
+        /usr/local/bin/expect ${filePrefix}.exp > /dev/null 2>&1 || {
+                rm  ${filePrefix}.in ${filePrefix}.exp
+                echo "ERROR: [LDAP_CREATE_DOMAIN] creating domain $domain, error code $?"
+                return 5
+        }
+        rm  ${filePrefix}.in ${filePrefix}.exp
+        LDAP_DOMAIN_EXISTS $domain || { echo "ERROR: [LDAP_CREATE_DOMAIN] Failed to create domain $domain"; return 6; }
+
+        return 0
+}
+
+LDAP_DELETE_DOMAIN() {
+        # Delete an LDAP domain
+        # Parameters: $domain
+        #
+        # Return codes
+	# 1		No domain argument specified
+	# 2		Domain doesn't exist
+	# 3		Failed to create expect input file
+	# 4 		Failed to create expect output file from input
+	# 5		Error executing expect script
+	# 6 		Domain does not exist after completeion of expect script
+        local domain=$1
+        [ -z "$domain" ] && { echo "ERROR: [LDAP_DELETE_DOMAIN] requires domain argument"; return 1; }
+
+	# Check if domain doesn't exists
+	LDAP_DOMAIN_EXISTS $domain || {
+		echo "Domain given doesn't exist"
+		return 2
+	}
+
+        local superUserPasswd=${LDAP_SUPERUSER_PASSWD:-ldappass}
+	local filePrefix=deleteDomain
+# ----- START HERE DOCUMENT -----
+cat > ${filePrefix}.in << EOF || { echo "ERROR: failed to make input file ${filePrefix}.in" ; return 3; }
+LDAP Directory Manager DN*
+
+LDAP Directory Manager password:
+$superUserPasswd
+Enter LDAP domain to delete* 
+$domain
+Continue to remove LDAP name service domain*
+y
+EOF
+# ----- END HERE DOCUMENT -----
+        # Generate Expect script from input file
+        ${AT_BIN}/con_ex.bsh -d ${filePrefix}.in -o ${filePrefix}.exp -c "/ericsson/sdee/bin/prepSUNDS.sh -r" -r || {
+                echo "ERROR: [LDAP_DELETE_DOMAIN] Could not create expect output script from input file ${filePrefix}.in"
+                return 4
+        }
+        # Execute expect script to add domain
+        /usr/local/bin/expect ${filePrefix}.exp > /dev/null 2>&1 || {
+                rm  ${filePrefix}.in ${filePrefix}.exp
+                echo "ERROR: [LDAP_DELETE_DOMAIN] deleting domain $domain, error code $?"
+                return 5
+        }
+        rm  ${filePrefix}.in ${filePrefix}.exp
+        LDAP_DOMAIN_EXISTS $domain && { echo "ERROR: [LDAP_DELETE_DOMAIN] Failed to delete domain $domain"; return 6; }
+        return 0
+}
+
+LDAP_CREATE_USER() {
+        # Create an LDAP user
+	# Ldap user id will be next available UID
+        # Parameters: Domain Username Password
+        #
+        # Return codes
+        # 1             No user name or password specified
+        # 2             User already exists
+	# 3		Failed to create expect input file
+	# 4 		Failed to create expect output file from input
+	# 5		Error executing expect script
+	# 6 		Domain does not exist after completeion of expect script
+	if [ "$#" -ne 3 ]; then
+                invalid_params $FUNCNAME domain user userPassword
+		return 1
+        fi
+	local uc_domain=$1
+        local uc_user=$2
+	local uc_userPasswd=$3
+
+        # Check if domain already exists
+        LDAP_USER_EXISTS $uc_domain $uc_user && {
+                echo "User already exists"
+                return 2
+        }
+	
+	if [[ ${#uc_user} -gt 8 ]]; then
+		echo "User name is too long"
+		return 2
+	fi
+        # Variable declaration for expect file input
+        local superUserPasswd=${LDAP_SUPERUSER_PASSWD:-ldappass}
+        local filePrefix=createUser
+
+# ----- START HERE DOCUMENT -----
+cat > ${filePrefix}.in << EOF || { echo "ERROR: failed to make input file ${filePrefix}.in" ; return 3; }
+LDAP Directory Manager password:
+$superUserPasswd
+New local user name:
+$uc_user
+Start of uidNumber search range*
+
+End of uidNumber search range*
+
+New local user uidNumber*
+
+New local user password:
+$uc_userPasswd
+Re-enter password:
+$uc_userPasswd
+New local user category*
+
+New local user description*
+
+Continue to create local user*
+y
+EOF
+# ----- END HERE DOCUMENT -----
+        # Generate Expect script from input file
+        ${AT_BIN}/con_ex.bsh -d ${filePrefix}.in -o ${filePrefix}.exp -c "/ericsson/sdee/bin/add_user.sh -d $uc_domain" -r || {
+                echo "ERROR: [LDAP_CREATE_USER] Could not create expect output script from input file ${filePrefix}.in"
+                return 4
+        }
+        # Execute expect script to add domain
+        /usr/local/bin/expect ${filePrefix}.exp > /dev/null 2>&1 || {
+                rm  ${filePrefix}.in ${filePrefix}.exp
+                echo "ERROR: [LDAP_CREATE_USER] creating user $uc_user, error code $?"
+                return 5
+        }
+        rm  ${filePrefix}.in ${filePrefix}.exp
+        LDAP_USER_EXISTS $uc_domain $uc_user || { echo "ERROR: [LDAP_CREATE_USER] Failed to create user $uc_user"; return 6; }
+        return 0
+}
+
+LDAP_DELETE_USER() {
+        # Delete an LDAP user 
+        # Parameters: $domain $user
+        #
+        # Return codes
+        # 1             Incorrect arguments specified
+        # 4             Failed to create expect output file from input
+        # 5             Error executing expect script
+        # 6             Domain does not exist after completeion of expect script
+        if [ "$#" -ne 2 ]; then
+                invalid_params $FUNCNAME domain user
+		return 1
+        fi
+
+        local ud_domain=$1
+	local ud_user=$2
+        [ -z "$ud_domain" ] && { echo "ERROR: [LDAP_DELETE_USER] requires domain argument"; return 1; }
+        [ -z "$ud_user" ] && { echo "ERROR: [LDAP_DELETE_USER] requires user argument"; return 1; }
+
+        # Check if domain doesn't exists
+        LDAP_USER_EXISTS $ud_domain $ud_user || {
+                echo "User given doesn't exist, exiting"
+                return 2
+        }
+
+        local superUserPasswd=${LDAP_SUPERUSER_PASSWD:-ldappass}
+        local filePrefix=deleteUser 
+# ----- START HERE DOCUMENT -----
+cat > ${filePrefix}.in << EOF || { echo "ERROR: failed to make input file ${filePrefix}.in" ; return 3; }
+LDAP Directory Manager password:
+$superUserPasswd
+Local user name: 
+$ud_user
+Continue to delete local user 
+y
+EOF
+# ----- END HERE DOCUMENT -----
+        # Generate Expect script from input file
+        ${AT_BIN}/con_ex.bsh -d ${filePrefix}.in -o ${filePrefix}.exp -c "/ericsson/sdee/bin/del_user.sh -d $ud_domain" -r || {
+                echo "ERROR: [LDAP_DELETE_USER] Could not create expect output script from input file ${filePrefix}.in"
+                return 4
+        }
+        # Execute expect script to add domain
+        /usr/local/bin/expect ${filePrefix}.exp > /dev/null 2>&1 || {
+                rm  ${filePrefix}.in ${filePrefix}.exp
+                echo "ERROR: [LDAP_DELETE_USER] deleting $ud_user, error code $?"
+                return 5
+        }
+        rm  ${filePrefix}.in ${filePrefix}.exp
+        LDAP_USER_EXISTS $ud_domain $ud_user&& { echo "ERROR: [LDAP_DELETE_USER] Failed to delete user $ud_user"; return 6; }
+        return 0
+}
+
+LDAP_CREATE_GROUP() {
+        # Create an LDAP group
+        # Parameter: Domain Group
+        # Return codes
+        # 1             No user name or password specified
+        # 2             Group already exists / Group name is too long
+	# 3		Failed to create expect input file
+	# 4 		Failed to create expect output file from input
+	# 5		Error executing expect script
+	# 6 		Domain does not exist after completeion of expect script
+	if [ "$#" -ne 2 ]; then
+                invalid_params $FUNCNAME domain group
+		return 1
+        fi
+	local gc_domain=$1
+        local gc_group=$2
+
+        # Check if domain already exists
+        LDAP_GROUP_EXISTS $gc_domain $gc_group && {
+                echo "Group already exists"
+                return 2
+        }
+	
+	if [[ ${#gc_group} -gt 8 ]]; then
+		echo "Group name is too long"
+		return 2
+	fi
+
+        # Variable declaration for expect file input
+        local superUserPasswd=${LDAP_SUPERUSER_PASSWD:-ldappass}
+        local filePrefix=createGroup
+
+# ----- START HERE DOCUMENT -----
+cat > ${filePrefix}.in << EOF || { echo "ERROR: failed to make input file ${filePrefix}.in" ; return 3; }
+LDAP Directory Manager password:
+$superUserPasswd
+New local group name: 
+$gc_group
+Start of gidNumber search range* 
+
+End of gidNumber search range* 
+
+New local group gidNumber*
+
+Continue to create local group*
+y
+EOF
+# ----- END HERE DOCUMENT -----
+        # Generate Expect script from input file
+        ${AT_BIN}/con_ex.bsh -d ${filePrefix}.in -o ${filePrefix}.exp -c "/ericsson/sdee/bin/add_group.sh -d $gc_domain" -r || {
+                echo "ERROR: [LDAP_CREATE_GROUP] Could not create expect output script from input file ${filePrefix}.in"
+                return 4
+        }
+        # Execute expect script to add domain
+        /usr/local/bin/expect ${filePrefix}.exp > /dev/null 2>&1 || {
+                rm  ${filePrefix}.in ${filePrefix}.exp
+                echo "ERROR: [LDAP_CREATE_GROUP] creating group $gc_group, error code $?"
+                return 5
+        }
+        rm  ${filePrefix}.in ${filePrefix}.exp
+        LDAP_GROUP_EXISTS $gc_domain $gc_group || { echo "ERROR: [LDAP_CREATE_GROUP] Failed to create group $gc_group"; return 6; }
+        return 0
+}
+
+LDAP_DELETE_GROUP() {
+        # Delete an LDAP group
+	# Parameters: Domain Group
+        #
+        # Return codes
+        # 1             Incorrect arguments specified
+        # 4             Failed to create expect output file from input
+        # 5             Error executing expect script
+        # 6             Domain does not exist after completeion of expect script
+        if [ "$#" -ne 2 ]; then
+                invalid_params $FUNCNAME domain group 
+		return 1
+        fi
+
+        local gd_domain=$1
+	local gd_group=$2
+        [ -z "$gd_domain" ] && { echo "ERROR: [LDAP_DELETE_GROUP] requires domain argument"; return 1; }
+        [ -z "$gd_group" ] && { echo "ERROR: [LDAP_DELETE_GROUP] requires group argument"; return 1; }
+
+        # Check if group doesn't exists
+        LDAP_GROUP_EXISTS $gd_domain $gd_group|| {
+                echo "Group given doesn't exist, exiting..."
+                return 2
+        }
+
+        local superUserPasswd=${LDAP_SUPERUSER_PASSWD:-ldappass}
+        local filePrefix=deleteGroup
+# ----- START HERE DOCUMENT -----
+cat > ${filePrefix}.in << EOF || { echo "ERROR: failed to make input file ${filePrefix}.in" ; return 3; }
+LDAP Directory Manager password:
+$superUserPasswd
+Local group name: 
+$gd_group
+Local gidNumber*
+
+Continue to delete local group*
+y 
+EOF
+# ----- END HERE DOCUMENT -----
+        # Generate Expect script from input file
+        ${AT_BIN}/con_ex.bsh -d ${filePrefix}.in -o ${filePrefix}.exp -c "/ericsson/sdee/bin/del_group.sh -d $gd_domain" -r || {
+                echo "ERROR: [LDAP_DELETE_GROUP] Could not create expect output script from input file ${filePrefix}.in"
+                return 4
+        }
+        # Execute expect script to add domain
+        /usr/local/bin/expect ${filePrefix}.exp > /dev/null 2>&1 || {
+                rm  ${filePrefix}.in ${filePrefix}.exp
+                echo "ERROR: [LDAP_DELETE_GROUP] deleting $gd_group, error code $?"
+                return 5
+        }
+        rm  ${filePrefix}.in ${filePrefix}.exp
+        LDAP_GROUP_EXISTS $gd_domain $gd_group && { echo "ERROR: [LDAP_DELETE_GROUP] Failed to delete group $gd_group"; return 6; }
+        return 0
+}

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne10_0.dtd">
+<Model version="1" importVersion="10.0">
+   <Create>
+      <FtpServer userLabel="">
+         <FtpServerId string="SMRSSLAVE-CORE-%slave%"/>
+         <ipAddress ip_v4="10.0.6.130"/>
+         <hostname string="%slave%"/>
+         <dataPortId int="0"/>
+         <controlPortId int="0"/>
+         <directoryPath string=""/>
+         <serviceSecurityState string="ON"/>
+                 <FtpService userLabel="corepmu-%slave%">
+            <name string="corepmu-%slave%"/>
+            <directoryPath string="/CORE/%slave%/#NE-NAME#/NeTransientUp"/>
+            <type string="neTransientPmUp"/>
+            <networkType string="Core"/>
+            <Tss>
+               <Entry>
+                  <System string="corepmu-%slave%"/>
+                  <Type string="NORMAL"/>
+                  <User string="corepmu-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+               <Entry>
+                  <System string="corepmu-%slave%"/>
+                  <Type string="SECURE"/>
+                  <User string="corepmu-%slave%"/>
+                  <Password string="ftpshroot"/>
+               </Entry>
+            </Tss>
+         </FtpService>
+ </FtpServer>
+      <Site userLabel="MSMSCS01">
+         <altitude string="200"/>
+         <location string="N58-25-12/E15-37-48"/>
+         <longitude string="56268000"/>
+         <latitude string="210312000"/>
+         <worldTimeZoneId string="GB-Eire"/>
+         <freeText string=""/>
+         <datum string="wgs84"/>
+      </Site>
+      <ManagedElement sourceType="Redback">
+         <ManagedElementId string="%nename%01"/>
+         <primaryType type="SmartMetro"/>
+         <managedElementType types=""/>
+         <associatedSite string="Site=MSMSCS01"/>
+         <nodeVersion string="SM-240"/>
+         <platformVersion string="SEOS6.1.5"/>
+         <swVersion string=""/>
+         <vendorName string=""/>
+         <userDefinedState string=""/>
+         <managedServiceAvailability int="1"/>
+         <isManaged boolean="true"/>
+         <connectionStatus string="ON"/>
+         <Connectivity>
+            <DEFAULT>
+               <emUrl url="https://10.1.1.1:8888/"/>
+               <ipAddress ip_v4="10.1.1.1"/>
+               <hostname string="%nename%01"/>
+               <nodeSecurityState state="ON"/>
+               <boardId string=""/>
+               <Protocol number="0">
+                  <protocolType string="SSH"/>
+                  <port int="22"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Protocol number="1">
+                  <protocolType string="SNMP"/>
+                  <port int="0"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Protocol number="2">
+                  <protocolType string="Netconf"/>
+                  <port int="0"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Browser>
+                  <browser string=""/>
+                  <browserURL string=""/>
+                  <bookname string=""/>
+               </Browser>
+            </DEFAULT>
+         </Connectivity>
+         <Tss>
+            <Entry>
+               <System string="%nename%01"/>
+               <Type string="SECURE"/>
+               <User string="lionel"/>
+               <Password string="richie"/>
+            </Entry>
+            <Entry>
+               <System string="%nename%01"/>
+               <Type string="NORMAL"/>
+               <User string="lionel"/>
+               <Password string="richie"/>
+            </Entry>
+            <Entry>
+               <System string="%nename%01"/>
+               <Type string="ROOT"/>
+               <User string="lionel"/>
+               <Password string="richie"/>
+            </Entry>
+         </Tss>
+         <Relationship>
+            <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-CORE-%slave%,FtpService=corepmu-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+            <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+         </Relationship>
+      </ManagedElement>
+   </Create>
+</Model>

@@ -1,0 +1,54 @@
+#!./expect --
+
+set VERSANT_BIN /ericsson/versant/bin
+spawn  su - nmsadm -c $VERSANT_BIN/vrsnt_admin.sh
+
+expect "Enter your choice:"
+send "1\r"
+sleep 5
+expect "Press <Return> to continue:"
+send "\r"
+sleep 5
+
+expect "Enter your choice:"
+send "2\r"
+expect "for all databases, enter 'q' to quit]: "
+sleep 2
+send "all\r"
+
+expect "Press <Return> to continue:"
+sleep 5
+send "\r"
+sleep 5
+expect "Enter your choice: "
+sleep 5
+send "3\r"
+
+expect "to stop all databases, enter 'q' to quit]:"
+send "all\r"
+sleep 5
+expect "Press <Return> to continue:"
+send "\r"
+expect "Enter your choice:"
+sleep 5
+send "4\r"
+expect "Press <Return> to continue:"
+send "\r"
+expect "Enter your choice:"
+send "5\r"
+expect "Press <Return> to continue:"
+send "\r"
+expect {
+        "Enter your choice:" {
+        send "0\r"
+        exp_continue
+        }
+        "Do you want to start the offline database before you leave?(y or n)" {
+        send "n\r"
+        exp_continue
+        }
+        "Do you want to set all unstartable databases into multi-user mode before you leave?(y or n)" {
+        send "n\r"
+}
+}
+

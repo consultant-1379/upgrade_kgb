@@ -1,0 +1,257 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+
+# History
+# 02/04/2012    edavmax         First version
+
+
+usage() {
+cat << EOF
+
+Usage:  ${G_SCRIPTNAME} [-h] [-t]
+
+- builds cominf rpms 
+- creates tarball of Cominf software
+- creates iso file of Cominf software
+
+-t	include test harness rpm in tarball
+
+It assumes that GIT setup has already been done on the host running the script. 
+
+EOF
+
+return 0
+
+}
+
+#
+# Function to create a tar ball from supplied rpm
+# $1 test_rpm
+create_test_harness_tarball() {
+	echo "${G_SCRIPTNAME}: Creating cominf test harness tarball $1"
+	local tarfilename=$(basename $1)
+	#tarfilename=${tarfilename%.*}.tar.gz
+        echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}: tarfilename=$tarfilename"
+	echo "WORKSPACE = ${WORKSPACE}"
+	cd ${WORKSPACE}/SOURCES ; return 1 #|| {
+		echo " cd ${WORKSPACE}/SOURCES failed"
+		return 1
+	#}
+	echo "DEBUG ${WORKSPACE}"; return 1
+	#tar -zcvf $tarfilename  FA/DDC/ FA/SCK/ FA/TEMP FA/USCK harness/ suites/ > /dev/null || return 1
+	/bin/tar -zcvf $tarfilename  FA/DDC/ FA/SCK/ FA/TEMP FA/USCK harness/ suites/
+	RET_CODE=$?
+	if [ $RET_CODE -ne 0 ]; then
+		echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}: tar command failed with RET_CODE: $RET_CODE"
+		echo "Current dir is : $(pwd)"
+		ls -lart $tarfilename.$$
+		echo "G_WORKSPACEDIR=${G_WORKSPACEDIR}"
+		return 1
+	fi
+	if [ ! -f $tarfilename ]; then
+		echo "Error tarfile $tarfilename does not exist."
+		return 1
+	fi
+#	mv $tarfilename ${G_WORKSPACEDIR} 
+#	RET_CODE=$?
+#        if [ $RET_CODE -ne 0 ]; then
+#		echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}: Error - move of test harness tarball in $(pwd) to ${G_WORKSPACEDIR} tmp build area failed"
+#		echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}:mv $tarfilename ${G_WORKSPACEDIR}"
+#		# small hack to sleep for a few seconds and retry, could be disk access problem on Storage Array.
+#		for ((i=1; i<=10; i++)); 
+#			do
+#			sleep 10
+#			if [ ! -f $tarfilename ]; then
+#                		echo "Error tarfile $(pwd) $tarfilename does not exist."
+#		        fi
+#			mv $tarfilename ${G_WORKSPACEDIR}
+#			RET_CODE=$?
+#        		if [ $RET_CODE -ne 0 ]; then 
+#		                echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}: Error $i - move of test harness tarball in $(pwd) to ${G_WORKSPACEDIR} tmp build area failed"
+#		                echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}:mv $tarfilename ${G_WORKSPACEDIR}"
+#			fi
+#		done
+#	fi
+#        if [ -f ${G_WORKSPACEDIR}/$tarfilename ]; then
+#
+#		echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}: ${G_WORKSPACEDIR}/$tarfilename exists "
+#	else
+#               echo "${G_SCRIPTNAME}${FUNCNAME} ${LINENO}: Error - ${G_WORKSPACEDIR}/$tarfilename does not exist "
+#        fi
+	return $RET_CODE
+
+}
+##############################
+# Function: updateGitRepoOrClone 
+# Purpose: Updates or clones the repo passed as an argument.
+# Usage: updateGitRepoOrClone <repo_name>
+#
+# Return Values:
+# 0      success
+# 1      failure
+#
+# Input globals accessed by this function
+# G_SCRIPTNAME,G_WORKSPACEDIR,GIT,G_USER,G_GIT_SERVER,G_GIT_PORT
+#
+# Output globals set by this function
+# none
+##############################
+updateGitRepoOrClone(){
+	repo_name=$1
+	echo -e "\n${G_SCRIPTNAME}: ** Configuring repo $G_WORKSPACEDIR/$repo_name **"
+	pushd . > /dev/null
+	if [ -d $G_WORKSPACEDIR/$repo_name/.git ]; then
+		echo "${G_SCRIPTNAME}: Updating git repo $G_WORKSPACEDIR/$repo_name"
+		cd $G_WORKSPACEDIR/$repo_name 
+		if ! $GIT pull; then
+			echo "${G_SCRIPTNAME}: Error - failed to update git pull repo $G_WORKSPACEDIR/$repo_name"
+			echo "${G_SCRIPTNAME}: Error - recommend you delete this dir and run script again" 
+		fi
+	else
+		cd $G_WORKSPACEDIR 
+		echo "${G_SCRIPTNAME} ${FUNCNAME} ${LINENO}:hostname $HOSTNAME pwd $PWD"
+		echo "${G_SCRIPTNAME}: Cloning git repository $repo_name.."
+		if ! $GIT clone ssh://$G_USER@$G_GIT_SERVER:$G_GIT_PORT/com.ericsson.oss.cominf/$repo_name;  then
+			echo "${G_SCRIPTNAME}: Error - failed to clone git repo $G_WORKSPACEDIR/$repo_name"
+			exit 1
+		fi
+	fi
+}
+##############################
+# Function: buildRpm 
+# Purpose: build the rpm passed as an argument.
+# Usage: buildRpm <repo_name>
+#
+# Return Values:
+# 0      success
+# 1      failure
+#
+# Input globals accessed by this function
+# G_SCRIPTNAME,G_WORKSPACEDIR,G_DEST_PACKAGEDIR,G_TEST_HARNESS_RPM,
+#
+# Output globals set by this function
+# none
+##############################
+buildRpm(){
+	repo_name=$1
+	pushd .
+	cd $G_WORKSPACEDIR
+	build_script=$G_WORKSPACEDIR/$repo_name/build.sh
+	if [ -x $build_script ]; then
+		echo "${G_SCRIPTNAME} ${FUNCNAME}: building rpms using command $build_script"
+		$build_script > /dev/null 2>&1 > /dev/null
+		if [ $? -ne 0 ]; then
+			echo "${G_SCRIPTNAME}: Error - build script $build_script failed"
+			exit 1
+		fi
+	else
+		echo "${G_SCRIPTNAME}: Note: no build script found for repo $repo_name. Assuming no rpm build needed."
+	fi
+	echo -e "*********************************************************\n"
+	popd 
+}
+#
+# Function to cache media on MWS
+#
+cache_media_mws() {
+	printf "\n${G_SCRIPTNAME}: ** caching media on MWS **\n"
+	for file in $G_SCRIPTDIR/cache_new_media.bsh $G_SCRIPTDIR/get_ci_media_exp.bsh $G_SCRIPTDIR/remove_existing_media_exp.bsh $G_SCRIPTDIR/cache_new_media_exp.bsh; do
+		scp $file root@$G_MWS_IP:/var/tmp || return 1
+	done
+	ssh root@$G_MWS_IP /var/tmp/cache_new_media.bsh || return 1
+
+}
+
+setup_environment_Variables() {
+G_INST_TYPE=nfd_stageing
+G_SCRIPTNAME=$(/bin/basename $0)
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_BUILD_ROOTDIR=$( /usr/bin/dirname $G_SCRIPTDIR )
+G_WORKSPACEDIR=$G_BUILD_ROOTDIR/nfd_workspace
+G_STAGINGDIR=$G_WORKSPACEDIR/$G_INST_TYPE
+G_DEST_PACKAGEDIRNAME=packages
+G_DEST_PACKAGEDIR=$G_STAGINGDIR/$G_DEST_PACKAGEDIRNAME
+G_PACKAGE_TGZFILENAME=platform_test_harness
+G_PACKAGE_TGZFILE=$G_WORKSPACEDIR/$G_PACKAGE_TGZFILENAME
+G_GIT_SERVER=eselivm2v238l.lmera.ericsson.se
+G_GIT_PORT=29418
+G_USER=edavmax
+G_TEST_HARNESS="cominf_test"
+G_TEST_HARNESS_RPM="COMInf_TEST_HARNESS-R1A01-0.noarch.rpm"
+G_MWS_IP=10.45.201.54
+}
+
+#MAIN
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+. ${G_SCRIPTDIR}/etc/script.env
+#commands
+GIT=/usr/bin/git
+RPMBUILD=/usr/bin/rpmbuild
+RPM2CPIO=/usr/bin/rpm2cpio
+CREATEREPO=/usr/bin/createrepo
+
+while getopts ":h" opt
+	do
+	case ${opt} in
+		h)      # Print help and exit OK
+			usage
+			exit 0
+		;;
+		*)      # Print usage and exit error
+			usage
+			exit 1
+		;;
+	esac
+done
+
+# check for installed utilities
+for utility in $GIT $RPMBUILD $RPM2CPIO $CREATEREPO; do
+	if [ ! -x $utility ]; then
+		echo "${G_SCRIPTNAME}: Error - looks like $utility not installed. Install associated rpm & try again."
+		exit 1
+	fi
+done
+
+# blow away staging dir
+if [ -d $G_STAGINGDIR ]; then
+	echo "${G_SCRIPTNAME}: Deleting staging dir $G_STAGINGDIR"
+	/bin/rm -rf $G_STAGINGDIR || {
+		echo "${G_SCRIPTNAME}: Unable to delete staging dir $G_STAGINGDIR"
+		exit 1
+	}
+fi
+
+#updateGitRepoOrClone cominf_test || {
+#        echo "${G_SCRIPTNAME} ${LINENO}:Error - failed to update git"
+#        exit 1
+#}
+
+
+#create_test_harness_tarball  $G_WORKSPACEDIR/$repo_name/RPMS/noarch/$G_TEST_HARNESS_RPM || {
+create_test_harness_tarball  ${G_PACKAGE_TGZFILE} || {
+	echo "${G_SCRIPTNAME} ${LINENO}: Failed to create ${G_PACKAGE_TGZFILE}"
+	exit 1
+}
+exit 0
+cd $G_WORKSPACEDIR
+if tar -zcvf $G_PACKAGE_TGZFILE  $G_INST_TYPE > /dev/null 2>&1; then
+	echo "${G_SCRIPTNAME} ${LINENO}: COMInf software tarball $G_PACKAGE_TGZFILE created successfully"
+else
+	echo "${G_SCRIPTNAME} ${LINENO}: Error - failed to create $G_PACKAGE_TGZFILE"
+	exit 1
+fi
+
+exit 0
+

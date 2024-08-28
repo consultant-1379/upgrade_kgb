@@ -1,0 +1,357 @@
+#!/bin/bash
+#*********************************************************************
+# Ericsson Radio Systems AB                                     SCRIPT
+#*********************************************************************
+#
+#
+# (c) Ericsson Radio Systems AB 2001 - All rights reserved.
+#
+# The copyright to the computer program(s) herein is the property
+# of Ericsson Radio Systems AB, Sweden. The programs may be used 
+# and/or copied only with the written permission from Ericsson Radio 
+# Systems AB or in accordance with the terms and conditions stipulated 
+# in the agreement/contract under which the program(s) have been 
+# supplied.
+#
+# Name    : EIS_import.bsh
+# Written : Grant Loch
+# Date    : 17/12/2013
+# Revision: A
+# Purpose : Import Solaris patches into ClearCase
+#          
+#*********************************************************************
+
+#*********************************************************************
+#
+# 	Command Section
+#
+#*********************************************************************
+BASENAME=/usr/bin/basename
+BZCAT=/usr/bin/bzcat
+CAT=/usr/bin/cat
+CD=/usr/bin/cd
+CHMOD=/usr/bin/chmod
+CLEAR=/usr/bin/clear
+CLEARFSIMPORT=/usr/atria/bin/clearfsimport
+CP=/usr/bin/cp
+CPIO=/usr/bin/cpio
+CT=/opt/rational/clearcase/bin/cleartool
+CUT=/usr/bin/cut
+DATE=/usr/bin/date
+DD=/usr/bin/dd
+DF=/usr/bin/df
+DIRNAME=/usr/bin/dirname
+DU=/usr/bin/du
+ECHO=/usr/bin/echo
+EGREP=/usr/bin/egrep
+ENV=/usr/bin/env
+EXPR=/usr/bin/expr
+FIND=/usr/bin/find
+FOLD=/usr/bin/fold
+GETENT=/usr/bin/getent
+GREP=/usr/bin/grep
+GZCAT=/usr/bin/gzcat
+HEAD=/usr/bin/head
+HOSTNAME=/usr/bin/hostname
+ID=/usr/bin/id
+LN=/usr/bin/ln
+LS=/usr/bin/ls
+MKDIR=/usr/bin/mkdir
+MKFILE=/usr/sbin/mkfile
+MORE=/usr/bin/more
+MV=/usr/bin/mv
+NAWK=/usr/bin/nawk
+PKGTRANS=/usr/bin/pkgtrans
+PWD=/usr/bin/pwd
+RM=/usr/bin/rm
+RCP=/usr/bin/rcp
+RSH=/usr/bin/rsh
+SED=/usr/bin/sed
+SEVENZ=/usr/bin/7z
+SLEEP=/usr/bin/sleep
+SORT=/usr/bin/sort
+SU=/usr/bin/su
+TAIL=/usr/bin/tail
+TAR=/usr/bin/tar
+TOUCH=/usr/bin/touch
+UNAME=/usr/bin/uname
+UNZIP=/usr/bin/unzip
+WC=/usr/bin/wc
+ZIP=/usr/bin/zip
+
+#********************************************************************
+#
+# 	functions
+#
+#********************************************************************
+
+### Function: abort_script ###
+#
+#   This will be called if the script is aborted through an error,
+#   error signal sent by the kernel such as CTRL-C or if a serious
+#   error is encountered during runtime
+#
+# Arguments:
+#       $1 - Error message from part of program (Not always used)
+# Return Values:
+#       none
+#*****************************************************************
+abort_script()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : abort_script"
+
+  #**************************************************************
+  # Display error message if supplied otherwise a default message
+  #**************************************************************
+  if [ ! "$1" ]
+  then
+      ${ECHO} "Script aborted......."
+  else
+      ${ECHO} "$1"
+  fi
+
+  cd ${SCRIPTHOME}
+
+  #*********
+  # End time
+  #*********
+  END_TIME=`${DATE} +'%Y%m%d%H%M%S'`
+  [ "${DEBUG}" ] && ${ECHO} "End time: ${END_TIME}"
+
+  exit 100
+}
+
+
+### Function: check_id_ossrcci ###
+#
+#   Check that the effective id of the user is 112650
+#   i.e. ossrcci. If not ossrcci, print error msg and exit.
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#****************************************************
+check_id_ossrcci() 
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : check_id_ossrcci"
+
+  EFFECT_ID=`${ID} | ${SED} 's/uid=\([0-9]*\)(.*/\1/'`
+  if [ "${EFFECT_ID}" != "112650" ]
+  then
+      abort_script "ERROR: You must be ossrcci to execute this script."
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "ID=112650"
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : check_id_ossrcci\n"
+}
+
+
+### Function: check_input_params ###
+#
+# Check Input parameters
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#***********************************
+check_input_params()
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : check_input_params"
+
+  #**************************************
+  # Check that the input directory exists
+  #**************************************
+  if [ ! -d "${INPUT_DIR}" ]
+  then
+      abort_script "ERROR: ${INPUT_DIR} does not exist."
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "INPUT_DIR = ${INPUT_DIR}"
+
+  #***************************************
+  # Check that the output directory exists
+  #***************************************
+  if [ ! -d "${OUTPUT_DIR}" ]
+  then
+      abort_script "ERROR: ${OUTPUT_DIR} does not exist."
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "OUTPUT_DIR = ${OUTPUT_DIR}"
+
+  [ "${DEBUG}" ] && ${ECHO} "End Function : check_input_params\n"
+}
+
+
+### Function: get_absolute_path ###
+#
+# Determine absolute path to software
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#************************************
+get_absolute_path() 
+{
+  [ "${DEBUG}" ] && ${ECHO} "Function : get_absolute_path"
+
+  DIR=`${DIRNAME} $0`
+  SCRIPTHOME=`cd ${DIR} 2> /dev/null && pwd || ${ECHO} ${DIR}`
+
+  [ "${DEBUG}" ] && ${ECHO} "SCRIPTHOME = ${SCRIPTHOME}"
+  [ "${DEBUG}" ] && ${ECHO} "End Function : get_absolute_path\n"
+}
+
+
+### Function: usage_msg ###
+#
+# Print out the usage message
+#
+# Arguments:
+#	none
+# Return Values:
+#	none
+#******************************
+usage_msg() 
+{
+  ${CLEAR}
+  ${ECHO} "Usage: `${BASENAME} $0` -d <EIS date> [ -D ]
+ 
+  options:
+      -d : EIS date in yymmdd format. The directory structure should exist as yymmdd_Oracle
+           under ${KITDIR}.
+
+      -r : Shipment to import patches into. xx.y.z format, e.g. 14.2.6
+
+      -D : Debug, increased logging."
+}
+
+
+#********************************************************************
+#
+# 	Main body of program
+#
+#********************************************************************
+
+#***********
+# Start time
+#***********
+START_TIME=`${DATE} +'%Y%m%d%H%M%S'`
+
+#**************************
+# Parse supplied parameters
+#**************************
+while getopts "d:r:D" arg
+do
+  case ${arg} in
+    d) EIS_DATE="${OPTARG}" 
+       ;;
+    r) SHIPMENT="${OPTARG}" 
+       ;;
+    D) DEBUG="YES"
+       ;;
+    *) usage_msg 
+       exit 1 
+       ;;
+  esac
+done
+if [ `expr ${OPTIND} - 1` -ne ${#} ]
+then
+    ${ECHO} "ERROR: Invalid parameter string '${@}'"
+    sleep 2
+    usage_msg
+    exit
+fi
+
+[ "${DEBUG}" ] && ${ECHO} "Start time: ${START_TIME}"
+
+#****************
+# Setup variables
+#****************
+KITDIR="/net/159.107.177.22/NFD_Store/EIS/DVD_Kit"
+
+#************************************
+# Determine absolute path to software
+#************************************
+get_absolute_path
+
+#***************************************************
+# Check that the effective id of the user is ossrcci
+#***************************************************
+check_id_ossrcci
+
+#*******************************************************
+# Select the ClearCase config file for supplied shipment
+#*******************************************************
+[ "${DEBUG}" ] && ${ECHO} "Setting config to /view/sck/vobs/oss_sck/tools/cs/sck_o${SHIPMENT}.cs\n"
+${CT} setcs /view/sck/vobs/oss_sck/tools/cs/sck_o${SHIPMENT}.cs
+ERR=$?
+if [ ${ERR} -ne 0 ]
+then
+    abort_script "ERROR: Setting config to sck_o${SHIPMENT}.cs - ${ERR}"
+fi
+[ "${DEBUG}" ] && ${ECHO} "Set config to sck_o${SHIPMENT}.cs\n"
+
+#***************************
+# Display the current config
+#***************************
+[ "${DEBUG}" ] && ${ECHO} "Current config:\n"
+[ "${DEBUG}" ] && ${CT} catcs
+
+#************************************
+# Run once for sparc and once for x86
+#************************************
+for ARCH in "sparc" "i386"
+do
+  ${ECHO} "#************************"
+  ${ECHO} "Importing ${ARCH} patches"
+  ${ECHO} "#************************"
+
+  #****************
+  # Setup variables
+  #****************
+  INPUT_DIR="${KITDIR}/${EIS_DATE}_Oracle/DVD1_Output/${ARCH}"
+  OUTPUT_DIR="/vobs/fw/cif2_CDimage/cif4/OM/Patches"
+
+  #**********************
+  # Check Iput parameters
+  #**********************
+  check_input_params
+
+  #**************************
+  # Preview the clearfsimport
+  #**************************
+  [ "${DEBUG}" ] && ${ECHO} "Previewing clearfsimport"
+  [ "${DEBUG}" ] && ${ECHO} "${CLEARFSIMPORT} -nset -pre -rec -rmname ${INPUT_DIR} ${OUTPUT_DIR}"
+  ${CLEARFSIMPORT} -nset -pre -rec -rmname ${INPUT_DIR} ${OUTPUT_DIR}
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: ${CLEARFSIMPORT} -nset -pre -rec -rmname ${INPUT_DIR} ${OUTPUT_DIR} - ${ERR}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "clearfsimport preview successfull"
+
+  #**************
+  # clearfsimport
+  #**************
+  [ "${DEBUG}" ] && ${ECHO} "clearfsimport"
+  [ "${DEBUG}" ] && ${ECHO} "${CLEARFSIMPORT} -nset -rec -rmname ${INPUT_DIR} ${OUTPUT_DIR}"
+  ${CLEARFSIMPORT} -nset -rec -rmname ${INPUT_DIR} ${OUTPUT_DIR}
+  ERR=$?
+  if [ ${ERR} -ne 0 ]
+  then
+      abort_script "ERROR: ${CLEARFSIMPORT} -nset -rec -rmname ${INPUT_DIR} ${OUTPUT_DIR} - ${ERR}"
+  fi
+  [ "${DEBUG}" ] && ${ECHO} "clearfsimport successfull"
+
+done
+
+${ECHO} "#*****************"
+${ECHO} "Importing complete"
+${ECHO} "#*****************"
+
+#*********
+# End time
+#*********
+END_TIME=`${DATE} +'%Y%m%d%H%M%S'`
+[ "${DEBUG}" ] && ${ECHO} "End time: ${END_TIME}"

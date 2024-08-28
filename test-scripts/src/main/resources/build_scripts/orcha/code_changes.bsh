@@ -1,0 +1,216 @@
+#!/usr/bin/bash
+# ********************************************************************
+# Ericsson Radio Systems AB                                     SCRIPT
+# ********************************************************************
+#
+#
+#
+# ********************************************************************************
+# Name    : code_changes
+# Date    : 11/03/2015
+# Revision:
+# Purpose : common Clearcase Utiliseds
+###############################################################################################
+
+declare POD2TEXT="/usr/perl5/5.8.4/bin/pod2text"
+declare CT=/usr/atria/bin/cleartool
+
+
+function usage_msg
+{
+    
+    ${CLEAR}
+
+    $POD2TEXT -m 4 -w 150 -l $0
+
+    return 0
+}
+
+######################################################################
+# FUNCTION check_diff_between_labels
+#
+# Creates a 2k ssh key pair for root user on the isolated non_updated node. 
+#
+# Return codes:
+# 0        successful
+# 1        Failed
+# 2        Failed 
+# Input 
+# New Label
+# Old Label
+# 
+######################################################################
+
+function check_diff_between_labels()
+{
+	local retVal=0
+	local newLabel=$1
+	local oldLabel=$2
+	echo "Start Function: (${*})"
+	echo "Checking the Labels: ${newLabel} and ${oldLabel}"
+	echo "Command: cleartool find -all -element {lbtype_sub(${newLabel}) && lbtype_sub(${oldLabel})} -ver {lbtype(${newLabel}) && !lbtype(${oldLabel})}  -exe cleartool diff -options \"-blank_ignore\" $CLEARCASE_XPN $CLEARCASE_PN@@/${oldLabel}"
+	
+	echo "==============================="
+	echo ""
+	echo "NEW"
+	$CT lshistory -minor lbtype:${newLabel} 
+	echo "OLD"
+	$CT lshistory -minor lbtype:${oldLabel} 
+	echo ""
+	
+	echo "==============================="
+	echo "==============================="
+	echo ""
+	$CT find -all -element "{lbtype_sub(${newLabel}) && lbtype_sub(${oldLabel})}" -ver "{lbtype(${newLabel}) && !lbtype(${oldLabel})}" -nxname -print
+	 
+	echo ""
+	echo "==============================="
+	
+	echo "==============================="
+	echo ""
+	
+	$CT find -all -element "{lbtype_sub(${newLabel}) && lbtype_sub(${oldLabel})}" -ver "{lbtype(${newLabel}) && !lbtype(${oldLabel})}" -exe '/usr/atria/bin/cleartool diff -options "-blank_ignore" -ser $CLEARCASE_XPN $CLEARCASE_PN@@/'"${oldLabel}"
+	retVal=$?
+	
+	echo ""
+	echo "==============================="
+	retVal=$?
+	if [ "${retVal}" -ne 0 ]
+    then
+        echo "Failed to find the code changes"
+		echo "End Function: (Return ${retVal})"
+		return $retVal
+    fi
+	
+	return 0
+	
+}
+
+function find_diff_between_labels()
+{
+	local retVal=0
+	local newLabel=$1
+	local oldLabel=$2
+	echo "Start Function: (${*})"
+	echo "Checking the Labels: ${newLabel} and ${oldLabel}"
+	echo "Command: $CT find -all -element {lbtype_sub(${newLabel}) && lbtype_sub(${oldLabel})} -ver {lbtype(${newLabel}) && !lbtype(${oldLabel})} -version -print"
+	
+	echo "==============================="
+	echo ""
+	echo "NEW"
+	$CT lshistory -minor lbtype:${newLabel} 
+	echo "OLD"
+	$CT lshistory -minor lbtype:${oldLabel} 
+	echo ""
+	
+	echo "==============================="
+	echo "==============================="
+	echo ""
+	$CT find -all -element "{lbtype_sub(${newLabel}) && lbtype_sub(${oldLabel})}" -ver "{lbtype(${newLabel}) && !lbtype(${oldLabel})}"  -exe '/usr/atria/bin/cleartool desc -short $CLEARCASE_PN@@/'"${newLabel}"
+	retVal=$?
+	
+	echo ""
+	echo "==============================="
+	retVal=$?
+	if [ "${retVal}" -ne 0 ]
+    then
+        echo "Failed to find the code changes"
+		echo "End Function: (Return ${retVal})"
+		return $retVal
+    fi
+	
+	return 0
+	
+}
+
+function parse_supplied_params()
+{
+	echo "First parameter = ${1}"
+	# Parse the optional parameters
+	echo "Attempting to parse inputs"
+	# while getopts ":f:d" ARG
+	while getopts ":fd" ARG
+	do 
+		case ${ARG} in
+		  f)    FIND="TRUE"
+				echo "FIND is set to true:"
+				;;
+		  d)    DIFF="TRUE"
+				echo "DIFF is set to true:"
+				;;				
+		  *)    echo "ERROR: Invalid option ${OPTARG} supplied"
+				exit 1
+				;;
+		esac
+	done
+	shift $((OPTIND-1))
+ 
+	# Parse the positional parameters
+
+	NUM_FIXED_ARGS=$#
+	echo "First parameter = ${1}"
+	if [ $NUM_FIXED_ARGS -lt 2 ]
+	then
+		${ECHO} "ERROR: Invalid input '${@}'"
+		sleep 2
+		usage_msg
+		exit 1
+	fi
+
+	return 0
+}
+
+#*************************************************************************
+#
+# Step 1: Parse build options
+#
+#*************************************************************************
+
+parse_supplied_params "${@}" || exit 1
+shift $((OPTIND-1))
+#*************************************************************************
+#
+# Step 2: Parse build options
+#
+#*************************************************************************
+
+
+if [ "${DIFF}" = "TRUE" ] ; then
+	check_diff_between_labels $1 $2
+fi
+
+if [ "${FIND}" = "TRUE" ] ; then
+	find_diff_between_labels $1 $2
+fi
+#****************************************
+#****************************************
+# POD Section for man and HTML pages.
+#****************************************
+#****************************************
+: <<=cut
+=pod
+
+=head1 NAME
+
+    code_changes basic clearcase commands for delivery . 
+
+=head1 SYNOPSIS
+
+    Usage: code_changes 
+
+  
+=head1 DESCRIPTION
+
+    code_chages.bsh performs the following tasks:
+
+=over 4
+
+=item *
+
+I
+
+=head1 LICENSE
+
+    Ericsson Radio Systems AB 2015 - All rights reserved.
+
+=cut

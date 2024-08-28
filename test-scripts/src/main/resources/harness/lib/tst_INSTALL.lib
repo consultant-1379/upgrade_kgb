@@ -1,0 +1,283 @@
+#!/bin/bash
+#------------------------------------------------------------------------
+#
+#       COPYRIGHT (C) ERICSSON RADIO SYSTEMS AB, Sweden
+#
+#       The copyright to the document(s) herein is the property of
+#       Ericsson Radio Systems AB, Sweden.
+#
+#       The document(s) may be used and/or copied only with the written
+#       permission from Ericsson Radio Systems AB or in accordance with
+#       the terms and conditions stipulated in the agreement/contract
+#       under which the document(s) have been supplied.
+#
+#------------------------------------------------------------------------
+#
+#
+#   Provides a set of library functions related to INSTALL
+#   Functions provided:
+#     RHEL_INSTALLED
+#     IS_SERVER_UP
+#     OM_SERV_MASTER_RPMS
+#     SMRS_SLAVE_RPMS
+#     JAVA_CHECK
+#     CHECK_HOSTS
+#
+# Date        Signum   Details
+# 2012-06-06  XPHICOO  Initial script
+# 2012-06-12  XAMAMCG  Add CHECK_CONFIG_INI
+# 2012-06-15  XAMAMCG  Add CHECK_HOSTS
+# 2012-07-10  XAMAMCG  Move CHECK_CONFIG_INI and CHECK_PROFILE to common
+#
+. ${AT_LIB}/tst_cominf.lib
+#. /root/cominf/cominf_test/SOURCES/harness/lib/tst_cominf.lib
+
+### Function RHEL_INSTALLED
+#
+#   Check if the OS is RHEL 6.1
+#
+# Arguments:
+#       none
+# Return Values:
+#       See tst_cominf.lib function TEST_REDHAT
+#
+function RHEL_INSTALLED()
+{
+    TEST_REDHAT
+    retcode=$?
+    if [ ${retcode} -gt 0 ]; then
+        return ${retcode}
+    fi
+    return 0
+}
+
+### Function IS_SERVER_UP
+#
+#   Check if the server is up and running
+#
+# Arguments:
+#       none
+# Return Values:
+#       0 Server is running
+#       1 Problem with server
+#
+function IS_SERVER_UP()
+{
+    uptime > /dev/null 2>&1
+    retcode=$?
+    #[ ${retcode} -gt 0 ] && echo "System is not up";return ${retcode}
+    if [ ${retcode} -gt 0 ]; then
+        echo "IS_SERVER_UP returned ${retcode}"
+        return ${retcode}
+    fi
+    return 0
+}
+
+
+### Function OM_SERV_MASTER_RPMS
+#
+#   Check if the core RPMS have benn installed
+#
+# Arguments:
+#       None
+# Return Values:
+#       0 All RPM's are installed
+#       1 RNot all RPM's are installed
+#
+function OM_SERV_MASTER_RPMS()
+{
+    # Are the core RPM's installed
+    NOT_INSTALLED=""
+    RPMS="dhcp expect rsync ntp tftp tftp-server COMInf_CORE COMInf_LDAP OpenDJ jre-1.6.0_37"
+    for RPM in ${RPMS} ; do
+        RPM_IS_INSTALLED ${RPM}
+        [ $? -ne 0 ] && NOT_INSTALLED="${NOT_INSTALLED} ${RPM}"
+    done
+
+    # If detected RPM's not installed log and return error status
+    if [ "${NOT_INSTALLED}" != "" ]; then
+        echo "Missing RPM's: ${NOT_INSTALLED}"
+        return 1
+    fi
+
+    return 0
+}
+
+### Function SMRS_SLAVE_RPMS
+#
+#   Check if the core RPMS have benn installed
+#
+# Arguments:
+#       None
+# Return Values:
+#       0 All RPM's are installed
+#       1 Not all RPM's are installed
+#
+function SMRS_SLAVE_RPMS()
+{
+    # Are the core RPM's installed
+    NOT_INSTALLED=""
+    RPMS="dhcp expect rsync ntp tftp tftp_server"
+    for RPM in ${RPMS} ; do
+        RPM_IS_INSTALLED ${RPM}
+        [ $? -ne 0 ] && NOT_INSTALLED="${NOT_INSTALLED} ${RPM}"
+    done
+
+    # If detected RPM's not installed log and return error status
+    if [ "${NOT_INSTALLED}" != "" ]; then
+        echo "Missing RPM's: ${NOT_INSTALLED}"
+        return 1
+    fi
+
+    return 0
+}
+
+### Function COMINF_INSTALLED
+#
+#   Check if the core RPMS have benn installed
+#
+# Arguments:
+#       None
+# Return Values:
+#       0 All RPM's are installed
+#       1 Not all RPM's are installed
+#
+function COMINF_INSTALLED()
+{
+    # Are the COMInf RPM's installed
+    NOT_INSTALLED=""
+    RPMS="COMInf_CORE COMInf_LDAP"
+    for RPM in ${RPMS} ; do
+        RPM_IS_INSTALLED ${RPM}
+        [ $? -ne 0 ] && NOT_INSTALLED="${NOT_INSTALLED} ${RPM}"
+    done
+
+    # If detected RPM's not installed log and return error status
+    if [ "${NOT_INSTALLED}" != "" ]; then
+        echo "Missing RPM's: ${NOT_INSTALLED}"
+        return 1
+    fi
+
+    return 0
+}
+
+### Function CHECK_JAVA()
+#
+#   Check if the core RPMS have benn installed
+#
+# Arguments:
+#       None
+# Return Values:
+#       0 Java is installed and the correct version
+#       1 Java is not installed
+#       2 Java is installed but not the correct version
+#
+function CHECK_JAVA()
+{
+    # Is Java installed and the correct version
+    correct_java="java version 1.6"
+
+    # Is java installed
+    java -version > /dev/null 2>&1
+    [ $? -ne 0 ] && return 1
+
+    # Check version
+    pid=$$
+    scr=`basename $0 | awk -F. '{print $1}'`
+    tst_file=/tmp/${scr}.${pid}
+    java -version > ${tst_file} 2>&1
+    cat ${tst_file}
+    current_java=`head -1 ${tst_file} | sed -e 's/\"//g'`
+    if [ "$correct_java" != "${current_java:0:16}" ]; then
+        echo "Not correct java version ${current_java}. Expected ${correct_java}"
+        return 2
+    fi
+    rm -f ${tst_file}
+
+    return 0
+}
+
+### Function COMINF_RPM_DEPENDS
+#
+#   Check that the COMINF RPMS contain the correct entries
+#
+# Arguments:
+#       None
+# Return Values:
+#       0 - Correct entries are in the RPMS
+#       1 - Entries are missing from the RPMS
+#
+function COMINF_RPM_DEPENDS()
+{
+    # Create a temporary file name
+    scr=`basename $0 | awk -F. '{print $1}'`
+    pid=$$
+    tst_file="/tmp/${scr}.${pid}"
+
+    # OpenDJ Checks
+    rpm -qR OpenDJ | grep -q jre
+    retcode=$?
+    if [ ${retcode} -ne 0 ]; then
+        echo "jre is missing from OpenDJ"
+        return 1
+    fi 
+    
+    # COMInf_CORE checks
+    rpm -qR COMInf_CORE > ${tst_file}
+    lookfor="bid dhcp expect ntp"
+    for entry in ${lookfor} ; do
+        grep -q ${entry} ${tst_file}
+        retcode=$?
+        if [ ${retcode} -ne 0 ]; then
+            echo "${entry} is missing from COMInf_CORE"
+        fi
+    done
+
+    # COMInf_LDAP checks
+    rpm -qR COMInf_LDAP > ${tst_file}
+    lookfor="OpenDJ COMInf_CORE"
+    for entry in ${lookfor} ; do
+        grep -q ${entry} ${tst_file}
+        retcode=$?
+        if [ ${retcode} -ne 0 ]; then
+            echo "${entry} is missing from COMInf_LDAP"
+        fi
+    done
+
+}
+    
+### Function CHECK_HOSTS
+#
+#   Check if /etc/hosts has entry for name and IP address provided
+
+# Arguments:
+#       $1 should contain the IP address
+#       $2 should contain the hostname
+#
+# Return Values:
+#       0 Entry found
+#       1 No matching entry found for IP address
+#       2 Entry for IP address does not contain hostname
+#       3 The /etc/hosts file was not found
+#       4 Wrong parameters were passed to the function
+#
+function CHECK_HOSTS()
+{
+    # Check for a parameter being passed
+    [ $# -lt 2 ] && return 4
+    
+    # Location of the hosts file
+    hfile="/etc/hosts"
+
+    # Check hosts file is readable
+    [ ! -r ${hfile} ] && return 3
+
+    # Check IP address is in file
+    LINE=`grep ^$1 ${hfile} 2> /dev/null`
+    [ $? -ne 0 ] && return 1
+    
+    # Check hostname is on matching line
+    echo "$LINE " | grep -i -q "\s$2\s"
+    [ $? -ne 0 ] && return 2
+    return 0
+}

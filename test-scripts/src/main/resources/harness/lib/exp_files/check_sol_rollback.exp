@@ -1,0 +1,58 @@
+#!./expect -- 
+
+#Return 1 no boot environments are configured
+#Return 2 d10 active 
+#Return 3 d70 active 
+
+set timeout 120 
+#log_user 0
+
+set SERVER [lindex $argv 0]
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$SERVER.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+send "/ericsson/dmr/bin/dmtool s p\r"
+expect "#"
+send "lustatus\r"
+while 1 {
+        expect {
+                "d10                        yes      yes" {
+			sleep 5
+                        exit 2}
+                "d70                        yes      yes" {
+			sleep 5
+                        exit 3}
+                "ERROR:" {
+			sleep 5
+                        exit 1}
+                }
+        }
+
+
+exit 1
+send "exit\r"
+expect "#"

@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# TEST CASE SPEC FILE
+# This file is generated/updated using the test framework web interface.
+# Manual updates on test servers are lost when the test package is re-installed.
+#
+# Last modified: Tuesday 15th of April 2014 12:05:48
+#
+
+# These settings must be in BASH script format, they are sourced by other scripts.
+SPEC_FA_NAME="UNIT_ADMIN"
+SPEC_UC_NAME="03_01_ADMIN_UG_TSK_SPLT_CLSTR_UNIT"
+SPEC_TC_ID=22507
+SPEC_TC_SLOGAN="Verify admin_has_peer returns peer if asn_ services on peer node"
+SPEC_TC_TYPE="UNIT"
+SPEC_TC_POLARITY="positive"
+SPEC_TC_PRIORITY="low"
+if [ "$ORCH_SERVER_TYPE" = "ADMIN" ]; then
+ SPEC_TC_AUTOMATED=1
+else
+ SPEC_TC_AUTOMATED=0
+fi
+SPEC_TC_DEPENDENT_ONLY=0
+SPEC_TC_TIMEOUT=300
+SPEC_TC_TEST_PASSCODE=0
+SPEC_TC_AUTHOR="xmcgama"
+SPEC_TC_AUTOMATOR="xmcgama"
+# this parameter is not interpreted by harness
+SPEC_TC_DISABLED=0
+
+# Please do not remove the comment lines below.
+# They are used as section locators by the test harness.
+
+# BEGIN_PRE_CONDITIONS
+#- /etc/hosts has asn_ entry for peer1
+# END_PRE_CONDITIONS
+
+
+# BEGIN_MANUAL_STEPS
+#- admin_has_peer
+# END_MANUAL_STEPS
+
+# BEGIN_POST_CONDITIONS
+# END_POST_CONDITIONS

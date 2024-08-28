@@ -1,0 +1,68 @@
+#!./expect -- 
+
+set timeout 120 
+
+set ADMIN1 [lindex $argv 0]
+set ADMIN2 [lindex $argv 1]
+set D "\$" 
+
+#main
+
+spawn ssh -oUserKnownHostsFile=/dev/null -ostricthostkeychecking=no root@$ADMIN1.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+	expect {
+		"Are you sure you want to continue connecting" {
+			send "yes\r"}
+		"login: " {
+			send "root\r"}
+
+		"Password:" {
+			send "shroot\r"
+			break}
+		eof {
+			puts "warning: timed out"
+
+			exit 1}
+ 		timeout {
+			puts "warning: timed out"
+			exit 1}
+		}
+	}
+
+
+expect "#"
+
+ send "ssh ${ADMIN2}-priv\r"
+while 1 {
+        expect {
+                "${ADMIN2}\{root\} #" {
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        exit 1}
+                }
+        }
+
+send "chmod 755 /var/opt/ericsson\r"
+expect "#"
+send "chown nmsadm:nms /var/opt/ericsson\r"
+expect "#"
+send "chmod 755 /opt/ericsson\r"
+expect "#"
+send "chown nmsadm:nms /opt/ericsson\r"
+expect "#"
+send "chmod 775 /var/opt/ericsson/eba_rede\r"
+expect "#"
+send "chown nmsadm:nms /var/opt/ericsson/eba_rede\r"
+expect "#"
+send "chown nmsadm:nms /var/opt/ericsson/eba_rsdm\r"
+expect "#"
+send "chmod 775 /var/opt/ericsson/nms_umts_pms_seg\r"
+expect "#"
+send "chmod 775 /var/opt/ericsson/sgw\r"
+expect "#"
+send "/opt/ericsson/sck/bin/system_checks.bsh -a post_sys_upgrade\r"
+expect "Post System Uprgade Check Result"
+expect "#"
+sleep 3

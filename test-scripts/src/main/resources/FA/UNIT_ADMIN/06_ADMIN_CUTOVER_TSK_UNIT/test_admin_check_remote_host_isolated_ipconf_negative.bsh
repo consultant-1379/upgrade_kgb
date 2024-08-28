@@ -1,0 +1,51 @@
+#!/bin/bash
+# Tests function admin_check_remote_host_isolated_ipconf
+# Precondition: Must be on Admin cluster on isolated side with remote server "live"
+# Function will ssh across using private interface to verify remote server is isolated. Verification will fail since remote side is "live"
+#
+source /opt/ericsson/sck/lib/admin_common_functions.lib
+DEBUG=TRUE
+RES=0
+NO_OF_ERRORS=0
+
+################################################################################
+# Test 1: Positive run of admin_check_remote_host_isolated_ipconf 
+#
+###############################################################################
+
+#############Pre-condition - Server must be isolated ##########################
+if  ! orc_check_blocked_state
+then
+    echo "ERROR: this test should be run on an isolated admin server"
+    exit 1
+fi
+
+#############Test ########################################################
+
+RES=0
+admin_check_remote_host_isolated_ipconf
+RES=$?
+
+if [ $RES -eq 1 ]
+then
+    echo "############Negative test of admin_check_remote_host_isolated_ipconf was successful ##########"
+else 
+    echo "############Negative test of admin_check_remote_host_isolated_ipconf failed ########## "
+    ((NO_OF_ERRORS=NO_OF_ERRORS=1))
+fi
+
+#############Test 1: End ########################################################
+
+
+####################Results summary ####################################################
+if [ $NO_OF_ERRORS -eq 0 ] 
+then
+    echo "############admin_perform_isolate_system_prechecks negative tests executed successfully############"
+    exit 0
+else
+    echo "############admin_perform_isolate_system_prechecks negative tests failed with ${NO_OF_ERRORS}############"
+    exit 1
+fi 
+
+
+##################Results summary ####################################################

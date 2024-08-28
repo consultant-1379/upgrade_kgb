@@ -1,0 +1,8 @@
+#!/usr/local/bin/expect
+
+spawn /opt/ericsson/sck/bin/update_nmsadm.ksh -r
+expect "New Password"
+send "nms275\r"
+expect "Re-enter new Password"
+send "nms275\r"
+expect closed

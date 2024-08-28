@@ -1,0 +1,1918 @@
+#!/bin/bash
+#set -xv
+# moved cmddir;PATH;user to setup_func
+#cmddir=`dirname $0`
+#PATH=/usr/xpg4/bin:/bin
+#LD_LIBRARY_PATH=/usr/local/expect/lib:$LD_LIBRARY_PATH export LD_LIBRARY_PATH
+#user=$(id -un)
+#EXPECT=/usr/local/expect/bin/expect
+
+###############################
+#COMMAND INITIALIZATION -moved to setup_func
+###############################
+#CP=/usr/bin/cp
+#CAT=/usr/bin/cat
+#ECHO=/usr/bin/echo
+#RM=/usr/bin/rm
+#SLEEP=/usr/bin/sleep
+
+testRemote_func ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+echo "variables in lib function:
+===============
+expect: $EXPECT
+Arg1: $1
+Arg2: $2
+From TC: ${G_WRAPPER_ARGS}
+Admin1: ${CI_ADMIN1_HOSTNAME}
+exp_dir: ${G_EXPECT_DIR}
+"
+
+$EXPECT $cmddir/check_alive.exp ${admin1} ${admin2}	
+			ret=$?
+		return "${ret}"
+}
+
+setExpect ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+if [ $( hostname ) = "eeiatuc432" ]; then
+        # eeiatuc432 uses libexpect5.38 and libtcl8.4
+        LD_LIBRARY_PATH=/app/expect/5.38/lib:/app/tcl/8.4.5/lib:$LD_LIBRARY_PATH export LD_LIBRARY_PATH
+        EXPECT="/usr/local/bin/expect"
+elif [ $( hostname ) = "eieatx009" ]; then
+        # eieatx009 uses libexpect5.38 and libtcl8.4
+        LD_LIBRARY_PATH=/app/expect/5.38/lib:/app/tcl/8.4.5/lib:$LD_LIBRARY_PATH export LD_LIBRARY_PATH
+        EXPECT="/usr/local/bin/expect"
+elif [ $( hostname ) = "eeiatuc681" ]; then
+        LD_LIBRARY_PATH=/app/expect/5.38/lib:/app/tcl/8.4.5/lib:$LD_LIBRARY_PATH export LD_LIBRARY_PATH
+		EXPECT="/app/expect/5.38/bin/expect"
+elif [ $( uname -s ) = "Linux" ]; then
+		EXPECT="/usr/bin/expect"
+elif [ $( uname -s ) = "SunOS" ]; then
+		EXPECT="/usr/local/bin/expect"
+else
+        # eieatx008 and eeiatuc681 use libexpect5.22 and libtcl7.6
+        LD_LIBRARY_PATH=/usr/local/expect/lib:$LD_LIBRARY_PATH export LD_LIBRARY_PATH
+        EXPECT="/app/expect/5.43/bin/expect"
+fi
+}
+
+message()
+{
+echo ""
+echo "===================< CI: $1 `date '+%Y%m%d-%H:%M:%S'` >==================="
+echo ""
+}
+
+err_msg()
+{
+local _msg=$1
+local _ln=$2
+local _func=$3
+local _rc=$4
+local _script=$(basename $BASH_SOURCE)
+${BANNER} "->error"
+echo -e "\n\tERROR: ${_msg}.\tFUNCTION: ${_func}\tLINE:${_ln} IN: ${_script}\tCODE:$4\n"
+}
+
+error () 
+{
+        echo "Error: $1 $2" 
+	echo "Install Failed:[$1 $2] , see logs for details" | mailx -s "$release $shipment for $platforms $type FAILED" priju.punnoose@ericsson.com,roopa.k10@wipro.com,PDLSCKSUPP@ex1.eemea.ericsson.se,PDLUSCKSUP@ex1.eemea.ericsson.se
+
+	if [[ "${type}" == "II" ]]; then
+		content_for_log=contentII-$platforms-$wdate.html
+		log_for_log=lnstall-$platforms-$wdate.html
+		type_for_log="Initial Install"
+	else
+		content_for_log=contentUG-$platforms-$wdate.html
+		log_for_log=installug-$platforms-$wdate.html
+		type_for_log="Upgrade from $base"
+	fi
+	if [[ "${admin2}" == "NO" ]]; then
+		servers_for_log=${admin1}
+	else
+		servers_for_log=${admin1},${admin2}
+	fi
+
+	installfinish_for_log=`date +'%a %b %e %Y %T'`
+	echo "Install Finished: $installfinish_for_log"
+	echo "Arch: $platforms"
+	echo "Install type: $type_for_log"
+	echo "DM build date: $II_build_complete"
+	echo "Server: $servers_for_log"
+	echo "Install status: Failed at $2"
+	echo "Install log: $log_for_log"
+	echo "content: $content_for_log"
+ 	if [ -f $logdir/${INSTALL} ]; then
+               echo "<html> <body>"  > $logdirhtml/$log_for_log
+               cat $logdir/${INSTALL} | sed 's/$/\<BR\>/' >> $logdirhtml/$log_for_log
+               echo "</body></html>"  >> $logdirhtml/$log_for_log
+        fi
+ 	echo  "$installstart@$installfinish_for_log@$platforms@$type_for_log@$II_build_complete@$servers_for_log@Failed at $2@Failed@<a href=\"./logs/$log_for_log\">Install log</a\>@Failed@<a href=\"./logs/$content_for_log\">Content" >>  /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results
+        rm /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results1-$platforms-$wdate
+        exit 1
+}
+
+usage () 
+{
+        echo "Usage: $cmd [-hv] -r release -s shipment -m machine" 1>&2
+        printf " -s shipment    shipment is e.g. F or C1\n" 
+        printf " -r release     release is e.g. R3\n" 
+        printf " -m machine     machine is e.g. atrcus1\n" 
+	printf " -i yes         use pre inirator\n"
+	printf " -v version     Used to enter the Version of the CU/EU tar file (Default Rev. A)\n"
+	printf " -t type	Type of build i.e. II or UG\n"
+	printf " -l Build Type	Used if this is an II for an LLSV e.g. II for LLSV1\n"	
+	printf " -p platform	What platform do you wish to build from i386 or sparc\n"
+	printf " -n LLSV incr.	EU/LLSV increment\n"
+	printf " -u Base shipment \n"
+	printf " -q admin2 \n"
+        printf " -c NO		This will not create an OM DVD. By default it will be created\n"
+	printf " -o NO		This will not create an OSS DVD. By default it will be created\n"
+	printf " -e sun/hp	Used to say which server to install onto Rackmount or blade\n"
+	printf " -k YES		mws jump\n"
+	printf " -z NO		Used if you are performing a rebuild but you wish to keep the existing EC on the EC web page. Default is YES\n"
+	printf " -f YES		Used if you are performing an II or CU build and you wish to create a full build not copy the old build\n"
+	printf " -d DMR		DMR Server Yes or No.\n"
+	printf " -b YES		add uploaded packahes.\n"
+	printf " -j YES		Only creates a jump\n"
+	printf " -x NO		Excludes post install configuration steps\n"
+	printf " -h             print this help, then exit\n" 
+        exit 1
+}
+
+add_uploaded ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	ERICsck=/ossrc_base_sw/inst_config/common/ericsson/ERICsck.pkg
+	ERICusck=/ossrc_base_sw/inst_config/common/upgrade/ERICusck.pkg
+	ERICcore=/ossrc_base_sw/inst_config/common/install/ERICcore.pkg
+	ECONFsystem=/ossrc_base_sw/inst_config/common/config/ECONFsystem.pkg
+	ECONFbase=/ossrc_base_sw/inst_config/common/config/ECONFbase.pkg
+	ERICsol=/ossrc_base_sw/inst_config/common/install/ERICsol.pkg
+	ERICaxe=/ossrc_base_sw/eric_app/common/ERICaxe.pkg
+        dest1=$1/uploaded
+        dest2=$1
+        if [ -d "$dest1" ] && [ -n "`ls -1 $dest1`" ]; then
+                i386new_manifest=/tmp/i386.$$
+                sparcnew_manifest=/tmp/sparc.$$
+                i386tmp_manifest=/tmp/i386t.$$
+                sparctmp_manifest=/tmp/sparct.$$
+                /bin/cat $dest2/ossrc_base_sw/build_manifest_i386 >> $i386new_manifest
+                /bin/cat $dest2/ossrc_base_sw/build_manifest_sparc >> $sparcnew_manifest
+
+                for files in $dest1/* ; do
+                        basefile=$(/bin/basename $files)
+                        basefile1=$(echo $basefile | /bin/sed "s/\.pkg//" )
+                        path=$dest2/$(eval echo \$$basefile1)
+                        currentver=$(pkginfo -ld $path |grep VERSION: | sed 's/VERSION://;s/^[ \t]*//;s/[ \t]*$//')
+                        newver=$(pkginfo -ld $files |grep VERSION: | sed 's/VERSION://;s/^[ \t]*//;s/[ \t]*$//')
+
+ 			if [[ "$newver" <  "$currentver" || "$newver" =  "$currentver"  ]]; then
+                                printf "%-30s" "discard"
+                                continue
+                        fi
+
+
+                        declare -a man_array=($(cat $dest2/ossrc_base_sw/build_manifest_i386|grep "$basefile1 "))
+                        target_package=${man_array[0]}
+                        apr=${man_array[1]}
+                        misc1=${man_array[3]}
+                        misc2=${man_array[4]}
+                        misc3=${man_array[5]}
+                        /bin/sed "/$target_package /d" $i386new_manifest > $i386tmp_manifest
+                        echo "$target_package $apr $newver $misc1 $misc2 $misc3" 1>> $i386tmp_manifest
+                        cp $i386tmp_manifest $i386new_manifest
+
+                        declare -a man_arrays=($(cat $dest2/ossrc_base_sw/build_manifest_sparc|grep "$basefile1 "))
+                        target_packages=${man_arrays[0]}
+                        aprs=${man_arrays[1]}
+                        misc1s=${man_arrays[3]}
+                        misc2s=${man_arrays[4]}
+                        misc3s=${man_arrays[5]}
+                        /bin/sed "/$target_packages /d" $sparcnew_manifest > $sparctmp_manifest
+                        echo "$target_packages $aprs $newver $misc1s $misc2s $misc3s" 1>> $sparctmp_manifest
+
+                        cp $sparctmp_manifest $sparcnew_manifest
+
+                        cp $files $path
+                        cp $files $dest2/current_jump/ 
+                 done
+
+        cp $sparcnew_manifest $dest2/ossrc_base_sw/build_manifest_sparc
+        cp $i386new_manifest $dest2/ossrc_base_sw/build_manifest_i386
+        rm $i386new_manifest
+        rm $sparcnew_manifest
+        rm $i386tmp_manifest
+        rm $sparctmp_manifest
+fi
+}
+
+setVars_func ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"	
+cmddir=`dirname $0`
+[[ -n ${G_EXPECT_DIR} ]] && cmddir=${G_EXPECT_DIR}
+[[ -n ${G_BASH_DIR} ]] && cmddir_bash=${G_BASH_DIR}
+[[ $( uname -s ) != "Linux" ]] && PATH=/usr/xpg4/bin:/bin
+user=$(id -un)
+
+###############################
+#COMMAND INITIALIZATION 
+###############################
+#[[ $(uname) == "Linux" ]] && CP=/bin/cp
+#[[ $(uname) == "SunOS" ]] && CP=/usr/bin/cp      
+#[[ $(uname) == "Linux" ]] && CAT=/bin/cat
+#[[ $(uname) == "SunOS" ]] && CAT=/usr/bin/cat
+#[[ $(uname) == "Linux" ]] && ECHO=/bin/echo
+#[[ $(uname) == "SunOS" ]] && ECHO=/usr/bin/echo 
+#[[ $(uname) == "Linux" ]] && RM=/bin/rm
+#[[ $(uname) == "SunOS" ]] && RM=/usr/bin/rm
+#[[ $(uname) == "Linux" ]] && SLEEP=/bin/sleep
+#[[ $(uname) == "SunOS" ]] && SLEEP=/usr/bin/sleep
+
+setExpect
+
+	if [[ -f /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/II_build_complete ]];then
+        II_build_complete=$(cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/II_build_complete)
+    else
+        II_build_complete="NA"
+    fi
+}
+
+handleArgs_func ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+version=NO
+OMDVD=YES
+OSSDVD=YES
+LABEL=YES
+platforms="ignore";
+release=""; 
+shipment="";
+base="NO";
+manual="NO";
+BUILDNOCOPY="NO";
+mws="NO";
+IPV6="NO";
+preini="NO";
+admin2="NO";
+runEU="YES";
+postInst="YES";
+add_uploaded_pkgs="NO";
+while getopts r:s:m:q:i:t:b:j:a:l:n:v:u:c:o:p:d:e:k:z:f:h:x: opt; do
+        case $opt in
+			r)      release=$OPTARG
+                        ;;
+            a)      runEU=$OPTARG
+                        ;;
+            s)      shipment=$OPTARG
+                        ;;
+            m)      admin1=$OPTARG
+                        ;;
+			i)      preini1=$OPTARG
+                        preini=`echo $preini1 | tr -s '[:lower:]' '[:upper:]'  `
+                        ;;
+            t)      type1=$OPTARG
+                        type=`echo $type1 | tr '[:lower:]' '[:upper:]'  `
+                        ;; 
+			l)      typeii1=$OPTARG
+                        typeii=`echo $typeii1 | tr '[:lower:]' '[:upper:]'  `
+                        ;;    
+            n)      IPV61=$OPTARG
+                        IPV6=`echo $IPV61 | tr -s '[:lower:]' '[:upper:]'  `
+                        ;;
+            v)      version1=$OPTARG
+                        version=`echo $version1 | tr -s '[:lower:]' '[:upper:]' 	`
+                        ;;
+			u)	base=$OPTARG
+				;;
+			q)	admin2=$OPTARG
+				;;
+			c)  OMDVD1=$OPTARG
+                OMDVD=`echo $OMDVD1 | tr -s '[:lower:]' '[:upper:]' 	`
+                        ;;
+			o)  OSSDVD1=$OPTARG
+                OSSDVD=`echo $OSSDVD1 | tr -s '[:lower:]' '[:upper:]' 	`
+                        ;;
+			p) 	platforms1=$OPTARG
+				platforms=`echo $platforms1 | tr -s '[:upper:]' '[:lower:]' 	`
+				;;
+			k) 	mws1=$OPTARG
+				mws=`echo $mws1 | tr -s '[:lower:]' '[:upper:]' 	`
+				;;
+			z) 	LABEL1=$OPTARG
+				LABEL=`echo $LABEL1 | tr -s '[:lower:]' '[:upper:]' 	`
+				;;	
+			f) 	BUILDNOCOPY1=$OPTARG
+				BUILDNOCOPY=`echo $BUILDNOCOPY1 | tr -s '[:lower:]' '[:upper:]' 	`
+				;;	
+			b)	add_uploaded_pkgs=$OPTARG
+				;;
+			j)  	jump_only=$OPTARG
+                        ;;
+			d)	dmr=$OPTARG
+				;;
+			e)	vendor=$OPTARG
+				;;
+			x)	postInst=$OPTARG
+				;;
+            h|\?)   usage
+                        ;;
+        esac
+done
+shift `expr $OPTIND - 1`
+
+#[ "$postInst" == "NO" ] && $admin2="NO"  #RB
+
+[ "$release" != "" ] || usage
+[ "$shipment" != "" ] || usage
+[ "$type" != "" ] || usage
+if [[ "$type" == "II" ]]; then
+	[ "$platforms" != "" ] || usage
+	[ "$platforms" != "ignore" ] || usage
+	if [[ "${build_only}" != "YES" ]]; then
+		[ "$vendor" != "" ] || usage
+	fi
+fi
+if [[ "${admin1}" != "" ]]; then
+	ip=`getent hosts $admin1.athtem.eei.ericsson.se | awk '{print $1}'`
+fi
+
+
+############
+# why was the script run?
+#
+[[ "${type}" == "II" ]] && purpose="install"
+[[ "${type}" == "UG" && "${admin2}" != "" && "${platforms}" == "i386" ]] && purpose="x86UG"
+[[ "${type}" == "UG" && "${platforms}" != "i386" ]] && purpose="sparcUG"
+#[[ -z "$@" ]] && purpose="sourceOnly"
+echo "Library called for: ${purpose}"
+
+}
+
+maintBuild_func ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+umask 0
+
+if [[ "${add_uploaded_pkgs}" == "YES" ]]; then
+	add_uploaded /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/
+	
+fi
+
+if [[ "${type}" == "UG" ]]; then
+    logdir=/proj/ossrcci/logs/${type}/$release/$shipment/
+	logdirhtml=/view/www_integrationci/vobs/ossrc/del-mgt/html/CI/$release/$shipment/logs/
+	testlogdir=/proj/ossrcci/logs/extra/$release/$shipment/
+else
+	logdir=/proj/ossrcci/logs/${type}/$release/$shipment/
+	logdirhtml=/view/www_integrationci/vobs/ossrc/del-mgt/html/CI/$release/$shipment/logs/
+	testlogdir=/proj/ossrcci/logs/extra/$release/$shipment/
+fi
+
+export logdir
+export logdirhtml
+export testlogdir
+
+date=`date '+%Y%m%d'`
+wdate=`date '+%Y%m%d-%H:%M:%S'`
+[ -d $logdir ] || mkdir -p $logdir
+[ -d $logdirhtml ] || mkdir -p $logdirhtml
+
+if [[ ${platforms} == "ignore" ]]; then
+	INSTALL="INSTALL-${admin1}-${type}-${release}-${shipment}-${wdate}.txt"
+else
+	INSTALL="INSTALL-${admin1}-${type}-${release}-${shipment}-${platforms}-${wdate}.txt"
+	WRAPPER="WRAPPER-${type}-${release}-${shipment}-${platforms}-${wdate}.txt"
+fi
+exec > $logdir/${INSTALL} 2>&1
+cplatform=`$ECHO ${platforms} | tr '[:lower:]' '[:upper:]'`
+$ECHO "CONVERTED PLATFORM : $cplatform"
+if [[ "${cplatform}" == "I386" ]]; then
+	cplatform="X86"
+fi
+
+$cmddir/create_content $shipment $type $platforms $wdate 
+
+}
+
+checkMirrors ()
+{
+local _server=$1
+
+	$EXPECT $cmddir/check_mirrors_II.exp ${_server}
+	ret=$?
+	return $ret
+}
+
+###############################################
+# X86 Upgrade sub-functions
+###############################################
+xUG_setupUG ()
+{	
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	ugadmin1=$admin1  	#left in just in case this is used somewhere else
+	ugadmin2=$admin2	#left in just in case this is used somewhere else
+
+	# Check mirrors 1st:
+	checkMirrors ${admin1} || { ret=$? ; err_msg "Mirrors on ${admin1} NOK" $LINENO $FUNCNAME ${ret} ; exit ${ret} ; }
+	checkMirrors ${admin2} || { ret=$? ; err_msg "Mirrors on ${admin2} NOK" $LINENO $FUNCNAME ${ret} ; exit ${ret} ; }
+    
+#copy current manifest to previous manifest for next time
+	cp /net/nfdbuild220.athtem.eei.ericsson.se/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_$release/${shipment}_UG/ossrc_base_sw/build_manifest_${platforms} /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/build_manifest_${platforms}_UG_CI_PREVIOUS || { local _rt1=$?; err_msg "manifest backup failed" $LINENO $FUNCNAME; return ${_rt1}; }
+	installstart=`date +'%a %b %e %Y %T'`
+    echo -ne "$installstart" > /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/ugresults1-$platforms-$wdate || { local _rt2=$?; err_msg "failed to write startdate to result file" $LINENO $FUNCNAME; return ${_rt2}; }
+
+}
+
+xUG_live_or_isolated_node ()
+{
+$EXPECT << EOF
+set timeout 5
+spawn ssh ${admin1}.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        exit  1}
+                }
+		}
+#expect "#"
+#send -- "bash\r"
+expect "#"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+if [ $? -eq 0 ]
+then
+	echo
+        echo "ssh to $admin1 is sucessfull"
+	$EXPECT << EOF
+	set timeout 5
+	spawn ssh ${admin2}.athtem.eei.ericsson.se
+	#exp_internal 1
+	while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        exit  1}
+                }
+		}
+	expect "#"
+	send "exit\r"
+	exit 0
+	expect closed
+EOF
+
+	if [ $? -eq 1 ]
+	then
+        	echo "ssh to $admin2 has failed"
+		return 0
+	else	
+		return 3
+	fi
+else
+        echo "ssh to $admin1 is failed"
+	$EXPECT << EOF
+	set timeout 5
+	spawn ssh ${admin2}.athtem.eei.ericsson.se
+	#exp_internal 1
+	while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                timeout {
+                        puts "warning: timed out"
+                        exit  1}
+                }
+		}
+	expect "#"
+	send "exit\r"
+	exit 0
+	expect closed
+EOF
+
+	if [ $? -eq 0 ]
+	then
+		echo
+        	echo "ssh to $admin2 is successful"
+		return 1
+	else	
+		return 4
+	fi
+
+fi
+}
+
+xUG_getBackupip()
+{
+xUG_live_or_isolated_node
+ret=$?
+if [ $ret -eq 0 ]
+then
+        live_node=${admin1}.athtem.eei.ericsson.se
+        isolated_node=${admin2}.athtem.eei.ericsson.se
+	live_node_name=${admin1}
+	isolated_node_name=${admin2}
+	echo "--------------------------------------------------------"
+	echo "live node:$live_node"
+	echo "isolated node:$isolated_node"
+	echo "--------------------------------------------------------"
+elif [ $ret -eq 1 ]
+then
+        live_node=${admin2}.athtem.eei.ericsson.se
+        isolated_node=${admin1}.athtem.eei.ericsson.se
+	live_node_name=${admin2}
+	isolated_node_name=${admin1}
+	echo "--------------------------------------------------------"
+	echo "live node:$live_node"
+	echo "isolated node:$isolated_node"
+	echo "--------------------------------------------------------"
+elif [ $ret -eq 3 ]
+then
+	echo "--------------------------------------------------------"
+	echo "Both $admin1 and $admin2 is going thru SSH....<<Potential issue>>"
+	echo "--------------------------------------------------------"
+	return $ret
+elif [ $ret -eq 4 ]
+then
+	echo "--------------------------------------------------------"
+	echo "Both $admin1 and $admin2 are not going thru SSH....<<Potential issue>>"
+	echo "--------------------------------------------------------"
+	return $ret
+fi
+> roll_back1_log
+
+$EXPECT << EOF
+log_file roll_back1_log
+spawn ssh root@atmws4-oss-serv.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot12\r"
+			break
+                        }
+			
+                }
+        }
+expect " #"
+send -- "bash\r"
+expect " #"
+send -- "fip ${live_node_name}\r"
+expect " #"
+send -- "fip ${isolated_node_name}\r"
+expect " #"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+back_up_ip_live_node1=$(cat roll_back1_log |grep bup2 |grep ${live_node_name} | awk '{print $4}')
+back_up_ip_live_node2=$(cat roll_back1_log |grep bup1 | grep ${live_node_name} | awk '{print $4}')
+
+back_up_ip_isolated_node1=$(cat roll_back1_log |grep bup2 | grep ${isolated_node_name} |awk '{print $4}')
+back_up_ip_isolated_node2=$(cat roll_back1_log |grep bup1 |grep ${isolated_node_name} |awk '{print $4}')
+
+>roll_back_log
+
+echo "back_up_ip_live_node1:${back_up_ip_live_node1}"
+echo "back_up_ip_live_node2:${back_up_ip_live_node2}"
+echo "back_up_ip_isolated_node1:${back_up_ip_isolated_node1}"
+echo "back_up_ip_isolated_node2:${back_up_ip_isolated_node2}"
+
+$EXPECT << EOF
+log_file roll_back_log
+spawn ssh root@nfdbuild220.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "beepbeep\r"
+                        break}
+                }
+        }
+expect "#"
+send -- "bash\r"
+expect " #"
+send -- "ping ${back_up_ip_live_node1}\r"
+sleep 5
+expect " #"
+send -- "ping $back_up_ip_live_node2\r"
+sleep 5
+expect " #"
+send -- "ping $back_up_ip_isolated_node1\r"
+sleep 5
+expect " #"
+send -- "ping $back_up_ip_isolated_node2\r"
+sleep 5
+expect " #"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+#backup_live_node_result_first=$(ping $back_up_ip_live_node1)
+
+echo
+backup_live_node_result1=$(cat roll_back_log | sed -n "/$back_up_ip_live_node1/{n;p;}" |grep alive)
+if [ $? -eq 0 ]
+then
+        backup_live_node_result1=0
+else
+        backup_live_node_result1=1
+fi
+
+#backup_live_node_result_sec=$(ping $back_up_ip_live_node2)
+#echo "$backup_live_node_result_sec" |grep alive
+echo
+cat roll_back_log | sed -n "/$back_up_ip_live_node2/{n;p;}" |grep alive
+if [ $? -eq 0 ]
+then
+        backup_alive_livenode=$back_up_ip_live_node2
+        echo "backup of live node server is : $backup_alive_livenode"
+
+elif [ $backup_live_node_result1 -eq 0 ]
+then
+        backup_alive_livenode=$back_up_ip_live_node1
+         echo "backup of live node server is : $backup_alive_livenode"
+else
+        echo " none of the live node backup ip is up"
+fi
+
+#backup_isolated_node_result_first=$(ping $back_up_ip_isolated_node1)
+backup_isolated_node_result1=$(cat roll_back_log | sed -n "/$back_up_ip_isolated_node1/{n;p;}" |grep alive)
+if [ $? -eq 0 ]
+then
+        backup_isolated_node_result1=0
+else
+        backup_isolated_node_result1=1
+fi
+
+#backup_isolated_node_result_sec=$(ping $back_up_ip_isolated_node2)
+#echo "$backup_isolated_node_result_sec" |grep alive
+cat roll_back_log | sed -n "/$back_up_ip_isolated_node2/{n;p;}" |grep alive
+if [ $? -eq 0 ]
+then
+        backup_alive_isolatednode=$back_up_ip_isolated_node2
+        echo "backup of isolated node is $backup_alive_isolatednode"
+
+elif [ $backup_isolated_node_result1 -eq 0 ]
+then
+        backup_alive_isolatednode=$back_up_ip_isolated_node1
+        echo "backup of isolated node is $backup_alive_isolatednode"
+else
+        echo " none of the isolated node backup ip is up"
+fi
+BUIP1=$backup_alive_livenode
+BUIP2=$backup_alive_isolatednode
+
+}
+xUG_offline_peer_mcs ()
+{
+set -xv
+echo "Admin1:$admin1"
+echo "Admin2:$admin2"
+$EXPECT << EOF
+spawn scp $cmddir_bash/login_upgraded_node.sh root@${admin2}.athtem.eei.ericsson.se:/var/tmp
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+
+                }
+                break
+        }
+expect "#"
+send -- "bash\r"
+expect " #"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+flag=$?
+
+$EXPECT << EOF
+spawn scp $cmddir_bash/login_peer_server.sh root@${admin2}.athtem.eei.ericsson.se:/var/tmp
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+
+                }
+                break
+        }
+expect "#"
+send -- "bash\r"
+expect " #"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+if [ $? -eq 0 ]  && [ $flag -eq 0 ]
+then
+
+$EXPECT << EOF
+spawn ssh root@${admin2}.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                }
+        }
+expect "#"
+send -- "chmod a+x /var/tmp/login_upgraded_node.sh\r"
+expect "#"
+send -- "/var/tmp/login_upgraded_node.sh Off\r"
+expect " #"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+else
+	echo "Cutover to the upgraded node is not performed"
+fi
+
+}
+
+xUG_online_peer_mcs ()
+{
+set -xv
+echo "Admin1:$admin1"
+echo "Admin2:$admin2"
+$EXPECT << EOF
+spawn scp $cmddir_bash/login_upgraded_node.sh root@${admin1}.athtem.eei.ericsson.se:/var/tmp
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+
+                }
+                break
+        }
+expect "#"
+send -- "bash\r"
+expect " #"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+flag=$?
+
+$EXPECT << EOF
+spawn scp $cmddir_bash/login_peer_server.sh root@${admin1}.athtem.eei.ericsson.se:/var/tmp
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+
+                }
+                break
+        }
+expect "#"
+send -- "bash\r"
+expect " #"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+if [ $? -eq 0 ]  && [ $flag -eq 0 ]
+then
+
+$EXPECT << EOF
+spawn ssh root@${admin1}.athtem.eei.ericsson.se
+#exp_internal 1
+while 1 {
+        expect {
+                "Are you sure you want to continue connecting" {
+                        send "yes\r"}
+                "Password:" {
+                        send "shroot\r"
+                        break}
+                }
+        }
+expect "#"
+send -- "chmod a+x /var/tmp/login_upgraded_node.sh\r"
+expect "#"
+send -- "/var/tmp/login_upgraded_node.sh On\r"
+expect " #"
+send "exit\r"
+exit 0
+expect closed
+EOF
+
+else
+	echo "Cutover to the upgraded node is not performed"
+fi
+
+}
+
+xUG_rollBack ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+xUG_getBackupip
+echo "BUIP1:$BUIP1"
+echo "BUIP2:$BUIP2"
+#$EXPECT $cmddir/offline_peer_mcs.exp ${admin1} ${admin2} 
+#xUG_offline_peer_mcs
+#RB rollback start?
+		$EXPECT $cmddir/check_admin2.exp ${admin1} ${admin2} 
+		ret=$? 
+
+		if [[ "$ret" == "2"  || "$ret" == "4" || "$ret" == "5" ]];then
+			#rejump admin2
+           		relbase=O$(echo "$base" | sed 's/\./_/;s/\..*//')
+
+			if [[ "$BUIP1" != "" && "$BUIP2" != "" ]];then
+				message "Starting: Admin 2 cutover rollback"
+				#$EXPECT $cmddir/rollback_upgraded_live_node.exp $BUIP1
+
+				if [[ "$?" != "0" ]];then
+					error "Server: ${admin1} Install Type: ${type} Error at: " "Admin2 Rollback"
+				fi
+
+				#$EXPECT $cmddir/rollback_cutover_upgraded_node.exp $BUIP2
+
+				if [[ "$?" != "0" ]];then
+					error "Server: ${admin1} Install Type: ${type} Error at: " "Admin2 Rollback"
+				fi
+				#xUG_online_peer_mcs
+
+				message "Finished: Admin 2 cutover rollback"
+
+			elif [[ "$state_a1" == "LIVE" ]];then
+				message "Admin 2 Cutover rollback not needed, Admin 1 is LIVE"
+			else
+				error "Server: ${admin1} Install Type: ${type} Error at: " "Admin2 Rollback"
+			fi
+
+			DDCrb=NO
+			NMSrb=NO
+ 			
+			if [[ "$relbase" == "O12_0" ]];then
+				DDCrb=YES
+			fi
+ 			
+			if [[ "$relbase" == "O11_3" ]];then
+				DDCrb=YES
+				NMSrb=YES
+			fi
+			
+			#$EXPECT $cmddir/rollback_admin2_part1.exp ${admin1} ${admin2} ${DDCrb} ${NMSrb} 
+			#ret=$?
+            
+			#if [[ "$ret" != "0" ]];then
+			#	#error "Server: ${admin1} Install Type: ${type} Error at: " "Admin2 check"
+			#	echo "problem with admin2 but continue anyway"
+			#fi
+
+			#$EXPECT $cmddir/rollback_admin2_part2.exp ${admin1} 	
+
+ 			$EXPECT $cmddir/check_mirrors.exp ${admin1}
+			ret=$?
+
+			if [[ "$ret" != "3" ]];then
+				echo "in Not insync, proceed with sync"
+				$EXPECT $cmddir/sync_admin1.exp ${admin1} 	
+			fi
+
+			return 1
+			$cmddir/master_jumpit -m NO -s $base -r $relbase -a i386 -d YES -v hp -q ${admin2} -k YES -i YES -n ${IPV6}
+			message "Admin 2 jumped"
+			$SLEEP 1800
+			$EXPECT $cmddir/check_alive.exp ${admin2} NO 	
+			ret=$?
+
+			if [[ "$ret" != "0" ]];then
+				error "Server: ${admin1} Install Type: ${type} Error at: " "Admin2 BMR"
+			fi
+			$EXPECT $cmddir/re_add_admin2.exp ${admin1} ${admin2} 	
+			ret=$?
+            
+            		if [[ "$ret" != "0" ]];then
+               			 error "Server: ${admin1} Install Type: ${type} Error at: " "Add Admin2 back to cluster"
+           	 	fi
+
+			sleep 3600	
+			$EXPECT $cmddir/check_alive.exp ${admin1} ${admin2} 
+			ret=$?
+
+			if [[ "$ret" != "0" ]];then
+               			 error "Server: ${admin1} Install Type: ${type} Error at: " "Add Admin2 back to cluster"
+			fi
+			
+			$EXPECT $cmddir/dmr_admin2.exp ${admin2} 	
+		fi
+#RB rollback stop?
+}
+
+xUG_checkCluster ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	message "Starting: Admin1 Check"
+ 	$EXPECT $cmddir/server_check.exp ${admin1}
+	ret=$?
+        
+    if [[ "$ret" != "0" ]];then
+		error "Server: ${admin1} Install Type: ${type} Error at: " "Admin1 check"
+    fi
+		
+	message "Finished: Admin1 Check"
+	message "Starting: Admin2 Check"
+ 	$EXPECT $cmddir/server_check.exp ${admin2}
+	ret=$?
+    
+	if [[ "$ret" != "0" ]];then
+        error "Server: ${admin1} Install Type: ${type} Error at: " "Admin2 check"
+    fi
+		
+	message "Finished: Admin2 Check"
+
+	$EXPECT $cmddir/check_admin1.exp ${admin1} 	
+	ret=$?
+		
+	if [[ "$ret" != "0" ]];then
+    	error "Server: ${admin1} Install Type: ${type} Error at: " "Admin1 check"
+	fi
+}
+
+xUG_copySentinel ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	$EXPECT $cmddir/get_sentinel.exp ${admin1} ${release} || { local _rt=$?; err_msg "Sentinel license copy failed" $LINENO $FUNCNAME; return ${_rt}; }
+}
+
+xUG_installUSCK ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	echo -e "\n\t\t<<<Updating ${admin1}...>>>\n"
+	$EXPECT $cmddir/install_usck_and_wranmom.exp ${admin1} 159.107.173.93:/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_$release/${shipment}_UG || { local _rt=$?; err_msg "Install USCK pkg to ${admin1} failed." $LINENO $FUNCNAME; return ${_rt}; }
+	echo -e "\n\t\t<<<Updating ${admin2}...>>>\n"
+	$EXPECT $cmddir/install_usck_and_wranmom.exp ${admin2} 159.107.173.93:/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_$release/${shipment}_UG || { local _rt=$?; err_msg "Install USCK pkg to ${admin2} failed." $LINENO $FUNCNAME; return ${_rt}; }
+}
+
+xUG_preChecks1 ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	
+	# Run the 1st scripted check and load output to a variable for processing after:
+	_expOut=`$EXPECT $cmddir/pre_check1_PreSysUpgrade.exp ${admin1} 159.107.173.93:/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_$release/${shipment}_UG || { _rt=$?; err_msg "Upgrade Prechecks1 failed." $LINENO $FUNCNAME $_rt; return ${_rt}; }` ; _lineNo=$LINENO
+	
+	# below code is to reprocess the error message (if generated) by the expect command as the 
+	# return code and error message is sent to the $_expOut variable instead of the shell and we 
+	# need the return code to asses if the command was OK.
+	# Also processing the other parts of the error message so it can be reconstructed and displayed.
+	_hasErrors=`echo "${_expOut}" |grep "ERROR:.*FUNCTION:.*LINE:"`
+	_return=`echo "${_hasErrors}" | awk -F"CODE:" '{print $2}'`
+	_message=`echo "${_hasErrors}" | awk -F"ERROR:" '{print $2}'|awk -F"FUNCTION:" '{print $1}' | sed 's/^[ \t]*//;s/[ \t]*$//'`
+	#_lineNo=`echo "${_hasErrors}" | awk -F"LINE:" '{print $2}'|awk -F"IN:" '{print $1}'`
+	
+	if [[ ${_return} -gt 0 ]]; then 
+		echo "${_expOut}"
+		err_msg "${_message}" $LINENO $FUNCNAME ${_return}
+		return ${_return}
+	fi
+		
+	
+	# Now process the output of the expect command to look for possible issues
+	_log1=`echo "${_expOut}" | grep log |tail -1 |awk '{print $NF}'`
+	if [[ -z ${_log1} ]]; then
+		err_msg "Pre Sys Upgrade checks failed to create log file" $LINENO $FUNCNAME ${_return} 
+		return 1
+	fi
+	
+	_errors=`echo "${_expOut}" | grep "NOK" | egrep -v 'MCs|This warning can be ignored|During normal runtime, Sybase1 should be on the other admin server'`
+	
+	
+	if [[ -n ${_errors} ]]; then
+	# add processing on $_errors to check if they can be ignored with a warning?
+		_err_count=`echo "${_errors}" |grep -c NOK`	
+		_err_list=`echo "${_errors}" |grep NOK`
+		err_msg "$_err_count checks failed when running pre_check1_PreSysUpgrade.exp Check $_log1 on $admin1 for details" $LINENO $FUNCNAME ${_return}
+		echo -e "\n\nFull list of NOK checks:\n=========================\n$_err_list\n"
+		#echo "$_expOut"
+		return 1
+	else echo "Preupgrade check: $cmddir/pre_check1_PreSysUpgrade.exp on ${admin1} completed OK"
+	
+	fi
+	
+	
+	#$BANNER break  # only for debugging
+	
+	
+	# Run the 2nd scripted check and load output to a variable for processing after:
+	_expOut=`$EXPECT $cmddir/pre_check1_ne.exp ${admin1} 159.107.173.93:/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_$release/${shipment}_UG || { export _rt=$?; err_msg "Upgrade Prechecks1 failed." $LINENO $FUNCNAME $_rt; return ${_rt}; }` ; _lineNo=$LINENO
+	
+	# below code is to reprocess the error message (if generated) by the expect command 
+	# as the return code and error message is sent to the $_expOut variable instead of the shell
+	# and we need the return code to asses if the command was OK.
+	# Also processing the other parts of the error message so it can be reconstructed and displayed.
+	_hasErrors=`echo "${_expOut}" |grep "ERROR:.*FUNCTION:.*LINE:"`
+	_return=`echo "${_hasErrors}" | awk -F"CODE:" '{print $2}'`
+	_message=`echo "${_hasErrors}" | awk -F"ERROR:" '{print $2}'|awk -F"FUNCTION:" '{print $1}' | sed 's/^[ \t]*//;s/[ \t]*$//'`
+	#_line=`echo "${_hasErrors}" | awk -F"LINE:" '{print $2}'|awk -F"in:" '{print $1}'`
+	
+	[[ ${_return} -gt 0 ]] && { err_msg "${_message}" ${_lineNo} $FUNCNAME ${_return} ; return ${_return} ; }
+	
+	
+	# Now process the output of the expect command to look for possible issues
+		# will need to do some failed tests to know what output to look for.
+	_log1=`echo "${_expOut}" | grep "Logs have been saved to" |awk '{print $NF}'`
+	_log2=`echo "${_expOut}" | grep "Check log file" |awk '{print $NF}'`
+	_neState=`echo "${_expOut}" | grep "OK" |grep "database" |awk '{print $NF}' | tr -cd '[:alpha:]'`
+	
+	if [ "${_neState}" == "NOK" ]; then
+		err_msg "Unsuppoted NEs exist. Check ${_log2} on ${_admin1} for details." $LINENO $FUNCNAME
+		return 1
+	
+	elif [ ${_neState} != "OK" ]; then
+		err_msg "Something went wrong. NE status not set right.[${_neState/$'\n'/}]  Check ${_log1} on ${admin1}" $LINENO $FUNCNAME
+		echo "${_expOut}"
+		#return 1     -not sure if the UG should continue
+		
+	else echo "Preupgrade check: $cmddir/pre_check1_ne.exp on ${admin1} completed OK"
+		
+	fi
+	
+	
+	echo "=================
+	Checking variables:
+====================
+log1 $_log1
+log2 $_log2
+NE state: $_neState
+"
+echo "preupgrade checks completed successfully"	
+return 0	
+}
+
+xUG_splitCluster () 
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+        $EXPECT $cmddir/UG_split_cluster.exp ${admin1}
+        if [[ "$?" != "0" ]];then
+                error "Server: ${admin1} Install Type: ${type} Error at: " "Split cluster"
+        fi
+
+        $SLEEP 600
+        $EXPECT $cmddir/check_ha_admin2.exp ${admin1} ${admin2}
+        if [[ "$?" != "0" ]];then
+                error "Server: ${admin2} Install Type: ${type} Error at: " "Split Cluster: Oss did not come ONLINE on ${admin2}"
+        fi
+
+        return 0
+}
+
+xUG_solLUG_omUG()
+{
+	message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	#RB Sol LUG start
+
+	message "Starting: Solaris Live Upgrade" 
+        mwsserver=/net/nfdbuild220.athtem.eei.ericsson.se
+        MWSLOC=/export/SW_LOCATION/OSSRC_MEDIA
+        servertype=sol_x86.loc
+        imageloc=Solaris_10/Product/SUNWsolnm/reloc/etc/release
+        MWSOM=/export/SW_LOCATION/OM_MEDIA
+	# Use bkupBaseIPP from preinirator file to determine  MWS backup IP to use
+	bip=$(echo ${bkupBaseIPP} |awk -F. '{print $2}')
+	#if [[ ${bip} -eq 248 ]]; then
+                mwsbip=10.248.0.41
+#	else
+        #        mwsbip=10.0.2.36
+#	fi
+	echo  ${bip} ${mwsbip}
+
+        mwssolaris=$( cat ${mwsserver}/${MWSLOC}/OSSRC_${release}/${shipment}_UG/${servertype} )
+        mwsom="${MWSOM}/OSSRC_${release}/${shipment}/om"
+        check="NO"
+
+	echo "Checking to see is Live Upgrade required"
+        echo "Running ::: $EXPECT $cmddir/solaris_liveupgrade.exp ${admin1} ${admin2} ${mwsom} ${mwssolaris} \"${check}\" ${mwsbip} d70"
+        $EXPECT $cmddir/solaris_liveupgrade.exp ${admin1} ${admin2} ${mwsom} ${mwssolaris} "${check}" ${mwsbip} d70
+	ret=$?
+	if [[ "$ret" == "1" ]];then
+           	error "Server: ${admin2} Install Type: ${type} Error at: " "Liveupgrade Unsuccessful"
+       	fi
+	if [[ "$ret" == "0" ]];then
+		message "Finished: Solaris Live Upgrade" 
+		echo "Going to sleep for 30 minutes to allow the Solaris Upgrade server to reboot"
+       		$SLEEP 1800
+        fi
+	if [[ "$ret" == "2" ]];then
+      		message "Solaris Liveupgrade not required"
+		message "Finished: Solaris Live Upgrade" 
+        fi
+
+	$EXPECT $cmddir/check_alive.exp ${admin1} ${admin2}
+        ret=$?
+	if [[ "$ret" != "0" ]];then
+        	error "Server: ${admin2} Install Type: ${type} Error at: " "liveupgrade: Not possible to ssh to ${admin2}"
+        fi
+
+
+	message "Starting: Versant Workaround"
+	if [[ "$base" == "11.3.2" ]];then
+		vhastop=YES
+	else
+		vhastop=NO
+	fi
+	$EXPECT $cmddir/versant_wo.exp  ${admin1} ${admin2} ${vhastop}
+	message "Finished: Versant Workaround"
+		
+
+	message "Starting: HA check Admin2"
+	$EXPECT $cmddir/check_ha_admin2.exp ${admin1} ${admin2}
+	if [[ "$?" != "0" ]];then
+        	error "Server: ${admin2} Install Type: ${type} Error at: " "Liveupgrade: Oss not ONLINE on ${admin2}"
+        fi
+	message "Finished: HA check Admin2"
+
+
+	message "Starting: OM Liveupgrade"
+        $EXPECT $cmddir/solaris_liveupgrade_OM.exp ${admin1} ${admin2} ${mwsom} ${mwssolaris} "${check}" ${mwsbip}
+	if [[ "$?" != "0" ]];then
+        	error "Server: ${admin2} Install Type: ${type} Error at: " "Liveupgrade: OM Liveupgrade"
+        fi
+	message "Finished: OM Liveupgrade"
+
+	#RB Sol LUG stop
+}
+
+xUG_preChecks2()
+{
+	message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	message "Starting: Sybase Health Check"
+	$EXPECT $cmddir/sybase_check.exp ${admin1} ${admin2}
+	message "Finished: Sybase Health Check"
+
+        message "Starting: Pre-checks on ${admin2}"
+	$EXPECT $cmddir/pre_checks2.exp ${admin1} ${admin2} || { local _rt=$?; err_msg "Pre-checks on ${admin2} failed" $LINENO $FUNCNAME; return ${_rt}; }
+        message "Finished: Pre-checks on ${admin2}"
+
+
+}
+
+xUG_doUG ()
+{
+	message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+	message "Starting: Base Software Upgrade" 
+        bip=$(echo ${bkupBaseIPP} |awk -F. '{print $2}')
+        #if [[ ${bip} -eq 248 ]]; then
+                mwsbip=10.248.0.41
+       # else
+       #         mwsbip=10.0.2.36
+#        fi
+
+	$EXPECT $cmddir/upgrade_admin2.exp ${admin1} ${admin2} ${release} ${shipment} ${mwsbip}
+   	ret1=$?
+        if [[ "$ret1" != "0" ]];then
+        	if [ -f $logdir/${INSTALL} ]; then
+               		echo "<html> <body>"  > $logdirhtml/installug-$platforms-$wdate.html
+               	 	cat $logdir/${INSTALL} | sed 's/$/\<BR\>/' >> $logdirhtml/installug-$platforms-$wdate.html
+                	echo "</body></html>"  >> $logdirhtml/installug-$platforms-$wdate.html
+            	fi
+
+		installfinish=`date +'%a %b %e %Y %T'`
+
+		#echo  "@$installfinish@$platforms@Upgrade from ${base}@$II_build_complete@$admin1@Failed@Failed@<a href=\"./logs/installug-$platforms-$wdate.html\">Install log</a\>@Failed@<a href=\"./logs/contentUG-$platforms-$wdate.html\">Content</a\>" >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/ugresults1-$platforms-$wdate
+                #cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/ugresults1-$platforms-$wdate >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results
+                #rm /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/ugresults1-$platforms-$wdate
+
+           	 error "Server: ${admin1} Install Type: ${type} Error at: " "Install"
+        fi
+
+	installfinish=`date +'%a %b %e %Y %T'`
+        $SLEEP 2400
+}
+
+
+xUG_preCutoverChecks ()
+{
+        message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+        message "Starting: Sybase Health Check"
+        $EXPECT $cmddir/sybase_check.exp ${admin1} ${admin2}
+        message "Finished: Sybase Health Check"
+
+        message "Starting: Post system upgrade, Pre-cutover checks on ${admin2}"
+        #$EXPECT $cmddir/pre_cutover_checks.exp ${admin1} ${admin2} || { local _rt=$?; err_msg "Pre-cutover checks on ${admin2} failed" $LINENO $FUNCNAME; return ${_rt}; }
+        # Run the 1st scripted check and load output to a variable for processing after:
+        _expOut=`$EXPECT $cmddir/pre_cutover_checks.exp ${admin1} ${admin2} || { _rt=$?; err_msg "Upgrade Post-checks failed." $LINENO $FUNCNAME $_rt; return ${_rt}; }` ; _lineNo=$LINENO
+
+        # below code is to reprocess the error message (if generated) by the expect command as the
+        # return code and error message is sent to the $_expOut variable instead of the shell and we
+        # need the return code to asses if the command was OK.
+        # Also processing the other parts of the error message so it can be reconstructed and displayed.
+        _hasErrors=`echo "${_expOut}" |grep "ERROR:.*FUNCTION:.*LINE:"`
+        _return=`echo "${_hasErrors}" | awk -F"CODE:" '{print $2}'`
+        _message=`echo "${_hasErrors}" | awk -F"ERROR:" '{print $2}'|awk -F"FUNCTION:" '{print $1}' | sed 's/^[ \t]*//;s/[ \t]*$//'`
+        #_lineNo=`echo "${_hasErrors}" | awk -F"LINE:" '{print $2}'|awk -F"IN:" '{print $1}'`
+
+        if [[ ${_return} -gt 0 ]]; then
+                echo "${_expOut}"
+                err_msg "${_message}" $LINENO $FUNCNAME ${_return}
+                return ${_return}
+        fi
+
+
+        # Now process the output of the expect command to look for possible issues
+        _log1=`echo "${_expOut}" | grep log |tail -1 |awk '{print $NF}'`
+        if [[ -z ${_log1} ]]; then
+                err_msg "Pre Sys Upgrade checks failed to create log file" $LINENO $FUNCNAME ${_return}
+                return 1
+        fi
+
+        _errors=`echo "${_expOut}" | grep "NOK" | egrep -v 'MCs|This warning can be ignored|During normal runtime, Sybase1 should be on the other admin server'`
+
+
+        if [[ -n ${_errors} ]]; then
+        # add processing on $_errors to check if they can be ignored with a warning?
+                _err_count=`echo "${_errors}" |grep -c NOK`
+                _err_list=`echo "${_errors}" |grep NOK`
+                err_msg "$_err_count checks failed when running pre_cutover_checks.exp Check $_log1 on $admin2 for details" $LINENO $FUNCNAME ${_return}
+                echo -e "\n\nFull list of NOK checks:\n=========================\n$_err_list\n"
+                #echo "$_expOut"
+                return 1
+        else echo "Post-upgrade check: $cmddir/pre_cutover_checks.exp on ${admin2} completed OK"
+
+        fi
+
+        #$BANNER break  # only for debugging
+
+        message "Finished: Pre-cutover checks on ${admin2}"
+
+}
+
+
+
+
+
+
+xUG_cutover ()
+{	
+xUG_getBackupip
+echo "BUIP1:$BUIP1"
+echo "BUIP2:$BUIP2"
+
+#RB prepare for cutover
+		message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+		message "Starting: Check for Cutover"
+		#resadmin1=$($EXPECT $cmddir/get_backup_ip.exp  ${admin1} ${admin2})
+		#if [[ "$?" != "0" ]];then
+		#	error "Server: ${admin1} Install Type: ${type} Error at: " "Cutover Upgraded Node - Get backup IP ${admin1}"
+		#fi
+		#BUIP1=$(echo $resadmin1 | sed 's/.*;//')
+		#state_a1=$(echo $resadmin1 |sed 's/;.*//')
+		#resadmin2=$($EXPECT $cmddir/get_backup_ip.exp  ${admin2} ${admin1})
+		#if [[ "$?" != "0" ]];then
+		#	error "Server: ${admin1} Install Type: ${type} Error at: " "Cutover Upgraded Node - Get backup IP ${admin2}"
+		#fi
+		#BUIP2=$(echo $resadmin2 | sed 's/.*;//')
+		#state_a2=$(echo $resadmin2 |sed 's/;.*//')
+#RB do cutover
+		#if [[ "$state_a1" == "LIVE" && "$BUIP1" != "" && "$BUIP2" != "" ]];then
+		if [[ "$BUIP1" != "" && "$BUIP2" != "" ]];then
+			message "Starting: Cutover"
+			$EXPECT $cmddir/check_ha_rollback_admin2.exp ${admin1} ${admin2}
+               		if [[ "$?" != "0" ]];then
+                   		error "Server: ${admin1} Install Type: ${type} Error at: " "Cutover Upgraded Node - HA Group not ONLINE"
+               		fi
+
+               		#$EXPECT $cmddir/sybase_check.exp ${admin1} ${admin2}
+		#	if [[ "$?" != "0" ]];then
+                #   		error "Server: ${admin1} Install Type: ${type} Error at: " "Cutover Upgraded Node"
+               	#	fi
+
+		#	$EXPECT $cmddir/set_perm_and_post_check.exp ${admin1} ${admin2}
+               	#	if [[ "$?" != "0" ]];then
+                #   		error "Server: ${admin1} Install Type: ${type} Error at: " "Cutover Upgraded Node"
+               	#	fi
+
+		#	$EXPECT $cmddir/online_mcs.exp ${admin1} ${admin2}
+    #           		$EXPECT $cmddir/cutover_isolate_live_node.exp ${admin1} $BUIP2
+		$EXPECT $cmddir/cutover_isolate_live_node.exp ${admin1} $BUIP1
+               		if [[ "$?" != "0" ]];then
+                   		error "Server: ${admin1} Install Type: ${type} Error at: " "Cutover Upgraded Node - Isolate Live Node"
+               		fi
+
+			$EXPECT $cmddir/cutover_upgrade_node.exp $BUIP2
+               		if [[ "$?" != "0" ]];then
+                   		error "Server: ${admin1} Install Type: ${type} Error at: " "Cutover Upgraded Node Failed"
+               		fi
+		else
+			error "Server: ${admin1} Install Type: ${type} Error at: " "Cutover Upgraded Node"
+		fi
+
+		message "Finished: Cutover"
+#RB cutover finished
+}
+
+xUG_postChecks ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+        testdate=`date '+%Y%m%d'`
+        testtime=`date '+%H:%M:%S'`
+		
+		message "Starting: Post Upgrade Check"
+        $EXPECT $cmddir/post_check_ug.exp $admin1 $release $shipment II NA $platforms $testdate $testtime "$installfinish" "$wdate" "$II_build_complete" $base ${admin2}
+		message "Finished: Post Upgrade Check"
+}
+
+xUG_updateResults ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+#RB post results to web        
+        if [ -f $logdir/${INSTALL} ]; then
+           	echo "<html> <body>"  > $logdirhtml/installug-$platforms-$wdate.html
+            cat $logdir/${INSTALL} | sed 's/$/\<BR\>/' >> $logdirhtml/installug-$platforms-$wdate.html
+            echo "</body></html>"  >> $logdirhtml/installug-$platforms-$wdate.html
+        fi
+
+		if [ -f $testlogdir/post_check-UG-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt ]; then
+            echo "<html> <body>"  > $logdirhtml/testug-$platforms-$wdate.html
+            echo "<br><h1>Summary</h1>"  >> $logdirhtml/testug-$platforms-$wdate.html
+			cat $testlogdir/post_check-UG-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt| grep RESULT | sed s/"$ RESULTLINE:"//g | sed s/"RESULTLINE:"//g | sed 's/$/\<BR\>/'>> $logdirhtml/testug-$platforms-$wdate.html
+            echo "<br><h1>Summary End</h1>"  >> $logdirhtml/testug-$platforms-$wdate.html
+            cat $testlogdir/post_check-UG-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt| sed 's/$/\<BR\>/'>> $logdirhtml/testug-$platforms-$wdate.html
+            echo "</body></html>"  >> $logdirhtml/testug-$platforms-$wdate.html
+        fi
+  		
+		checkformat=$((`cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/ugresults1-$platforms-$wdate|sed 's/[^@]//g'|wc -m`-1))
+
+		if [[ "$checkformat" != "10" ]];then
+            echo "<TR><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD></TR>" >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/results
+        else
+            cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/ugresults1-$platforms-$wdate >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/results
+        fi
+
+		rm /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/ugresults1-$platforms-$wdate
+	#fi
+}
+
+
+
+install_func ()
+{
+	#if [[ "${purpose}" == "install" ]]; then
+		# moved below to setVars
+		#if [[ -f /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/II_build_complete ]];then
+		#	II_build_complete=$(cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/II_build_complete)
+		#else
+		#	II_build_complete="NA"
+		#fi
+		
+		#create content (moved to setupPrep)
+		#$cmddir/create_content $shipment $type $platforms $wdate 
+		#copy current manifest to previous manifest for next time
+		cp /net/nfdbuild220.athtem.eei.ericsson.se/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_$release/$shipment/ossrc_base_sw/build_manifest_${platforms} /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/build_manifest_${platforms}_II_CI_PREVIOUS
+
+		dest1=/net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily
+        	for files in /view/integrationci_view/vobs/ossrc/del-mgt/isobuild/ci/etc/jumpit*.exp; do
+                	basefile=$(/bin/basename $files)
+                	/bin/cp $files $dest1/ && /bin/chmod 777 $dest1/$basefile
+        	done
+
+		installstart=`date +'%a %b %e %Y %T'`
+		echo -ne "$installstart" > /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results1-$platforms-$wdate
+		$cmddir/master_jumpit -m $admin1 -s $shipment -r $release -a ${platforms} -d ${dmr} -v ${vendor} -k ${mws} -i ${preini} -q ${admin2} -n ${IPV6}
+		if [[ "$?" != "0" ]];then
+	 		if [ -f $logdir/${INSTALL} ]; then
+				[[ -f $logdirhtml/install_$platforms.html ]] && rm $logdirhtml/install_$platforms.html 
+					echo "<html> <body>"  > $logdirhtml/install-$platforms-$wdate.html
+               				cat $logdir/${INSTALL} | sed 's/$/\<BR\>/' >> $logdirhtml/install-$platforms-$wdate.html
+					echo "</body></html>"  >> $logdirhtml/install-$platforms-$wdate.html
+       	 		fi
+			installfinish=`date +'%a %b %e %Y %T'`
+			#echo  "@$installfinish@$platforms@Initial Install@$II_build_complete@$admin1@Failed@Failed@<a href=\"./logs/install-$platforms-$wdate.html\">Install log</a\>@Failed@<a href=\"./logs/contentII-$platforms-$wdate.html\">Content" >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results1-$platforms-$wdate
+#cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results1-$platforms-$wdate >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results
+#rm /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results1-$platforms-$wdate 
+                	error "Server: ${admin1} Install Type: ${type} Error: " "Install problem"
+		fi
+
+		installfinish=`date +'%a %b %e %Y %T'`
+		$SLEEP 3600
+		testdate=`date '+%Y%m%d'`
+		testtime=`date '+%H:%M:%S'`
+
+
+		if [[ "$admin2" == "NO" ]];then
+			if [[ "$postInst" == "YES" ]] ; then #RB-start 1
+ 				if [[ "$runEU" == "YES" ]];then
+                        		$EXPECT $cmddir/upgrade_uploaded_EU.exp $admin1 $release $shipment
+                        		$SLEEP 60
+                		fi
+			fi #RB-stop 1
+       			$EXPECT $cmddir/post_check.exp $admin1 $release $shipment II NA $platforms $testdate $testtime "$installfinish" "$wdate" "$II_build_complete" 8 NO
+		else
+			if [[ "$postInst" == "YES" ]] ; then #RB-start 1
+       				$EXPECT $cmddir/add_admin2.exp $admin1 $admin2
+				$SLEEP 1800
+				#if [[ "$admin2" != "NO" ]];then
+				$EXPECT $cmddir/dmr_admin2_II.exp ${admin2} 
+				#fi
+				$SLEEP 300
+				if [[ "$runEU" == "YES" ]];then
+                        		$EXPECT $cmddir/upgrade_uploaded_EU.exp $admin1 $release $shipment
+                        		$SLEEP 60
+                		fi
+			fi
+       			$EXPECT $cmddir/post_check.exp $admin1 $release $shipment II NA $platforms $testdate $testtime "$installfinish" "$wdate" "$II_build_complete" 13 $admin2
+		fi
+		if [ -f $logdir/${INSTALL} ]; then
+			[[ -f $logdirhtml/install_$platforms.html ]] && rm $logdirhtml/install_$platforms.html 
+			echo "<html> <body>"  > $logdirhtml/install-$platforms-$wdate.html
+                	cat $logdir/${INSTALL} | sed 's/$/\<BR\>/' >> $logdirhtml/install-$platforms-$wdate.html
+			echo "</body></html>"  >> $logdirhtml/install-$platforms-$wdate.html
+        	 fi
+		 if [ -f $testlogdir/post_check-II-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt ]; then
+			echo "<html> <body>"  > $logdirhtml/test-$platforms-$wdate.html
+			echo "<br><h1>Summary</h1>"  >> $logdirhtml/test-$platforms-$wdate.html
+                	cat $testlogdir/post_check-II-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt| grep RESULT | sed s/"$ RESULTLINE:"//g | sed s/"RESULTLINE:"//g | sed 's/$/\<BR\>/'>> $logdirhtml/test-$platforms-$wdate.html
+			echo "<br><h1>Summary End</h1>"  >> $logdirhtml/test-$platforms-$wdate.html
+                	cat $testlogdir/post_check-II-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt| sed 's/$/\<BR\>/'>> $logdirhtml/test-$platforms-$wdate.html
+			echo "</body></html>"  >> $logdirhtml/test-$platforms-$wdate.html
+        	 fi
+  		checkformat=$((`cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results1-$platforms-$wdate|sed 's/[^@]//g'|wc -m`-1))
+                if [[ "$checkformat" != "10" ]];then
+                        echo "<TR><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD></TR>" >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results
+		else
+			cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results1-$platforms-$wdate >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results
+		fi
+		rm /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results1-$platforms-$wdate 
+
+#set -xv
+	#fi
+}
+
+x86Upgrade_func ()
+{
+	#if [[ "${purpose}" == "x86UG" ]]; then
+   		# moved below to setVars
+		#if [[ -f /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/II_build_complete ]];then
+        #    II_build_complete=$(cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/II_build_complete)
+        #else
+        #    II_build_complete="NA"
+        #fi
+	#create content (moved to setupPrep)
+		#$cmddir/create_content $shipment $type $platforms $wdate 
+
+
+	# code moved to function xUG_setupUG
+		xUG_setupUG
+	# code moved to function xUG_rollBack
+		xUG_rollBack
+	# code moved to function xUG_copySentinel
+		xUG_checkCluster
+	# code moved to function xUG_copySentinel
+		xUG_copySentinel
+	# code moved to function xUG_installUSCK
+		xUG_installUSCK
+	# new code split off from previous step
+		xUG_preChecks1
+
+#RB remove extra files start		
+		message "Starting: cleanup"
+        $EXPECT $cmddir/cleanup.exp ${admin1} i386 
+        message "Finished: cleanup"
+#RB remove extra files stop
+
+    # code moved to function xUG_splitCluster
+		xUG_splitCluster
+	# code moved to function xUG_solLUG_omUG
+		xUG_solLUG_omUG
+	# code moved to function xUG_preChecks2
+		xUG_preChecks2
+	# code moved to function xUG_doUG
+		xUG_doUG
+	# New code added to function xUG_preCutoverChecks
+		xUG_preCutoverChecks
+	# code moved to function xUG_cutover
+		xUG_cutover
+	# code moved to function xUG_postChecks
+		xUG_postChecks
+	# code moved to function xUG_updateResults
+		xUG_updateResults
+
+}
+
+sparcUpgrade_func ()
+{
+
+	#if [[ "${purpose}" == "sparcUG" ]]; then
+   		# moved below to setVars
+		#if [[ -f /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/II_build_complete ]];then
+        #                II_build_complete=$(cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/II_build_complete)
+        #        else
+        #                II_build_complete="NA"
+        #        fi
+		
+		#create content (moved to setup Prep)
+		#$cmddir/create_content $shipment $type $platforms $wdate 
+		
+		#copy current manifest to previous manifest for next time
+		cp /net/nfdbuild220.athtem.eei.ericsson.se/export/SW_LOCATION/OSSRC_MEDIA/OSSRC_$release/${shipment}_UG/ossrc_base_sw/build_manifest_${platforms} /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/build_manifest_${platforms}_UG_CI_PREVIOUS
+
+                installstart=`date +'%a %b %e %Y %T'`
+                echo -ne "$installstart" > /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/ugresults1-$platforms-$wdate
+
+		message "Starting: Chech Mirrors"
+		$EXPECT $cmddir/check_mirrors.exp ${admin1} 	
+		ret=$? 
+		if [[ "$ret" == "1" ]];then
+			echo "if serious problem don't continue" 
+			error "Server: ${admin1} Install Type: ${type} Error at: " "Mirror check"
+		elif [[ "$ret" == "2" ]];then
+			echo "no mirrors defined, do nothing proceed with upgrade" 
+		elif [[ "$ret" == "3" ]];then
+			echo "in sync, if x86 detach and  proceed with upgrade" 
+			if [[ "$platforms" == "i386" ]];then
+			message "Starting: Detach Mirror 2"
+			$EXPECT $cmddir/detach_m2.exp ${admin1} 
+				if [[ "$?" != "0" ]];then
+					error "Server: ${admin1} Install Type: ${type} Error at: " "Mirror 2 detach"
+				fi
+			message "Finished: Detach Mirror 2"
+			fi
+		elif [[ "$ret" == "4" ]];then
+ 			if [[ "$base" == "11.3.2" && "$platforms" == "sparc" ]];then
+				message "Starting: Remove Sparc Volume 11.3.2 only"
+                                echo "Running::: $EXPECT $cmddir/remove_sparc_volume.exp ${admin1}"
+                                $EXPECT $cmddir/remove_sparc_volume.exp ${admin1}
+				message "Finished: Remove Sparc Volume 11.3.2 only"
+                        fi
+			message "Starting: Boot from Detach"
+			echo "Runnning ::: $EXPECT $cmddir/boot_from_detach.exp ${admin1}"
+			$EXPECT $cmddir/boot_from_detach.exp ${admin1} 	
+			if [[ "$?" != "0" ]];then
+				error "Server: ${admin1} Install Type: ${type} Error at: " "Boot from Detach"
+			fi
+			$SLEEP 1800
+			message "Finished: Boot form Detach"
+			$EXPECT $cmddir/check_sol_rollback.exp ${admin1}
+			ret=$?
+                	if [[ "$ret" == "3" ]];then
+				message "Started: Solaris Rollback"
+				mwsip=159.107.173.93
+				echo "Running::: $EXPECT $cmddir/solaris_rollback.exp ${admin1} \"/export/SW_LOCATION/OM_MEDIA/OSSRC_${release}/${shipment}/om\""
+				$EXPECT $cmddir/solaris_rollback.exp ${admin1} "/export/SW_LOCATION/OM_MEDIA/OSSRC_${release}/${shipment}/om" ${mwsip} d10
+				$SLEEP 3000
+				message "Finished: Solaris Rollback"
+			fi
+			message "Starting: cleanup"
+                        $EXPECT $cmddir/cleanup.exp ${admin1} sparc
+			message "Finished: cleanup"
+			message "Starting: Sync Mirrors"
+                        echo "Runnning ::: $EXPECT $cmddir/sync_sparc.exp ${admin1}"
+                        $EXPECT $cmddir/sync_sparc.exp ${admin1}         
+                        if [[ "$?" != "0" ]];then
+                                error "Server: ${admin1} Install Type: ${type} Error at: " "Mirror sync"
+                        fi
+			message "Finished: Sync Mirrors"
+
+			message "Started: Server Check"
+
+			echo "Running ::: $EXPECT $cmddir/check_reboot_finished.exp ${admin1}" 	
+			$EXPECT $cmddir/check_reboot_finished.exp ${admin1} 
+			$EXPECT $cmddir/online_mcs.exp ${admin1} NO 
+			message "Finished: Server Check"
+
+		fi
+
+  		$EXPECT $cmddir/get_sentinel.exp ${admin1} ${release}
+  		$EXPECT $cmddir/system_upgrade_utils.exp ${admin1}  
+		message "Starting: Solaris Live Upgrade"
+                mwsserver=/net/159.107.173.93
+                mwsip=159.107.173.93
+                MWSLOC=/export/SW_LOCATION/OSSRC_MEDIA
+                servertype=sol_sparc.loc
+                imageloc=Solaris_10/Product/SUNWsolnm/reloc/etc/release
+		MWSOM=/export/SW_LOCATION/OM_MEDIA
+                mwssolaris=$( cat ${mwsserver}/${MWSLOC}/OSSRC_${release}/${shipment}_UG/${servertype} )
+                mwsom="${MWSOM}/OSSRC_${release}/${shipment}/om"
+
+  		#changed so liveupgrade will allways be run
+                check="NO"
+                echo "Checking to see is Live Upgrade required"
+                $EXPECT $cmddir/solaris_liveupgrade.exp ${admin1} NO ${mwsom} ${mwssolaris} "${check}" ${mwsip} d70
+			ret=$?
+                        if [[ "$ret" == "1" ]];then
+                                error "Server: ${admin1} Install Type: ${type} Error at: " "Liveupgrade"
+                        fi
+                        if [[ "$ret" == "0" ]];then
+				message "Finished: Solaris Live Upgrade"
+                                echo "Going to sleep for 30 minutes to allow the Solaris Upgrade server to reboot"
+                                $SLEEP 1800
+                        fi
+                        if [[ "$ret" == "2" ]];then
+                                message "Solaris Liveupgrade not required"
+				message "Finished: Solaris Live Upgrade"
+                                #message "Starting: OM Upgrade"
+                                #$EXPECT $cmddir/OM_upgrade.exp  ${admin1} ${admin2}
+                                #if [[ "$?" != "0" ]];then
+                                #       error "Server: ${admin1} Install Type: ${type} Error at: " "OM Upgrade"
+                                #fi
+                                #message "Finished: OM Upgrade"
+                        fi
+
+		message "Starting: Versant Workaround"
+                $EXPECT $cmddir/versant_wo.exp  ${admin1} NO NO
+                message "Finished: Versant Workaround"
+		message "Starting: OM Liveupgrade"
+                $EXPECT $cmddir/solaris_liveupgrade_OM.exp ${admin1} NO ${mwsom} ${mwssolaris} "${check}" ${mwsip}
+		if [[ "$?" != "0" ]];then
+                        error "Server: ${admin1} Install Type: ${type} Error at: " "Liveupgrade"
+                                fi
+		message "Finished: OM Liveupgrade"
+
+		message "Starting: Base Software Upgrade"
+
+                $EXPECT $cmddir/CI_UPGRADE_JUMPIT.exp $release ${shipment} $ip $type NA $platforms
+                ret1=$?
+		message "Finished: Base Software Upgrade"
+
+		if [[ "$ret1" != "0" ]];then
+		 	if [ -f $logdir/${INSTALL} ]; then
+					echo "<html> <body>"  > $logdirhtml/installug-$platforms-$wdate.html
+                			cat $logdir/${INSTALL} | sed 's/$/\<BR\>/' >> $logdirhtml/installug-$platforms-$wdate.html
+					echo "</body></html>"  >> $logdirhtml/installug-$platforms-$wdate.html
+        	 	fi
+			installfinish=`date +'%a %b %e %Y %T'`
+			#echo  "@$installfinish@$platforms@Upgrade from ${base}@$II_build_complete@$admin1@Failed@Failed@<a href=\"./logs/installug-$platforms-$wdate.html\">Install log</a\>@Failed@<a href=\"./logs/contentUG-$platforms-$wdate.html\">Content</a\>" >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/ugresults1-$platforms-$wdate
+			#cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/ugresults1-$platforms-$wdate >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/results
+			#rm /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_$release/$shipment.daily/ugresults1-$platforms-$wdate 
+			error "Server: ${admin1} Install Type: ${type} Error at: " "Install"
+		fi
+		installfinish=`date +'%a %b %e %Y %T'`
+                $SLEEP 3600
+                testdate=`date '+%Y%m%d'`
+                testtime=`date '+%H:%M:%S'`
+                $EXPECT $cmddir/post_check_ug.exp $admin1 $release $shipment II NA $platforms $testdate $testtime "$installfinish" "$wdate" "$II_build_complete" $base NO
+                if [ -f $logdir/${INSTALL} ]; then
+                   	echo "<html> <body>"  > $logdirhtml/installug-$platforms-$wdate.html
+                        cat $logdir/${INSTALL} | sed 's/$/\<BR\>/' >> $logdirhtml/installug-$platforms-$wdate.html
+                        echo "</body></html>"  >> $logdirhtml/installug-$platforms-$wdate.html
+                fi
+                if [ -f $testlogdir/post_check-UG-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt ]; then
+                        echo "<html> <body>"  > $logdirhtml/testug-$platforms-$wdate.html
+                        echo "<br><h1>Summary</h1>"  >> $logdirhtml/testug-$platforms-$wdate.html
+                        cat $testlogdir/post_check-UG-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt| grep RESULT | sed s/"$ RESULTLINE:"//g | sed s/"RESULTLINE:"//g | sed 's/$/\<BR\>/'>> $logdirhtml/testug-$platforms-$wdate.html
+                        echo "<br><h1>Summary End</h1>"  >> $logdirhtml/testug-$platforms-$wdate.html
+                        cat $testlogdir/post_check-UG-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt| sed 's/$/\<BR\>/'>> $logdirhtml/testug-$platforms-$wdate.html
+                        echo "</body></html>"  >> $logdirhtml/testug-$platforms-$wdate.html
+                fi
+  		checkformat=$((`cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/ugresults1-$platforms-$wdate|sed 's/[^@]//g'|wc -m`-1))
+                if [[ "$checkformat" != "10" ]];then
+                        echo "<TR><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD><TD>error</TD></TR>" >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/results
+                else
+                        cat /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/ugresults1-$platforms-$wdate >> /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/results
+                fi
+                rm /net/nfdbuild220.athtem.eei.ericsson.se/export/jumpstart/OSSRC_${release}/${shipment}.daily/ugresults1-$platforms-$wdate
+	#fi
+}
+
+mailResult_func ()
+{
+message "$(basename $BASH_SOURCE) is Running function: $FUNCNAME"
+# Send a mail on the status of the build and installatio if applicable
+maillog=/tmp/maillog.$$
+if [[ "${type}" == "UG" ]]; then
+	allresults=$(cat $testlogdir/post_check-UG-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt| grep RESULT | sed s/"$ RESULTLINE:"//g | sed s/"RESULTLINE:"//g)
+else
+	allresults=$(cat $testlogdir/post_check-II-$release-NA-$shipment-NA-$platforms-$testdate-$testtime.txt| grep RESULT | sed s/"$ RESULTLINE:"//g | sed s/"RESULTLINE:"//g)
+fi
+exec > $maillog
+cat <<- EOF
+The following is a summary $release $shipment Build/Install
+
+$allresults
+
+Server this command was run on was: $( hostname )
+
+Please see summary of inputs below
+
+Release = $release
+Shipment = $shipment
+Platform = $platforms
+Type of Install = $type
+
+EOF
+
+if [[ "${admin1}" != "" ]]; then
+        printf "Server = $admin1\n"
+fi
+if [[ "$typeii" != "" ]]; then
+        printf "Build For = $typeii\n"
+fi
+if [[ "$version" != "" && "$type" != "II" ]]; then
+        printf "Version of $type tar file = $version\n"
+fi
+if [[ "$base" != "" && "$type" != "II" ]]; then
+        printf "Base shipment = $base\n"
+fi
+if [[ "$OSSDVD" != "" && "$type" == "II" ]]; then
+        printf "Create OSS DVD = $OSSDVD\n"
+fi
+if [[ "$OMDVD" != "" && "$type" == "II" ]]; then
+        printf "Create O&M DVD = $OMDVD\n"
+fi
+echo ""
+if [ -f $logdir/${BUILD} ];then
+        warnings=$( cat $logdir/${BUILD} | grep -i warning | wc -l )
+        if [[ "$warnings" == "" ]]; then
+                warnings="0"
+        fi
+        oks=$( cat $logdir/${BUILD} | grep -i ok | wc -l )
+        if [[ "$oks" == "" ]]; then
+                oks="0"
+        fi
+        skips=$( cat $logdir/${BUILD} | grep -i skip | wc -l )
+        if [[ "$skips" == "" ]]; then
+                skips="0"
+        fi
+
+        noofpacks=$( cat $logdir/${BUILD} | grep -i ^Package | wc -l )
+        if [[ "$noofpacks" == "" ]]; then
+                ls -ltr ${SWDIBUILD} >> $logdir/${WRAPPER}
+        fi
+
+        ##################################################################
+        # JUMPSTART LOCK CAN THEN BE REMOVED AS INSTALLATION IS COMPLETED
+        ##################################################################
+        rm_jump_lock
+
+fi
+
+
+# Send a mail on the status of the build and installatio if applicable
+maillog=/tmp/maillog.$$
+exec > $maillog
+cat <<- EOF
+The following is a summary $release $shipment Install
+
+
+Continuous Intergration Webpage
+http://clearcase-oss.lmera.ericsson.se/view/www_integrationci/vobs/ossrc/del-mgt/html/CI/$release/$shipment/uploaded.html
+
+Server this command was run on was: $( hostname )
+
+Please see summary of inputs below
+
+Server:		$admin1
+Release:		$release
+Shipment:		$shipment
+Platform:		$platforms
+Type of Install:	$type
+
+EOF
+
+echo ""
+echo ""
+if [ -f $logdir/${INSTALL} ]; then
+        warnings=$( cat $logdir/${INSTALL} | grep -i warning | wc -l )
+        if [[ "$warnings" == "" ]]; then
+                warnings="0"
+        fi
+        fails=$( cat $logdir/${INSTALL} | grep -i fail | wc -l )
+        if [[ "$fails" == "" ]]; then
+                fails="0"
+        fi
+        perm=$( cat $logdir/${INSTALL} | grep -i permission | wc -l )
+        if [[ "$perm" == "" ]]; then
+                perm="0"
+        fi
+cat <<- EOF
+##################### Installation Summary #####################
+
+Full log can be viewed at the following location
+$logdir/${INSTALL}
+
+[Summary from Post install check]
+
+$allresults
+
+
+[Summary from Install Log]
+
+ Number of Warnings:	$warnings
+ Number of fails:		$fails
+ Permissions Issues:	$perm
+
+EOF
+
+fi
+echo ""
+echo "##################### Close Mail #####################"
+
+if [ -f $maillog ]; then
+        cat $maillog | mailx -s "$release $shipment for $platforms Install Summary of Logs" priju.punnoose@ericsson.com,roopa.k10@wipro.com,PDLSCKSUPP@ex1.eemea.ericsson.se,PDLUSCKSUP@ex1.eemea.ericsson.se
+        rm $maillog
+        #echo $maillog
+fi
+}
+
+
+ 
+	
+	
+# # # # # # # # # # # # # # # # 
+#
+# M A I N
+#
+# # # # # # # # # # # # # # # #
+
+	message "$(basename $BASH_SOURCE) is calling setVars_func"
+	setVars_func
+
+echo "vars in: $(basename $BASH_SOURCE)
+======================
+G_WRAPPER_ARGS: ${G_WRAPPER_ARGS}
+G_EXPECT_DIR: ${G_EXPECT_DIR}
+BASH_SOURCE:  $(basename $BASH_SOURCE)
+basname: $(basename "$0")
+banner: ${BANNER}
+==============================
+"
+
+	
+	[[ -n $1 ]] && { 
+			echo "lib called with arguments!" 
+			message "$(basename $BASH_SOURCE) is calling handleArgs_func" 
+			handleArgs_func $G_WRAPPER_ARGS 
+			}
+		
+	
+	# below code is for adding legacy support for calling master_wrapper
+	# from crontab in the Hub.  This is to be tested and activated later.
+	if [[ $1 == "legacy_run" ]] ;then
+		echo "doing the full run through because \$1 = $1" #uncomment below lines
+		#maintBuild_func
+		#[[ "${purpose}" == "install" ]] && install_func
+		#[[ "${purpose}" == "x86UG" ]] && x86Upgrade_func
+		#[[ "${purpose}" == "sparcUG" ]] && sparcUpgrade_func
+		#mailResult_func
+		#exit 0
+		
+	fi
+
+
+
+
+
+

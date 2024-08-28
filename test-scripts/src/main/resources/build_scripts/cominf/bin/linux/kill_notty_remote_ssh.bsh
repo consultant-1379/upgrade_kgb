@@ -1,0 +1,28 @@
+#!/bin/bash
+
+#
+# Kills zombie ssh sessions on remote server
+#
+G_SCRIPTDIR=$(cd $(/usr/bin/dirname $0); pwd)
+G_SCRIPTNAME=$(/bin/basename $0)
+
+
+remote_ip=$1
+remote_password=$2
+
+[ -z "$remote_ip" ] && {
+	echo "no remote IP supplied"
+	exit 1
+}
+[ -z "$remote_password" ] && {
+	echo "no remote password supplied"
+	exit 1
+}
+
+while true; do
+	echo "Checking for zombie ssh processes on $remote_ip"
+	timeout 10s $G_SCRIPTDIR/ssh_setup.sh ssh "root@$remote_ip pgrep -f atcominf.bsh || pkill -f 'sshd: root@notty'" $remote_password
+	sleep 60
+done
+
+

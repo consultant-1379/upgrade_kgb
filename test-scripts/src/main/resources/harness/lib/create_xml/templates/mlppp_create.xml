@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE Model SYSTEM "/opt/ericsson/arne/etc/arne6_3.dtd">
+<Model version="1" importVersion="6.3">
+   <Create>
+    <ManagedElement sourceType="Redback">
+         <ManagedElementId string="ML-PPPRouter"/>
+         <primaryType type="ML-PPPRouter"/>
+         <managedElementType types=""/>
+         <associatedSite string="Site=GRAN_SITE1"/>
+         <nodeVersion string="SE-400"/>
+         <platformVersion string=""/>
+         <swVersion string=""/>
+         <vendorName string=""/>
+         <userDefinedState string=""/>
+         <managedServiceAvailability int="1"/>
+         <isManaged boolean="true"/>
+         <connectionStatus string="ON"/>
+         <Connectivity>
+            <DEFAULT>
+               <emUrl url="0.0.0.0"/>
+               <ipAddress ip_v4="0.0.0.0"/>
+               <hostname string=""/>
+               <nodeSecurityState state="ON"/>
+               <boardId string=""/>
+               <Protocol number="0">
+                  <protocolType string="SNMP"/>
+                  <port int="0"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Protocol number="1">
+                  <protocolType string="SSH"/>
+                  <port int="22"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Protocol number="2">
+                  <protocolType string="Netconf"/>
+                  <port int="0"/>
+                  <protocolVersion string=""/>
+                  <securityName string=""/>
+                  <authenticationMethod string=""/>
+                  <encryptionMethod string=""/>
+                  <communityString string=""/>
+                  <context string=""/>
+                  <namingUrl string=""/>
+                  <namingPort int=""/>
+                  <notificationIRPAgentVersion string=""/>
+                  <alarmIRPAgentVersion string=""/>
+                  <notificationIRPNamingContext context=""/>
+                  <alarmIRPNamingContext context=""/>
+               </Protocol>
+               <Browser>
+                  <browser string=""/>
+                  <browserURL string=""/>
+                  <bookname string=""/>
+               </Browser>
+            </DEFAULT>
+         </Connectivity>
+         <Tss>
+            <Entry>
+               <System string="MLPPPRouter"/>
+               <Type string="NORMAL"/>
+               <User string="1"/>
+               <Password string="1"/>
+            </Entry>
+            <Entry>
+               <System string="MLPPPRouter"/>
+               <Type string="SECURE"/>
+               <User string="1"/>
+               <Password string="1"/>
+            </Entry>
+         </Tss>
+         <Relationship>
+            <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=backup-%slave%" AssociationType="ManagedElement_to_ftpBackupStore"/>
+            <AssociableNode TO_FDN="FtpServer=SMRSSLAVE-%slave%,FtpService=pmup-%slave%" AssociationType="ManagedElement_to_neTransientPm"/>
+            <AssociableNode TO_FDN="ManagementNode=ONRM" AssociationType="MgmtAssociation"/>
+         </Relationship>
+      </ManagedElement>
+   </Create>
+</Model>
